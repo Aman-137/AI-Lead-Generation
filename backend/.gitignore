@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Environment
+.env
+
+# Debug
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
