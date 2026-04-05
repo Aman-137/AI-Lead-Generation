@@ -34,12 +34,32 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users to login (except for public routes)
-  const publicRoutes = ["/login", "/signup", "/"];
+  const publicRoutes = ["/login", "/signup", "/", "/verify-email", "/forgot-password", "/reset-password"];
   const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname);
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect authenticated but unverified users to verify-email page
+  // (Supabase sets email_confirmed_at when user verifies their email)
+  if (
+    user &&
+    !user.email_confirmed_at &&
+    request.nextUrl.pathname !== "/verify-email" &&
+    !isPublicRoute
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/verify-email";
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect verified users away from verify-email page
+  if (user && user.email_confirmed_at && request.nextUrl.pathname === "/verify-email") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

@@ -5,7 +5,7 @@ import { autoFindLimiter } from "../middleware/rateLimit";
 import supabase from "../services/supabase";
 import { parseCSV } from "../utils/csv";
 import { findLeadsByNiche, formatLeadsForDB } from "../services/leadFinder";
-import { checkLeadFindLimit, incrementLeadsFound, getDailySearchLimit } from "../services/planLimits";
+import { checkLeadFindLimit, incrementLeadsFound, checkDailyLeadFindLimit } from "../services/planLimits";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -136,16 +136,26 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       return;
     }
 
-    // Get plan-based daily search limit (matches daily email cap)
-    const dailySearchLimit = await getDailySearchLimit(req.userId!);
+    // Check plan-based DAILY lead find limit (Starter: 50/day, Growth: 100/day, Agency: 200/day)
+    const dailyCheck = await checkDailyLeadFindLimit(req.userId!);
+    if (!dailyCheck.allowed) {
+      res.status(403).json({
+        error: `Daily lead find limit reached (${dailyCheck.usedToday}/${dailyCheck.dailyLimit} on ${dailyCheck.plan} plan). Try again tomorrow.`,
+        usedToday: dailyCheck.usedToday,
+        dailyLimit: dailyCheck.dailyLimit,
+        remaining: 0,
+        plan: dailyCheck.plan,
+      });
+      return;
+    }
 
-    // Use plan's daily limit as default, allow override up to that cap
-    let validatedLimit = dailySearchLimit;
+    // Cap search to remaining daily slots (not more than what's left for today)
+    let validatedLimit = dailyCheck.remaining;
     if (limit !== undefined) {
       const parsedLimit = parseInt(String(limit));
-      if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > dailySearchLimit) {
+      if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > dailyCheck.remaining) {
         res.status(400).json({
-          error: `Lead limit must be between 1 and ${dailySearchLimit} (your plan's daily cap)`,
+          error: `Lead limit must be between 1 and ${dailyCheck.remaining} (your remaining daily cap). You've found ${dailyCheck.usedToday}/${dailyCheck.dailyLimit} leads today.`,
         });
         return;
       }
@@ -261,6 +271,13 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       }
     }
 
+    // Re-check daily remaining (in case multiple searches happened close together)
+    // and cap leadsToInsert to the actual remaining daily allowance
+    const dailyRecheck = await checkDailyLeadFindLimit(req.userId!);
+    if (leadsToInsert.length > dailyRecheck.remaining) {
+      leadsToInsert = leadsToInsert.slice(0, dailyRecheck.remaining);
+    }
+
     if (leadsToInsert.length === 0) {
       await supabase
         .from("lead_sources")
@@ -313,6 +330,9 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
     // Track leads found against monthly plan limit
     await incrementLeadsFound(req.userId!, leadsToInsert.length);
 
+    // Get updated daily usage for response
+    const dailyFinal = await checkDailyLeadFindLimit(req.userId!);
+
     res.json({
       message: "Leads found and campaign created successfully",
       source_id: source.id,
@@ -320,6 +340,9 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       campaign_name: campaignName,
       count: leadsToInsert.length,
       duplicatesSkipped: formattedLeads.length - leadsToInsert.length,
+      dailyUsed: dailyFinal.usedToday,
+      dailyLimit: dailyFinal.dailyLimit,
+      dailyRemaining: dailyFinal.remaining,
     });
   } catch (error) {
     console.error("[AutoFind] Error:", error);
@@ -425,6 +448,65 @@ router.post("/enrich", authMiddleware, async (req: AuthenticatedRequest, res) =>
     });
   } catch (error) {
     console.error("[Enrich] Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/leads/sources — List all lead sources for user (with campaign info)
+router.get("/sources", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    // Fetch all lead sources for this user
+    const { data: sources, error: sourcesError } = await supabase
+      .from("lead_sources")
+      .select("*")
+      .eq("user_id", req.userId)
+      .order("created_at", { ascending: false });
+
+    if (sourcesError) {
+      res.status(500).json({ error: "Failed to fetch lead sources" });
+      return;
+    }
+
+    if (!sources || sources.length === 0) {
+      res.json({ sources: [] });
+      return;
+    }
+
+    // For each source, find the campaign and lead count
+    const enrichedSources = await Promise.all(
+      sources.map(async (source) => {
+        // Find campaign that matches this source's niche+location pattern
+        const campaignName = `${source.niche} in ${source.location}`;
+        const { data: campaign } = await supabase
+          .from("campaigns")
+          .select("id, name, total_leads")
+          .eq("user_id", req.userId)
+          .eq("name", campaignName)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        // Count leads from this source
+        const { count: leadsCount } = await supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("source_id", source.id);
+
+        return {
+          id: source.id,
+          niche: source.niche,
+          location: source.location,
+          status: source.status,
+          created_at: source.created_at,
+          leadsCount: leadsCount || campaign?.total_leads || 0,
+          campaignId: campaign?.id || null,
+          campaignName: campaign?.name || null,
+        };
+      })
+    );
+
+    res.json({ sources: enrichedSources });
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });

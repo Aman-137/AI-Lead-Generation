@@ -1,19 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function SignupPage() {
-  const [email, setEmail] = useState("");
+export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [ready, setReady] = useState(false);
+  const router = useRouter();
   const supabase = createClient();
 
-  const handleSignup = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // Supabase handles the token exchange from the URL hash automatically
+    // We just need to check if we have a valid session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setReady(true);
+      }
+    };
+
+    // Listen for auth state changes (Supabase processes the recovery token)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setReady(true);
+      }
+    });
+
+    checkSession();
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -29,8 +53,7 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
+    const { error } = await supabase.auth.updateUser({
       password,
     });
 
@@ -41,35 +64,46 @@ export default function SignupPage() {
     }
 
     setLoading(false);
-    setEmailSent(true);
+    setSuccess(true);
   };
 
-  // Show verification message after signup
-  if (emailSent) {
+  if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
-          <div className="text-5xl mb-4">📧</div>
-          <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
+          <div className="text-5xl mb-4">✅</div>
+          <h2 className="text-2xl font-bold text-gray-900">Password updated</h2>
           <p className="mt-3 text-gray-600 text-sm">
-            We sent a verification link to <span className="font-medium text-gray-900">{email}</span>.
-            Click the link in your email to verify your account.
+            Your password has been reset successfully. You can now sign in with your new password.
           </p>
-          <p className="mt-4 text-xs text-gray-400">
-            Didn&apos;t receive the email? Check your spam folder or try signing up again.
-          </p>
-          <div className="mt-6 flex gap-3 justify-center">
+          <div className="mt-6">
             <button
-              onClick={() => { setEmailSent(false); setPassword(""); setConfirmPassword(""); }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              onClick={() => router.push("/dashboard")}
+              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
-              Try again
+              Go to Dashboard
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
+          <div className="text-5xl mb-4">🔑</div>
+          <h2 className="text-2xl font-bold text-gray-900">Loading...</h2>
+          <p className="mt-3 text-gray-600 text-sm">
+            Verifying your reset link. If this takes too long, the link may have expired.
+          </p>
+          <div className="mt-6">
             <Link
-              href="/login"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              href="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-500 font-medium"
             >
-              Go to Sign In
+              Request a new reset link
             </Link>
           </div>
         </div>
@@ -82,14 +116,14 @@ export default function SignupPage() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div>
           <h2 className="text-center text-3xl font-bold text-gray-900">
-            Create your account
+            Set new password
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Start generating leads with AI
+            Enter your new password below
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSignup}>
+        <form className="mt-8 space-y-6" onSubmit={handleReset}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
               {error}
@@ -98,25 +132,8 @@ export default function SignupPage() {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
+                New password
               </label>
               <input
                 id="password"
@@ -132,7 +149,7 @@ export default function SignupPage() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
+                Confirm new password
               </label>
               <input
                 id="confirmPassword"
@@ -152,15 +169,8 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Creating account..." : "Sign up"}
+            {loading ? "Updating..." : "Update password"}
           </button>
-
-          <p className="text-center text-sm text-gray-600">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
-              Sign in
-            </Link>
-          </p>
         </form>
       </div>
     </div>

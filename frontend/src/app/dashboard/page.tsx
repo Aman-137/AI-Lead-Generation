@@ -26,6 +26,8 @@ interface Stats {
   warmupWeek: number;
   leadsFoundThisMonth: number;
   monthlyLeadFindLimit: number;
+  leadsFoundToday: number;
+  dailyLeadFindLimit: number;
 }
 
 export default function DashboardPage() {
@@ -36,6 +38,7 @@ export default function DashboardPage() {
     plan: "starter", planLabel: "Starter", priceMonthly: 29,
     maxDailyEmails: 50, warmupDay: 0, warmupComplete: false, warmupWeek: 0,
     leadsFoundThisMonth: 0, monthlyLeadFindLimit: 100,
+    leadsFoundToday: 0, dailyLeadFindLimit: 50,
   });
   const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -126,11 +129,19 @@ export default function DashboardPage() {
                 </p>
               )}
             </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500">Leads found this month</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {stats.leadsFoundThisMonth}/{stats.monthlyLeadFindLimit}
-              </p>
+            <div className="text-right space-y-1">
+              <div>
+                <p className="text-xs text-gray-500">Leads found today</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {stats.leadsFoundToday}/{stats.dailyLeadFindLimit}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Leads found this month</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {stats.leadsFoundThisMonth}/{stats.monthlyLeadFindLimit}
+                </p>
+              </div>
             </div>
           </div>
           {stats.warmupDay > 0 && !stats.warmupComplete && (
@@ -147,8 +158,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Key Metrics — the 3 that sell your SaaS */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Key Metrics */}
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-200 p-6 border-l-4 border-l-indigo-500">
+          <h3 className="text-sm font-medium text-gray-500">Leads Found Today</h3>
+          <p className="mt-2 text-3xl font-bold text-indigo-600">{v(stats.leadsFoundToday)}</p>
+          <p className="mt-1 text-xs text-gray-400">Remaining: {v(stats.dailyLeadFindLimit - stats.leadsFoundToday)}/{v(stats.dailyLeadFindLimit)}</p>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-sm font-medium text-gray-500">Emails Sent</h3>
           <p className="mt-2 text-3xl font-bold text-gray-900">{v(stats.emailsSent)}</p>

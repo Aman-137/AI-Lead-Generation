@@ -67,6 +67,8 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       warmupWeek: planInfo.warmupWeek,
       leadsFoundThisMonth: planInfo.leadsFoundThisMonth,
       monthlyLeadFindLimit: planInfo.monthlyLeadFindLimit,
+      leadsFoundToday: planInfo.leadsFoundToday,
+      dailyLeadFindLimit: planInfo.dailyLeadFindLimit,
     });
   } catch {
     res.status(500).json({ error: "Failed to fetch stats" });

@@ -49,6 +49,11 @@ function pickTone(): ToneKey {
   return TONES[Math.floor(Math.random() * TONES.length)];
 }
 
+// Append opt-out line to email body (CAN-SPAM / GDPR compliance)
+function appendOptOut(body: string): string {
+  return body.trimEnd() + "\n\nP.S. If this isn't relevant, just reply \"unsubscribe\" and I won't reach out again.";
+}
+
 function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string }): string {
   const company = lead.company;
   const context = enriched
@@ -239,7 +244,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
               user_id: req.userId,
               to_email: lead.email,
               subject: emailData.subject,
-              body: emailData.body,
+              body: appendOptOut(emailData.body),
               status: "pending",
               sequence_step: 1,
               tone_variant: tone,
@@ -369,7 +374,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
               user_id: req.userId,
               to_email: lead.email,
               subject: emailData.subject,
-              body: emailData.body,
+              body: appendOptOut(emailData.body),
               status: "pending",
               sequence_step: 1,
               scheduled_at: new Date().toISOString(),
@@ -399,7 +404,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                           user_id: req.userId,
                           to_email: lead.email,
                           subject: f1Data.subject,
-                          body: f1Data.body,
+                          body: appendOptOut(f1Data.body),
                           status: "pending",
                           sequence_step: 2,
                           scheduled_at: calculateFollowUpDate(2, 4),
@@ -430,7 +435,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                           user_id: req.userId,
                           to_email: lead.email,
                           subject: f2Data.subject,
-                          body: f2Data.body,
+                          body: appendOptOut(f2Data.body),
                           status: "pending",
                           sequence_step: 3,
                           scheduled_at: calculateFollowUpDate(5, 7),

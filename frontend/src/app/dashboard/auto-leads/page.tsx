@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/api";
+import { apiPost, apiGet } from "@/lib/api";
 
 interface LeadSource {
   id: string;
@@ -184,9 +184,25 @@ export default function AutoLeadsPage() {
   const [activeTab, setActiveTab] = useState("find");
   const [sources, setSources] = useState<LeadSource[]>([]);
   const [findingLeads, setFindingLeads] = useState(false);
+  const [loadingSources, setLoadingSources] = useState(true);
   const router = useRouter();
   const findProgress = useProgressTracker(findLeadsSteps);
   const toast = useToast();
+
+  // Fetch existing lead sources on page load
+  useEffect(() => {
+    const fetchSources = async () => {
+      try {
+        const data = await apiGet<{ sources: LeadSource[] }>("/leads/sources");
+        setSources(data.sources || []);
+      } catch {
+        // silently fail — sources will just be empty
+      } finally {
+        setLoadingSources(false);
+      }
+    };
+    fetchSources();
+  }, []);
 
   const handleFindLeads = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -427,7 +443,11 @@ export default function AutoLeadsPage() {
               Lead Sources
             </h2>
 
-            {sources.length === 0 ? (
+            {loadingSources ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 text-sm">Loading your lead sources...</p>
+              </div>
+            ) : sources.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-600 text-sm">
                   No lead sources yet. Find some leads first! 👆

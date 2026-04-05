@@ -1,6 +1,52 @@
 import { google } from "googleapis";
+import crypto from "crypto";
 import supabase from "./supabase";
 import { setGmailConnectedAt } from "./planLimits";
+
+// =============================================
+// Token Encryption (AES-256-GCM)
+// =============================================
+// Requires TOKEN_ENCRYPTION_KEY env var (32-byte hex = 64 hex chars)
+// Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+function getEncryptionKey(): Buffer {
+  const key = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!key || key.length !== 64) {
+    throw new Error("TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
+  }
+  return Buffer.from(key, "hex");
+}
+
+function encrypt(text: string): string {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12); // 96-bit IV for GCM
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const authTag = cipher.getAuthTag().toString("hex");
+  // Format: iv:authTag:encryptedData (all hex)
+  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+}
+
+function decrypt(encryptedText: string): string {
+  // Support plain text tokens (for backward compatibility with existing unencrypted data)
+  if (!encryptedText.includes(":")) {
+    return encryptedText;
+  }
+  const parts = encryptedText.split(":");
+  if (parts.length !== 3) {
+    return encryptedText; // Not encrypted, return as-is
+  }
+  const key = getEncryptionKey();
+  const iv = Buffer.from(parts[0], "hex");
+  const authTag = Buffer.from(parts[1], "hex");
+  const encrypted = parts[2];
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
 
 // Create OAuth2 client
 function getOAuth2Client() {
@@ -43,14 +89,14 @@ export async function handleOAuthCallback(
   const userInfo = await oauth2.userinfo.get();
   const gmailEmail = userInfo.data.email || "";
 
-  // Store tokens securely in DB (upsert)
+  // Store tokens encrypted in DB (upsert)
   const { error } = await supabase
     .from("gmail_tokens")
     .upsert(
       {
         user_id: userId,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        access_token: encrypt(tokens.access_token),
+        refresh_token: encrypt(tokens.refresh_token),
         token_expiry: new Date(tokens.expiry_date || Date.now() + 3600000).toISOString(),
         gmail_email: gmailEmail,
         updated_at: new Date().toISOString(),
@@ -85,12 +131,12 @@ async function getValidAccessToken(userId: string): Promise<string> {
 
   // If token is still valid (with 5min buffer), return it
   if (expiry.getTime() - now.getTime() > 5 * 60 * 1000) {
-    return tokenData.access_token;
+    return decrypt(tokenData.access_token);
   }
 
   // Token expired — refresh it
   const oauth2Client = getOAuth2Client();
-  oauth2Client.setCredentials({ refresh_token: tokenData.refresh_token });
+  oauth2Client.setCredentials({ refresh_token: decrypt(tokenData.refresh_token) });
 
   const { credentials } = await oauth2Client.refreshAccessToken();
 
@@ -98,11 +144,11 @@ async function getValidAccessToken(userId: string): Promise<string> {
     throw new Error("Failed to refresh Gmail access token");
   }
 
-  // Update stored token
+  // Update stored token (encrypted)
   await supabase
     .from("gmail_tokens")
     .update({
-      access_token: credentials.access_token,
+      access_token: encrypt(credentials.access_token),
       token_expiry: new Date(credentials.expiry_date || Date.now() + 3600000).toISOString(),
       updated_at: new Date().toISOString(),
     })

@@ -166,14 +166,59 @@ export async function getDailyLimit(userId: string): Promise<{
 }
 
 // =============================================
-// Get daily lead search limit (how many leads per search)
+// Get daily lead find limit
 // Matches the plan's max daily email cap so user always
 // has exactly enough leads to fill one day of sending.
+// Starter: 50/day, Growth: 100/day, Agency: 200/day
 // =============================================
-export async function getDailySearchLimit(userId: string): Promise<number> {
+export async function getDailyLeadFindLimit(userId: string): Promise<number> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
   return config.maxDailyEmails; // 50 / 100 / 200
+}
+
+// =============================================
+// Count how many leads the user has found TODAY
+// (counts leads with source_type='auto_find' created today)
+// =============================================
+export async function getLeadsFoundToday(userId: string): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("leads")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("source_type", "auto_find")
+    .gte("created_at", today.toISOString());
+
+  return count || 0;
+}
+
+// =============================================
+// Check if user can find more leads today (daily cap)
+// Returns: allowed, remaining slots, used today, daily limit
+// =============================================
+export async function checkDailyLeadFindLimit(userId: string): Promise<{
+  allowed: boolean;
+  remaining: number;
+  usedToday: number;
+  dailyLimit: number;
+  plan: PlanTier;
+}> {
+  const userPlan = await getUserPlan(userId);
+  const config = PLAN_CONFIGS[userPlan.plan];
+  const dailyLimit = config.maxDailyEmails; // 50 / 100 / 200
+  const usedToday = await getLeadsFoundToday(userId);
+  const remaining = Math.max(0, dailyLimit - usedToday);
+
+  return {
+    allowed: remaining > 0,
+    remaining,
+    usedToday,
+    dailyLimit,
+    plan: userPlan.plan,
+  };
 }
 
 // =============================================
@@ -266,10 +311,13 @@ export async function getPlanInfo(userId: string): Promise<{
   warmupWeek: number;
   leadsFoundThisMonth: number;
   monthlyLeadFindLimit: number;
+  leadsFoundToday: number;
+  dailyLeadFindLimit: number;
 }> {
   const userPlan = await getUserPlan(userId);
   const dailyInfo = await getDailyLimit(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
+  const leadsFoundToday = await getLeadsFoundToday(userId);
 
   const warmupWeek = dailyInfo.warmupDay === 0
     ? 0
@@ -292,5 +340,7 @@ export async function getPlanInfo(userId: string): Promise<{
     warmupWeek,
     leadsFoundThisMonth: userPlan.leadsFoundThisMonth,
     monthlyLeadFindLimit: config.monthlyLeadFindLimit,
+    leadsFoundToday,
+    dailyLeadFindLimit: config.maxDailyEmails,
   };
 }
