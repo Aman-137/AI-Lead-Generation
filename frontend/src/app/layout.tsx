@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Lead Gen - Marketing Agency Lead Generation",
-  description: "AI-powered lead generation and cold email outreach for marketing agencies",
+  title: "Inertia Leads - AI-Powered Lead Generation & Cold Email Outreach",
+  description: "Find leads, generate personalized cold emails with AI, and send them automatically with inbox rotation.",
 };
 
 export default function RootLayout({

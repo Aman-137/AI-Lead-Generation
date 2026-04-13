@@ -185,6 +185,8 @@ export default function AutoLeadsPage() {
   const [sources, setSources] = useState<LeadSource[]>([]);
   const [findingLeads, setFindingLeads] = useState(false);
   const [loadingSources, setLoadingSources] = useState(true);
+  const [findLimitReached, setFindLimitReached] = useState(false);
+  const [findLimitMsg, setFindLimitMsg] = useState("");
   const router = useRouter();
   const findProgress = useProgressTracker(findLeadsSteps);
   const toast = useToast();
@@ -259,6 +261,11 @@ export default function AutoLeadsPage() {
       setTimeout(() => setActiveTab("manage"), 500);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to find leads";
+      // Detect daily or monthly limit reached
+      if (message.includes("limit reached") || message.includes("Daily lead find limit") || message.includes("Monthly lead find limit")) {
+        setFindLimitReached(true);
+        setFindLimitMsg(message);
+      }
       toast.addToast(message, "error");
       findProgress.cancel();
       console.error("Find leads error:", err);
@@ -375,10 +382,11 @@ export default function AutoLeadsPage() {
 
                 <button
                   type="submit"
-                  disabled={findingLeads}
-                  className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 text-sm"
+                  disabled={findingLeads || findLimitReached}
+                  className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                  title={findLimitReached ? findLimitMsg : ""}
                 >
-                  {findingLeads ? "🔄 Finding Leads..." : "🚀 Find Leads"}
+                  {findingLeads ? "🔄 Finding Leads..." : findLimitReached ? "⛔ Daily Limit Reached — Try Tomorrow" : "🚀 Find Leads"}
                 </button>
               </form>
 

@@ -106,12 +106,15 @@ interface Email {
   subject: string;
   body: string;
   status: string;
+  sequence_step?: number;
   sent_at: string | null;
+  scheduled_at?: string | null;
   replied?: boolean;
   replied_at?: string | null;
   retry_count?: number;
   error_log?: string | null;
   tone_variant?: string;
+  gmail_email?: string | null;
 }
 
 interface Campaign {
@@ -128,9 +131,13 @@ interface Campaign {
 const TIMEZONE_OPTIONS = [
   { value: "US_EAST", label: "US East (New York)", hours: "8-11 AM & 1-5 PM EST" },
   { value: "US_CENTRAL", label: "US Central (Chicago)", hours: "8-11 AM & 1-5 PM CST" },
+  { value: "US_MOUNTAIN", label: "US Mountain (Denver)", hours: "8-11 AM & 1-5 PM MST" },
   { value: "US_WEST", label: "US West (Los Angeles)", hours: "8-11 AM & 1-5 PM PST" },
+  { value: "US_ALASKA", label: "US Alaska (Anchorage)", hours: "8-11 AM & 1-5 PM AKST" },
+  { value: "US_HAWAII", label: "US Hawaii (Honolulu)", hours: "8-11 AM & 1-5 PM HST" },
   { value: "UK", label: "UK (London)", hours: "8-11 AM & 1-5 PM GMT" },
-  { value: "EU_CENTRAL", label: "Europe (Berlin/Paris)", hours: "8-11 AM & 1-5 PM CET" },
+  { value: "EU_CENTRAL", label: "Europe Central (Berlin/Paris)", hours: "8-11 AM & 1-5 PM CET" },
+  { value: "EU_EAST", label: "Europe East (Athens/Helsinki)", hours: "8-11 AM & 1-5 PM EET" },
 ];
 
 // ===== Progress Tracker =====
@@ -281,6 +288,12 @@ export default function CampaignDetailPage() {
   const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv">("all");
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
 
+  // Limit-reached states (disable buttons when daily cap hit)
+  const [generateLimitReached, setGenerateLimitReached] = useState(false);
+  const [generateLimitMsg, setGenerateLimitMsg] = useState("");
+  const [enrichLimitReached, setEnrichLimitReached] = useState(false);
+  const [enrichLimitMsg, setEnrichLimitMsg] = useState("");
+
   const toast = useToast();
 
   // Progress trackers for each long operation
@@ -339,7 +352,13 @@ export default function CampaignDetailPage() {
       await fetchCampaign();
     } catch (err) {
       generateProgress.cancel();
-      toast.addToast(err instanceof Error ? err.message : "Failed to generate emails", "error");
+      const message = err instanceof Error ? err.message : "Failed to generate emails";
+      // Detect daily limit reached (403 from backend)
+      if (message.includes("Daily AI generation limit reached") || message.includes("daily generation")) {
+        setGenerateLimitReached(true);
+        setGenerateLimitMsg(message);
+      }
+      toast.addToast(message, "error");
     } finally {
       setGenerating(false);
     }
@@ -402,7 +421,13 @@ export default function CampaignDetailPage() {
       await fetchCampaign();
     } catch (err) {
       enrichProgress.cancel();
-      toast.addToast(err instanceof Error ? err.message : "Failed to enrich leads", "error");
+      const message = err instanceof Error ? err.message : "Failed to enrich leads";
+      // Detect batch size limit
+      if (message.includes("batch size exceeds") || message.includes("Enrichment rate limit")) {
+        setEnrichLimitReached(true);
+        setEnrichLimitMsg(message);
+      }
+      toast.addToast(message, "error");
     } finally {
       setEnriching(false);
     }
@@ -433,7 +458,12 @@ export default function CampaignDetailPage() {
       await fetchCampaign();
     } catch (err) {
       scriptProgress.cancel();
-      toast.addToast(err instanceof Error ? err.message : "Failed to generate call scripts", "error");
+      const message = err instanceof Error ? err.message : "Failed to generate call scripts";
+      if (message.includes("Daily AI generation limit reached") || message.includes("daily generation")) {
+        setGenerateLimitReached(true);
+        setGenerateLimitMsg(message);
+      }
+      toast.addToast(message, "error");
     } finally {
       setGeneratingScripts(false);
     }
@@ -500,10 +530,11 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && !hasEmails && leads.some(l => l.enriched_data?.summary) && (
             <button
               onClick={handleGenerate}
-              disabled={generating}
-              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              disabled={generating || generateLimitReached}
+              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={generateLimitReached ? generateLimitMsg : ""}
             >
-              {generating ? "Generating..." : selectedLeadIds.size > 0 ? `🤖 Generate for ${selectedLeadIds.size} Selected` : "🤖 Generate Emails"}
+              {generating ? "Generating..." : generateLimitReached ? "⛔ Daily Limit Reached" : selectedLeadIds.size > 0 ? `🤖 Generate for ${selectedLeadIds.size} Selected` : "🤖 Generate Emails"}
             </button>
           )}
 
@@ -511,10 +542,11 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && leads.some(l => l.contact_method === "call") && leads.some(l => l.enriched_data?.summary) && (
             <button
               onClick={handleGenerateCallScripts}
-              disabled={generatingScripts}
-              className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              disabled={generatingScripts || generateLimitReached}
+              className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={generateLimitReached ? generateLimitMsg : ""}
             >
-              {generatingScripts ? "Generating..." : "📞 Generate Call Scripts"}
+              {generatingScripts ? "Generating..." : generateLimitReached ? "⛔ Daily Limit Reached" : "📞 Generate Call Scripts"}
             </button>
           )}
 
@@ -522,10 +554,11 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && !hasEmails && leads.length > 0 && !leads.some(l => l.enriched_data?.summary) && (
             <button
               onClick={handleEnrich}
-              disabled={enriching}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              disabled={enriching || enrichLimitReached}
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={enrichLimitReached ? enrichLimitMsg : ""}
             >
-              {enriching ? "Enriching..." : selectedLeadIds.size > 0 ? `🔍 Enrich ${selectedLeadIds.size} Selected` : "🔍 Enrich Leads"}
+              {enriching ? "Enriching..." : enrichLimitReached ? "⛔ Limit Reached" : selectedLeadIds.size > 0 ? `🔍 Enrich ${selectedLeadIds.size} Selected` : "🔍 Enrich Leads"}
             </button>
           )}
 
@@ -534,7 +567,7 @@ export default function CampaignDetailPage() {
             <button
               onClick={handleSend}
               disabled={sending}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? "Sending..." : selectedLeadIds.size > 0 ? `🚀 Send to ${selectedLeadIds.size} Selected` : "🚀 Start Campaign"}
             </button>
@@ -799,6 +832,15 @@ export default function CampaignDetailPage() {
               <div key={email.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      (email.sequence_step || 1) === 1
+                        ? "bg-blue-100 text-blue-700"
+                        : (email.sequence_step || 1) === 2
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-orange-100 text-orange-700"
+                    }`}>
+                      {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
+                    </span>
                     <span className="text-sm text-gray-500">To: {email.to_email}</span>
                     {email.tone_variant && (
                       <span className="text-xs text-gray-400">({email.tone_variant})</span>
@@ -821,9 +863,19 @@ export default function CampaignDetailPage() {
                 <h3 className="font-medium text-gray-900">{email.subject}</h3>
                 <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{email.body}</p>
                 <div className="mt-2 flex items-center gap-3">
+                  {email.gmail_email && (
+                    <p className="text-xs text-gray-400">
+                      From: {email.gmail_email}
+                    </p>
+                  )}
                   {email.sent_at && (
                     <p className="text-xs text-gray-400">
                       Sent {new Date(email.sent_at).toLocaleString()}
+                    </p>
+                  )}
+                  {!email.sent_at && email.scheduled_at && (
+                    <p className="text-xs text-yellow-600">
+                      Scheduled: {new Date(email.scheduled_at).toLocaleString()}
                     </p>
                   )}
                   {email.replied_at && (

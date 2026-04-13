@@ -35,13 +35,14 @@ export default function DashboardPage() {
     totalLeads: 0, totalCampaigns: 0, emailsSent: 0, totalEmails: 0,
     emailsFailed: 0, repliesReceived: 0, replyRate: "0.0%", avgLeadScore: 0,
     callLeads: 0, sentToday: 0, dailySendLimit: 0,
-    plan: "starter", planLabel: "Starter", priceMonthly: 29,
+    plan: "starter", planLabel: "Starter", priceMonthly: 39,
     maxDailyEmails: 50, warmupDay: 0, warmupComplete: false, warmupWeek: 0,
     leadsFoundThisMonth: 0, monthlyLeadFindLimit: 100,
     leadsFoundToday: 0, dailyLeadFindLimit: 50,
   });
   const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,7 +54,7 @@ export default function DashboardPage() {
         const data = await apiGet<Stats>("/stats");
         setStats(data);
       } catch {
-        // stats will remain 0
+        setError(true);
       } finally {
         setLoading(false);
       }
@@ -69,6 +70,12 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
       <p className="mt-2 text-gray-600">Welcome back, {email}</p>
+
+      {error && (
+        <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-sm text-red-600">Failed to load dashboard stats. Please refresh the page.</p>
+        </div>
+      )}
 
       {/* Onboarding Guide — shows for new users */}
       {isNewUser && (

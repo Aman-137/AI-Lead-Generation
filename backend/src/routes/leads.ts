@@ -1,14 +1,21 @@
 import { Router } from "express";
 import multer from "multer";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
-import { autoFindLimiter } from "../middleware/rateLimit";
+import { autoFindLimiter, enrichLimiter } from "../middleware/rateLimit";
 import supabase from "../services/supabase";
 import { parseCSV } from "../utils/csv";
 import { findLeadsByNiche, formatLeadsForDB } from "../services/leadFinder";
-import { checkLeadFindLimit, incrementLeadsFound, checkDailyLeadFindLimit } from "../services/planLimits";
+import { checkLeadFindLimit, incrementLeadsFound, checkDailyLeadFindLimit, getMaxEnrichBatchSize, getUserPlan, PLAN_CONFIGS } from "../services/planLimits";
+import logger from "../utils/logger";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+
+// Max CSV file size: 2MB
+const MAX_CSV_SIZE = 2 * 1024 * 1024;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_CSV_SIZE },
+});
 
 // POST /api/leads/upload — Upload CSV and create leads + campaign
 router.post("/upload", authMiddleware, upload.single("file"), async (req: AuthenticatedRequest, res) => {
@@ -26,6 +33,8 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       res.status(400).json({ error: "Only CSV files are allowed" });
       return;
     }
+
+    // File size already enforced by multer (2MB max)
 
     const text = file.buffer.toString("utf-8");
     const leads = parseCSV(text);
@@ -46,7 +55,16 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       return;
     }
 
-    // Create campaign
+    // Get user's plan daily limit (Starter: 50, Growth: 100, Agency: 200)
+    const userPlan = await getUserPlan(req.userId!);
+    const config = PLAN_CONFIGS[userPlan.plan];
+    const dailyLimit = config.maxDailyEmails; // 50 / 100 / 200
+
+    // Split leads: today's batch (up to plan limit) and queued for later
+    const todayLeads = leads.slice(0, dailyLimit);
+    const queuedLeads = leads.slice(dailyLimit);
+
+    // Create campaign with total leads count (all leads, including queued)
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
       .insert({
@@ -63,8 +81,8 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       return;
     }
 
-    // Insert leads
-    const leadsToInsert = leads.map((lead) => ({
+    // Insert today's leads (ready to process)
+    const todayLeadsToInsert = todayLeads.map((lead) => ({
       campaign_id: campaign.id,
       user_id: req.userId,
       name: lead.name || "",
@@ -77,16 +95,39 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
 
     const { error: leadsError } = await supabase
       .from("leads")
-      .insert(leadsToInsert);
+      .insert(todayLeadsToInsert);
 
     if (leadsError) {
       res.status(500).json({ error: "Failed to insert leads" });
       return;
     }
 
+    // Insert queued leads (marked for later days)
+    if (queuedLeads.length > 0) {
+      const queuedLeadsToInsert = queuedLeads.map((lead) => ({
+        campaign_id: campaign.id,
+        user_id: req.userId,
+        name: lead.name || "",
+        email: lead.email || "",
+        company: lead.company || "",
+        website: lead.website || "",
+        industry: lead.industry || "",
+        source_type: "csv_queued",
+      }));
+
+      await supabase
+        .from("leads")
+        .insert(queuedLeadsToInsert);
+    }
+
     res.json({
-      message: "Leads uploaded successfully",
+      message: queuedLeads.length > 0
+        ? `Uploaded ${leads.length} leads. ${todayLeads.length} ready now, ${queuedLeads.length} queued for upcoming days (${userPlan.plan} plan: ${dailyLimit} leads/day).`
+        : "Leads uploaded successfully",
       count: leads.length,
+      readyNow: todayLeads.length,
+      queued: queuedLeads.length,
+      dailyLimit,
       campaignId: campaign.id,
     });
   } catch {
@@ -94,21 +135,27 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
   }
 });
 
-// GET /api/leads — List all leads for user
+// GET /api/leads — List leads for user (paginated)
 router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const { data: leads, error } = await supabase
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data: leads, error, count } = await supabase
       .from("leads")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("user_id", req.userId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       res.status(500).json({ error: "Failed to fetch leads" });
       return;
     }
 
-    res.json({ leads });
+    res.json({ leads, total: count || 0, page, limit });
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -301,9 +348,12 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       return;
     }
 
-    const { error: leadsError } = await supabase
+    const { data: insertedLeads, error: leadsError } = await supabase
       .from("leads")
-      .insert(leadsToInsert);
+      .upsert(leadsToInsert, { onConflict: "user_id,website", ignoreDuplicates: true })
+      .select("id");
+
+    const insertedCount = insertedLeads?.length ?? leadsToInsert.length;
 
     if (leadsError) {
       await supabase
@@ -315,10 +365,10 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       return;
     }
 
-    // Update campaign total to actual inserted count
+    // Update campaign total to actual inserted count (excluding duplicates)
     await supabase
       .from("campaigns")
-      .update({ total_leads: leadsToInsert.length })
+      .update({ total_leads: insertedCount })
       .eq("id", campaign.id);
 
     // Update source status to completed
@@ -328,7 +378,7 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       .eq("id", source.id);
 
     // Track leads found against monthly plan limit
-    await incrementLeadsFound(req.userId!, leadsToInsert.length);
+    await incrementLeadsFound(req.userId!, insertedCount);
 
     // Get updated daily usage for response
     const dailyFinal = await checkDailyLeadFindLimit(req.userId!);
@@ -338,25 +388,36 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       source_id: source.id,
       campaign_id: campaign.id,
       campaign_name: campaignName,
-      count: leadsToInsert.length,
-      duplicatesSkipped: formattedLeads.length - leadsToInsert.length,
+      count: insertedCount,
+      duplicatesSkipped: formattedLeads.length - insertedCount,
       dailyUsed: dailyFinal.usedToday,
       dailyLimit: dailyFinal.dailyLimit,
       dailyRemaining: dailyFinal.remaining,
     });
   } catch (error) {
-    console.error("[AutoFind] Error:", error);
+    logger.error({ error }, "AutoFind error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // POST /api/leads/enrich — Enrich a lead with website data and scoring
-router.post("/enrich", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedRequest, res) => {
   try {
     const { leadIds } = req.body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       res.status(400).json({ error: "Lead IDs array is required" });
+      return;
+    }
+
+    // Cap batch size to plan limit
+    const maxBatch = await getMaxEnrichBatchSize(req.userId!);
+    if (leadIds.length > maxBatch) {
+      res.status(400).json({
+        error: `Enrichment batch size exceeds plan limit. Maximum ${maxBatch} leads per request on your plan.`,
+        maxBatchSize: maxBatch,
+        requested: leadIds.length,
+      });
       return;
     }
 
@@ -421,7 +482,8 @@ router.post("/enrich", authMiddleware, async (req: AuthenticatedRequest, res) =>
           const { error: updateError } = await supabase
             .from("leads")
             .update(updateFields)
-            .eq("id", lead.id);
+            .eq("id", lead.id)
+            .eq("user_id", req.userId);
 
           if (!updateError) {
             return {
@@ -431,7 +493,7 @@ router.post("/enrich", authMiddleware, async (req: AuthenticatedRequest, res) =>
             };
           }
         } catch (error) {
-          console.error(`[Enrich] Error enriching lead ${lead.id}:`, error);
+          logger.error({ leadId: lead.id, error }, "Error enriching lead");
         }
         return null;
       }));
@@ -447,7 +509,7 @@ router.post("/enrich", authMiddleware, async (req: AuthenticatedRequest, res) =>
       leads: enrichedLeads,
     });
   } catch (error) {
-    console.error("[Enrich] Error:", error);
+    logger.error({ error }, "Enrich error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -490,7 +552,8 @@ router.get("/sources", authMiddleware, async (req: AuthenticatedRequest, res) =>
         const { count: leadsCount } = await supabase
           .from("leads")
           .select("*", { count: "exact", head: true })
-          .eq("source_id", source.id);
+          .eq("source_id", source.id)
+          .eq("user_id", req.userId);
 
         return {
           id: source.id,

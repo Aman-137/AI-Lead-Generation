@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
+import { isValidUUID } from "../middleware/validate";
 
 const router = Router();
 
@@ -28,6 +29,10 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
 router.get("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    if (!isValidUUID(id)) {
+      res.status(400).json({ error: "Invalid campaign ID format" });
+      return;
+    }
 
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
@@ -49,11 +54,19 @@ router.get("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     const { data: emails } = await supabase
       .from("emails")
-      .select("*")
+      .select("*, gmail_accounts(email)")
       .eq("campaign_id", id)
-      .eq("user_id", req.userId);
+      .eq("user_id", req.userId)
+      .order("sequence_step", { ascending: true });
 
-    res.json({ campaign, leads: leads || [], emails: emails || [] });
+    // Flatten gmail_accounts join into gmail_email field
+    const enrichedEmails = (emails || []).map(e => ({
+      ...e,
+      gmail_email: e.gmail_accounts?.email || null,
+      gmail_accounts: undefined,
+    }));
+
+    res.json({ campaign, leads: leads || [], emails: enrichedEmails });
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -63,6 +76,10 @@ router.get("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
 router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    if (!isValidUUID(id)) {
+      res.status(400).json({ error: "Invalid campaign ID format" });
+      return;
+    }
     const { enable_followups, name, status, send_timezone } = req.body;
 
     // Verify campaign ownership
@@ -90,7 +107,7 @@ router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
       updateData.status = status;
     }
     if (send_timezone !== undefined) {
-      const validTimezones = ["US_EAST", "US_CENTRAL", "US_WEST", "UK", "EU_CENTRAL"];
+      const validTimezones = ["US_EAST", "US_CENTRAL", "US_MOUNTAIN", "US_WEST", "US_ALASKA", "US_HAWAII", "UK", "EU_CENTRAL", "EU_EAST"];
       if (validTimezones.includes(send_timezone)) {
         updateData.send_timezone = send_timezone;
       }

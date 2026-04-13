@@ -33,7 +33,7 @@ create table if not exists leads (
   phone text default '',
   industry text default '',
   contact_method text not null default 'email' check (contact_method in ('email', 'call')),
-  source_type text not null default 'auto_find' check (source_type in ('auto_find', 'csv')),
+  source_type text not null default 'auto_find' check (source_type in ('auto_find', 'csv', 'csv_queued')),
   enriched_data jsonb,
   score integer default 0,
   contacted boolean default false,
@@ -45,6 +45,12 @@ create table if not exists leads (
 create unique index if not exists idx_leads_user_website
   on leads (user_id, website)
   where website is not null and website != '';
+
+-- Prevent duplicate leads per user (same company+phone = same business)
+create unique index if not exists idx_leads_user_company_phone
+  on leads (user_id, company, phone)
+  where company is not null and company != ''
+    and phone is not null and phone != '';
 
 -- =============================================
 -- Table: campaigns
@@ -58,7 +64,7 @@ create table if not exists campaigns (
   status text not null default 'draft' check (status in ('draft', 'running', 'completed')),
   total_leads integer default 0,
   enable_followups boolean default false,
-  send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_WEST', 'UK', 'EU_CENTRAL')),
+  send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_MOUNTAIN', 'US_WEST', 'US_ALASKA', 'US_HAWAII', 'UK', 'EU_CENTRAL', 'EU_EAST')),
   created_at timestamp with time zone default now()
 );
 
@@ -66,6 +72,26 @@ create table if not exists campaigns (
 alter table leads
   add constraint fk_leads_campaign
   foreign key (campaign_id) references campaigns(id) on delete cascade;
+
+-- =============================================
+-- Table: gmail_accounts (multi-inbox rotation)
+-- =============================================
+-- Each user can connect multiple Gmail accounts (1-4 depending on plan).
+-- The first connected account is marked is_primary = true.
+-- Emails are distributed round-robin across accounts.
+create table if not exists gmail_accounts (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  email text not null,
+  access_token text not null,
+  refresh_token text not null,
+  token_expiry timestamp with time zone not null,
+  is_primary boolean default false,
+  warmup_started_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(user_id, email)
+);
 
 -- =============================================
 -- Table: emails
@@ -90,21 +116,8 @@ create table if not exists emails (
   error_log text,
   sent_at timestamp with time zone,
   scheduled_at timestamp with time zone,
+  gmail_account_id uuid references gmail_accounts(id) on delete set null,
   created_at timestamp with time zone default now()
-);
-
--- =============================================
--- Table: gmail_tokens (store OAuth2 tokens securely)
--- =============================================
-create table if not exists gmail_tokens (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null unique,
-  access_token text not null,
-  refresh_token text not null,
-  token_expiry timestamp with time zone not null,
-  gmail_email text,
-  created_at timestamp with time zone default now(),
-  updated_at timestamp with time zone default now()
 );
 
 -- =============================================
@@ -186,20 +199,20 @@ create policy "Users can update their own emails"
 create policy "Users can delete their own emails"
   on emails for delete using (auth.uid() = user_id);
 
--- Gmail Tokens RLS
-alter table gmail_tokens enable row level security;
+-- Gmail Accounts RLS
+alter table gmail_accounts enable row level security;
 
-create policy "Users can view their own gmail tokens"
-  on gmail_tokens for select using (auth.uid() = user_id);
+create policy "Users can view their own gmail accounts"
+  on gmail_accounts for select using (auth.uid() = user_id);
 
-create policy "Users can insert their own gmail tokens"
-  on gmail_tokens for insert with check (auth.uid() = user_id);
+create policy "Users can insert their own gmail accounts"
+  on gmail_accounts for insert with check (auth.uid() = user_id);
 
-create policy "Users can update their own gmail tokens"
-  on gmail_tokens for update using (auth.uid() = user_id);
+create policy "Users can update their own gmail accounts"
+  on gmail_accounts for update using (auth.uid() = user_id);
 
-create policy "Users can delete their own gmail tokens"
-  on gmail_tokens for delete using (auth.uid() = user_id);
+create policy "Users can delete their own gmail accounts"
+  on gmail_accounts for delete using (auth.uid() = user_id);
 
 -- User Plans RLS
 alter table user_plans enable row level security;
@@ -231,5 +244,61 @@ create index if not exists idx_emails_campaign_id on emails(campaign_id);
 create index if not exists idx_emails_user_id on emails(user_id);
 create index if not exists idx_emails_status on emails(status);
 create index if not exists idx_emails_scheduled_at on emails(scheduled_at);
-create index if not exists idx_gmail_tokens_user_id on gmail_tokens(user_id);
+create index if not exists idx_gmail_accounts_user_id on gmail_accounts(user_id);
+create index if not exists idx_emails_gmail_account_id on emails(gmail_account_id);
 create index if not exists idx_user_plans_user_id on user_plans(user_id);
+
+-- =============================================
+-- Function: Atomic increment for leads_found_this_month
+-- Prevents race conditions when multiple requests update simultaneously
+-- =============================================
+create or replace function increment_leads_found(p_user_id uuid, p_count integer)
+returns void as $$
+  update user_plans
+  set leads_found_this_month = leads_found_this_month + p_count,
+      updated_at = now()
+  where user_id = p_user_id;
+$$ language sql volatile;
+
+-- =============================================
+-- Table: smtp_accounts (SMTP email sending)
+-- =============================================
+-- Users can connect SMTP accounts (Outlook, Zoho, custom domain, etc.)
+-- alongside Gmail accounts for inbox rotation.
+create table if not exists smtp_accounts (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  email text not null,
+  display_name text default '',
+  host text not null,
+  port integer not null default 587,
+  username text not null,
+  password_encrypted text not null,
+  use_tls boolean default true,
+  is_primary boolean default false,
+  warmup_started_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(user_id, email)
+);
+
+-- SMTP Accounts RLS
+alter table smtp_accounts enable row level security;
+
+create policy "Users can view their own smtp accounts"
+  on smtp_accounts for select using (auth.uid() = user_id);
+
+create policy "Users can insert their own smtp accounts"
+  on smtp_accounts for insert with check (auth.uid() = user_id);
+
+create policy "Users can update their own smtp accounts"
+  on smtp_accounts for update using (auth.uid() = user_id);
+
+create policy "Users can delete their own smtp accounts"
+  on smtp_accounts for delete using (auth.uid() = user_id);
+
+create index if not exists idx_smtp_accounts_user_id on smtp_accounts(user_id);
+
+-- Add smtp_account_id to emails table (nullable, alongside gmail_account_id)
+alter table emails add column if not exists smtp_account_id uuid references smtp_accounts(id) on delete set null;
+create index if not exists idx_emails_smtp_account_id on emails(smtp_account_id);

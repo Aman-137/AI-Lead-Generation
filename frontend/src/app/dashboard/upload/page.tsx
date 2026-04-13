@@ -100,8 +100,12 @@ export default function UploadPage() {
     formData.append("campaignName", campaignName);
 
     try {
-      const data = await apiPostFormData<{ count: number }>("/leads/upload", formData);
-      toast.addToast(`Successfully uploaded ${data.count} leads!`, "success");
+      const data = await apiPostFormData<{ count: number; readyNow?: number; queued?: number; dailyLimit?: number }>("/leads/upload", formData);
+      if (data.queued && data.queued > 0) {
+        toast.addToast(`Uploaded ${data.count} leads! ${data.readyNow} ready now, ${data.queued} queued for upcoming days (${data.dailyLimit}/day limit).`, "success");
+      } else {
+        toast.addToast(`Successfully uploaded ${data.count} leads!`, "success");
+      }
       setFile(null);
       setCampaignName("");
     } catch (err) {
@@ -140,12 +144,21 @@ export default function UploadPage() {
               CSV File
             </label>
             <p className="text-xs text-gray-500 mt-1 mb-2">
-              Required columns: name, email, company, website
+              Required columns: name, email, company, website · Max file size: 2MB
             </p>
             <input
               type="file"
               accept=".csv"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const selected = e.target.files?.[0] || null;
+                if (selected && selected.size > 2 * 1024 * 1024) {
+                  toast.addToast("CSV file must be under 2MB", "error");
+                  e.target.value = "";
+                  setFile(null);
+                  return;
+                }
+                setFile(selected);
+              }}
               className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
           </div>

@@ -1,25 +1,40 @@
 import "./config";
 import express from "express";
 import cors from "cors";
+import logger from "./utils/logger";
 import leadsRouter from "./routes/leads";
 import campaignsRouter from "./routes/campaigns";
 import generateRouter from "./routes/generate";
 import sendRouter from "./routes/send";
 import gmailRouter from "./routes/gmail";
+import smtpRouter from "./routes/smtp";
 import statsRouter from "./routes/stats";
 import { apiLimiter, sendEmailLimiter, generateLimiter } from "./middleware/rateLimit";
 import { sanitizeBody, validateCampaignId } from "./middleware/validate";
-import { startEmailQueue } from "./jobs/emailQueue";
+import { startEmailQueue, stopEmailQueue } from "./jobs/emailQueue";
+import { startCsvDripFeed, stopCsvDripFeed } from "./jobs/csvDripFeed";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(sanitizeBody);
 app.use(apiLimiter);
 
@@ -29,6 +44,7 @@ app.use("/api/campaigns", campaignsRouter);
 app.use("/api/generate", generateLimiter, validateCampaignId, generateRouter);
 app.use("/api/send", sendEmailLimiter, validateCampaignId, sendRouter);
 app.use("/api/gmail", gmailRouter);
+app.use("/api/smtp", smtpRouter);
 app.use("/api/stats", statsRouter);
 
 // Health check
@@ -36,14 +52,39 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info({ port: PORT }, "Backend server running");
   // Start background email queue processor
   try {
     startEmailQueue();
   } catch (err) {
-    console.error("[Server] Failed to start email queue:", err);
+    logger.error({ err }, "Failed to start email queue");
+  }
+  // Start CSV drip-feed processor
+  try {
+    startCsvDripFeed();
+  } catch (err) {
+    logger.error({ err }, "Failed to start CSV drip-feed");
   }
 });
+
+// Graceful shutdown — stop background jobs and close server on termination signals
+function gracefulShutdown(signal: string) {
+  logger.info({ signal }, "Shutdown signal received, closing gracefully...");
+  stopEmailQueue();
+  stopCsvDripFeed();
+  server.close(() => {
+    logger.info("Server closed. Exiting.");
+    process.exit(0);
+  });
+  // Force exit if graceful close takes too long (10 seconds)
+  setTimeout(() => {
+    logger.warn("Graceful shutdown timed out, forcing exit.");
+    process.exit(1);
+  }, 10000);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 export default app;

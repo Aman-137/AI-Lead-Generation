@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import { getPlanInfo } from "../services/planLimits";
+import { isValidUUID } from "../middleware/validate";
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const router = Router();
 router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     // Run all stats queries in parallel for speed
     const [
@@ -79,6 +80,10 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
 router.get("/campaign/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { id: campaignId } = req.params;
+    if (!isValidUUID(campaignId)) {
+      res.status(400).json({ error: "Invalid campaign ID format" });
+      return;
+    }
 
     // Fetch campaign
     const { data: campaign, error: campaignError } = await supabase

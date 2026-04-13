@@ -1,5 +1,8 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { URL } from "url";
+import dns from "dns/promises";
+import logger from "../utils/logger";
 
 export interface WebsiteData {
   title: string;
@@ -13,6 +16,50 @@ export interface WebsiteData {
   emails: string[];
 }
 
+// Block private/internal IPs to prevent SSRF
+function isPrivateIP(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4) return true; // block anything weird
+
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true;
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  // 127.0.0.0/8 (localhost)
+  if (parts[0] === 127) return true;
+  // 169.254.0.0/16 (link-local / cloud metadata)
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  // 0.0.0.0
+  if (parts.every(p => p === 0)) return true;
+
+  return false;
+}
+
+async function isUrlSafe(websiteUrl: string): Promise<boolean> {
+  try {
+    const parsed = new URL(websiteUrl);
+
+    // Only allow http/https
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+
+    // Block localhost hostnames
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "0.0.0.0" || hostname.endsWith(".local")) return false;
+
+    // Resolve DNS and check if it points to a private IP
+    const addresses = await dns.resolve4(hostname);
+    for (const ip of addresses) {
+      if (isPrivateIP(ip)) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Fetch and parse website content to extract business information
  */
@@ -24,8 +71,16 @@ export async function scrapeWebsite(
       return null;
     }
 
+    // SSRF protection: block internal/private IPs
+    const safe = await isUrlSafe(websiteUrl);
+    if (!safe) {
+      logger.warn({ url: websiteUrl }, "Blocked SSRF attempt — URL resolves to private/internal IP");
+      return null;
+    }
+
     const response = await axios.get(websiteUrl, {
       timeout: 5000,
+      maxRedirects: 3,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -119,9 +174,9 @@ export async function scrapeWebsite(
       emails,
     };
   } catch (error) {
-    console.error(
-      `[Scraper] Error scraping ${websiteUrl}:`,
-      error instanceof Error ? error.message : error
+    logger.error(
+      { url: websiteUrl, error: error instanceof Error ? error.message : error },
+      "Error scraping website"
     );
     return null;
   }

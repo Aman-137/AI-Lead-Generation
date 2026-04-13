@@ -4,12 +4,9 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.warn("[Supabase] Warning: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set. Database operations will fail.");
+  throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment variables.");
 }
 
-const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseKey || "placeholder-key"
-);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default supabase;

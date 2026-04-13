@@ -1,7 +1,8 @@
 import OpenAI from "openai";
+import logger from "../utils/logger";
 
 if (!process.env.OPENAI_API_KEY) {
-  console.warn("[OpenAI] Warning: OPENAI_API_KEY not set. AI generation will fail.");
+  logger.warn("OPENAI_API_KEY not set. AI generation will fail.");
 }
 
 const openai = new OpenAI({

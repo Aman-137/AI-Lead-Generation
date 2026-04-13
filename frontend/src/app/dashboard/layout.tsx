@@ -23,8 +23,8 @@ export default async function DashboardLayout({
       <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
         <div className="flex flex-col h-full">
           <div className="px-6 py-5 border-b border-gray-200">
-            <h1 className="text-xl font-bold text-gray-900">AI Lead Gen</h1>
-            <p className="text-xs text-gray-500 mt-1">Marketing Agency Tool</p>
+            <h1 className="text-xl font-bold text-gray-900">Inertia Leads</h1>
+            <p className="text-xs text-gray-500 mt-1">AI-Powered Outreach</p>
           </div>
 
           <nav className="flex-1 px-4 py-4 space-y-1">

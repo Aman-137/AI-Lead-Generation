@@ -1,23 +1,28 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
-import { sendEmail, isGmailConnected } from "../services/gmail";
+import { getAllEmailAccounts, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
 import { getDailyLimit } from "../services/planLimits";
+import logger from "../utils/logger";
 
 const router = Router();
-
-const MAX_RETRIES = 2;
 
 // ===== Business Hours Sending =====
 // Optimal cold email send times (research-backed):
 // Morning peak: 8:00-11:00 AM | Afternoon peak: 1:00-5:00 PM
 // All 7 days, timezone-aware with DST handling
 const TIMEZONE_OFFSETS: Record<string, number[]> = {
-  US_EAST:    [-5, -4],   // EST/EDT (Nov-Mar: -5, Mar-Nov: -4)
-  US_CENTRAL: [-6, -5],   // CST/CDT
-  US_WEST:    [-8, -7],   // PST/PDT
-  UK:         [0, 1],     // GMT/BST
-  EU_CENTRAL: [1, 2],     // CET/CEST
+  // US Timezones
+  US_EAST:     [-5, -4],   // EST/EDT (Nov-Mar: -5, Mar-Nov: -4)
+  US_CENTRAL:  [-6, -5],   // CST/CDT
+  US_MOUNTAIN: [-7, -6],   // MST/MDT (Colorado, Utah, Montana, Wyoming, New Mexico, Idaho)
+  US_WEST:     [-8, -7],   // PST/PDT
+  US_ALASKA:   [-9, -8],   // AKST/AKDT
+  US_HAWAII:   [-10, -10], // HST (no DST)
+  // UK & Europe Timezones
+  UK:          [0, 1],     // GMT/BST
+  EU_CENTRAL:  [1, 2],     // CET/CEST (France, Germany, Spain, Italy, Netherlands, etc.)
+  EU_EAST:     [2, 3],     // EET/EEST (Greece, Romania, Finland, Bulgaria, etc.)
 };
 
 // Determine if DST is active — different rules for US vs UK/EU
@@ -50,9 +55,13 @@ function isDSTForRegion(date: Date, region: "US" | "EU"): boolean {
 const TIMEZONE_REGIONS: Record<string, "US" | "EU"> = {
   US_EAST: "US",
   US_CENTRAL: "US",
+  US_MOUNTAIN: "US",
   US_WEST: "US",
+  US_ALASKA: "US",
+  US_HAWAII: "US",
   UK: "EU",
   EU_CENTRAL: "EU",
+  EU_EAST: "EU",
 };
 
 function getLocalHour(date: Date, timezone: string): { hour: number; dayOfWeek: number } {
@@ -64,10 +73,26 @@ function getLocalHour(date: Date, timezone: string): { hour: number; dayOfWeek: 
   return { hour: local.getUTCHours(), dayOfWeek: local.getUTCDay() };
 }
 
-// Check if current time is within sending hours (all 7 days)
-export function isWithinSendWindow(timezone: string): { canSend: boolean; nextWindowMs: number } {
+// Check if current time is within sending hours
+// Initial emails (isFollowUp=false): weekdays only (Mon-Fri) during business hours
+// Follow-ups (isFollowUp=true): all 7 days during business hours
+export function isWithinSendWindow(timezone: string, isFollowUp = false): { canSend: boolean; nextWindowMs: number } {
   const now = new Date();
-  const { hour } = getLocalHour(now, timezone);
+  const { hour, dayOfWeek } = getLocalHour(now, timezone);
+
+  // Weekend check for initial emails only (0=Sunday, 6=Saturday)
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  if (isWeekend && !isFollowUp) {
+    // Calculate next Monday 8am
+    const offsets = TIMEZONE_OFFSETS[timezone] || TIMEZONE_OFFSETS.US_EAST;
+    const region = TIMEZONE_REGIONS[timezone] || "US";
+    const offset = isDSTForRegion(now, region) ? offsets[1] : offsets[0];
+    const next = new Date(now);
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : 2; // Sunday→1 day, Saturday→2 days
+    next.setUTCDate(next.getUTCDate() + daysUntilMonday);
+    next.setUTCHours(8 - offset, 0, 0, 0);
+    return { canSend: false, nextWindowMs: Math.max(0, next.getTime() - now.getTime()) };
+  }
 
   // Morning window: 8:00-11:00 AM | Afternoon window: 1:00-5:00 PM
   const inMorning = hour >= 8 && hour < 11;
@@ -93,6 +118,13 @@ export function isWithinSendWindow(timezone: string): { canSend: boolean; nextWi
     // After 5pm → next day 8am
     next.setUTCDate(next.getUTCDate() + 1);
     next.setUTCHours(8 - offset, 0, 0, 0);
+    // If next day is Saturday (and not follow-up), skip to Monday
+    const nextDay = new Date(next);
+    const { dayOfWeek: nextDayOfWeek } = getLocalHour(nextDay, timezone);
+    if (!isFollowUp && (nextDayOfWeek === 6 || nextDayOfWeek === 0)) {
+      const skip = nextDayOfWeek === 6 ? 2 : 1;
+      next.setUTCDate(next.getUTCDate() + skip);
+    }
   }
 
   return { canSend: false, nextWindowMs: Math.max(0, next.getTime() - now.getTime()) };
@@ -107,7 +139,7 @@ function delay(minMs: number, maxMs: number): Promise<void> {
 // Helper: count emails sent today by this user
 async function getEmailsSentToday(userId: string): Promise<number> {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
 
   const { count } = await supabase
     .from("emails")
@@ -119,7 +151,9 @@ async function getEmailsSentToday(userId: string): Promise<number> {
   return count || 0;
 }
 
-// POST /api/send — Send generated emails for a campaign one-by-one with delay
+// POST /api/send — Queue a campaign for sending (non-blocking)
+// Validates, assigns inboxes, cancels replied follow-ups, then returns immediately.
+// Actual email delivery is handled by the background email queue processor.
 router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { campaignId, leadIds } = req.body;
@@ -129,11 +163,11 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    // Check if Gmail is connected
-    const gmailStatus = await isGmailConnected(req.userId!);
-    if (!gmailStatus.connected) {
+    // Check if any email account is connected (Gmail or SMTP)
+    const allAccounts = await getAllEmailAccounts(req.userId!);
+    if (allAccounts.length === 0) {
       res.status(400).json({
-        error: "Gmail not connected. Please connect your Gmail account first.",
+        error: "No email account connected. Please connect Gmail or SMTP in Settings first.",
       });
       return;
     }
@@ -164,34 +198,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (statusCheck?.status === "running") {
       res.json({
         message: "Campaign is already running. Emails will be sent during the next business hour window.",
-        sent: 0, failed: 0, total: 0, queued: true,
-      });
-      return;
-    }
-
-    // Check business hours — if outside window, queue the campaign for auto-sending
-    const sendWindow = isWithinSendWindow(timezone);
-    if (!sendWindow.canSend) {
-      // Set campaign to "running" so the background queue picks it up during business hours
-      await supabase
-        .from("campaigns")
-        .update({ status: "running" })
-        .eq("id", campaignId)
-        .eq("user_id", req.userId);
-
-      const waitMins = Math.ceil(sendWindow.nextWindowMs / 60000);
-      const waitHrs = Math.floor(waitMins / 60);
-      const remainMins = waitMins % 60;
-      const waitStr = waitHrs > 0 ? `${waitHrs}h ${remainMins}m` : `${waitMins}m`;
-      const tzLabel = timezone.replace("_", " ");
-
-      res.json({
-        message: `Campaign queued! Outside ${tzLabel} sending hours right now. Emails will auto-send during the next window (8-11 AM & 1-5 PM ${tzLabel}) in ~${waitStr}.`,
-        sent: 0,
-        failed: 0,
-        total: 0,
-        queued: true,
-        nextWindowMs: sendWindow.nextWindowMs,
+        queued: true, total: 0,
       });
       return;
     }
@@ -200,15 +207,15 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     const sentToday = await getEmailsSentToday(req.userId!);
     const { limit: DAILY_SEND_LIMIT, warmupDay, warmupComplete, plan } = await getDailyLimit(req.userId!);
 
-    // Gmail not connected or plan inactive — no sending
+    // Gmail/SMTP not connected or plan inactive — no sending
     if (DAILY_SEND_LIMIT === 0) {
       res.status(400).json({
-        error: "Gmail not connected or plan inactive. Please connect Gmail in Settings first.",
+        error: "No email account connected or plan inactive. Please connect an account in Settings first.",
       });
       return;
     }
 
-    // Fetch pending emails for this campaign (only those ready to send now)
+    // Count pending emails for this campaign
     const now = new Date().toISOString();
     let emailQuery = supabase
       .from("emails")
@@ -216,10 +223,9 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       .eq("campaign_id", campaignId)
       .eq("user_id", req.userId)
       .eq("status", "pending")
-      .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
       .order("sequence_step", { ascending: true });
 
-    // If specific lead IDs provided, only send emails for those leads
+    // If specific lead IDs provided, only include emails for those leads
     if (Array.isArray(leadIds) && leadIds.length > 0) {
       emailQuery = emailQuery.in("lead_id", leadIds);
     }
@@ -229,7 +235,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (emailsError || !emails || emails.length === 0) {
       if (sentToday >= DAILY_SEND_LIMIT) {
         res.status(429).json({
-          error: `Daily send limit reached (${DAILY_SEND_LIMIT}/day). Try again tomorrow to protect your Gmail account.`,
+          error: `Daily send limit reached (${DAILY_SEND_LIMIT}/day). Try again tomorrow to protect your email account.`,
         });
         return;
       }
@@ -237,149 +243,136 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    // Split into initial emails (capped) and follow-ups (uncapped)
+    // Split into initials and follow-ups for inbox assignment
     const initialEmails = emails.filter(e => (e.sequence_step || 1) === 1);
     const followUpEmails = emails.filter(e => (e.sequence_step || 1) > 1);
 
-    // Cap only initial emails to daily limit
-    const remaining = Math.max(0, DAILY_SEND_LIMIT - sentToday);
-    const cappedInitials = initialEmails.slice(0, remaining);
-
-    // Skip follow-ups for leads that already replied
+    // Cancel follow-ups for leads that already replied
     const repliedLeadIds = new Set<string>();
     if (followUpEmails.length > 0) {
-      const leadIds = [...new Set(followUpEmails.map(e => e.lead_id).filter(Boolean))];
-      if (leadIds.length > 0) {
+      const uniqueLeadIds = [...new Set(followUpEmails.map(e => e.lead_id).filter(Boolean))];
+      if (uniqueLeadIds.length > 0) {
         const { data: repliedEmails } = await supabase
           .from("emails")
           .select("lead_id")
-          .in("lead_id", leadIds)
+          .eq("user_id", req.userId)
+          .in("lead_id", uniqueLeadIds)
           .eq("replied", true);
         if (repliedEmails) {
           repliedEmails.forEach(e => repliedLeadIds.add(e.lead_id));
         }
       }
     }
-    const activeFollowUps = followUpEmails.filter(e => !repliedLeadIds.has(e.lead_id));
 
-    // Cancel follow-ups for replied leads
     const cancelledFollowUps = followUpEmails.filter(e => repliedLeadIds.has(e.lead_id));
     if (cancelledFollowUps.length > 0) {
       await supabase
         .from("emails")
         .update({ status: "cancelled" })
+        .eq("user_id", req.userId)
         .in("id", cancelledFollowUps.map(e => e.id));
     }
 
-    // Combine: capped initials + all active follow-ups
-    const emailsToSend = [...cappedInitials, ...activeFollowUps];
+    // ===== INBOX ROTATION: Assign email accounts (Gmail + SMTP) =====
+    const leadToAccount = new Map<string, { id: string; type: "gmail" | "smtp" }>();
+    let rrIndex = 0;
 
-    // Update campaign status to "running"
+    // Assign initials via round-robin across all connected accounts
+    for (const email of initialEmails) {
+      if (!email.gmail_account_id && !email.smtp_account_id) {
+        const account = allAccounts[rrIndex % allAccounts.length];
+        if (account.type === "gmail") {
+          email.gmail_account_id = account.id;
+        } else {
+          email.smtp_account_id = account.id;
+        }
+        rrIndex++;
+      }
+      if (email.lead_id) {
+        const info = getAccountInfo(email);
+        if (info) leadToAccount.set(email.lead_id, info);
+      }
+    }
+
+    // Assign follow-ups to match their initial email's account (thread consistency)
+    const activeFollowUps = followUpEmails.filter(e => !repliedLeadIds.has(e.lead_id));
+    for (const email of activeFollowUps) {
+      if (!email.gmail_account_id && !email.smtp_account_id && email.lead_id) {
+        let account = leadToAccount.get(email.lead_id);
+        if (!account) {
+          const { data: initial } = await supabase
+            .from("emails")
+            .select("gmail_account_id, smtp_account_id")
+            .eq("user_id", req.userId)
+            .eq("lead_id", email.lead_id)
+            .eq("campaign_id", campaignId)
+            .eq("sequence_step", 1)
+            .single();
+          if (initial) account = getAccountInfo(initial) ?? undefined;
+          if (!account) account = { id: allAccounts[0].id, type: allAccounts[0].type };
+        }
+        if (account.type === "gmail") {
+          email.gmail_account_id = account.id;
+        } else {
+          email.smtp_account_id = account.id;
+        }
+      }
+    }
+
+    // Batch update account assignments in DB
+    const allAssignableEmails = [...initialEmails, ...activeFollowUps];
+    for (const email of allAssignableEmails) {
+      const info = getAccountInfo(email);
+      if (info) {
+        await supabase
+          .from("emails")
+          .update(buildAccountAssignment(info.id, info.type))
+          .eq("id", email.id)
+          .eq("user_id", req.userId);
+      }
+    }
+    // ===== END INBOX ROTATION =====
+
+    // Set campaign to "running" — background queue will handle actual sending
     await supabase
       .from("campaigns")
       .update({ status: "running" })
       .eq("id", campaignId)
       .eq("user_id", req.userId);
 
-    let sentCount = 0;
-    let failedCount = 0;
+    const remaining = Math.max(0, DAILY_SEND_LIMIT - sentToday);
+    const totalQueued = allAssignableEmails.length;
 
-    for (let i = 0; i < emailsToSend.length; i++) {
-      const email = emailsToSend[i];
+    // Check business hours for informative messaging
+    const initialSendWindow = isWithinSendWindow(timezone, false);
+    const tzLabel = timezone.replace("_", " ");
 
-      try {
-        const result = await sendEmail(
-          req.userId!,
-          email.to_email,
-          email.subject,
-          email.body
-        );
-
-        if (result.success) {
-          await supabase
-            .from("emails")
-            .update({
-              status: "sent",
-              sent_at: new Date().toISOString(),
-              error_log: null,
-            })
-            .eq("id", email.id);
-
-          // Mark lead as contacted (only on first email)
-          if ((email.sequence_step || 1) === 1 && email.lead_id) {
-            await supabase
-              .from("leads")
-              .update({ contacted: true, contacted_at: new Date().toISOString() })
-              .eq("id", email.lead_id);
-          }
-
-          sentCount++;
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        const currentRetry = (email.retry_count || 0) + 1;
-
-        if (currentRetry <= MAX_RETRIES) {
-          // Keep as pending for retry, increment counter
-          await supabase
-            .from("emails")
-            .update({
-              retry_count: currentRetry,
-              error_log: errorMsg,
-            })
-            .eq("id", email.id);
-        } else {
-          // Max retries reached — mark as failed
-          await supabase
-            .from("emails")
-            .update({
-              status: "failed",
-              retry_count: currentRetry,
-              error_log: errorMsg,
-            })
-            .eq("id", email.id);
-        }
-
-        failedCount++;
-      }
-
-      // Delay between emails (45-90 seconds) — more natural spacing
-      if (i < emailsToSend.length - 1) {
-        await delay(45000, 90000);
-      }
+    let message: string;
+    if (!initialSendWindow.canSend) {
+      const waitMins = Math.ceil(initialSendWindow.nextWindowMs / 60000);
+      const waitHrs = Math.floor(waitMins / 60);
+      const remainMins = waitMins % 60;
+      const waitStr = waitHrs > 0 ? `${waitHrs}h ${remainMins}m` : `${waitMins}m`;
+      message = `Campaign queued! Outside ${tzLabel} sending hours. Emails will auto-send during the next window (Mon-Fri 8-11 AM & 1-5 PM ${tzLabel}) in ~${waitStr}.`;
+    } else {
+      message = `Campaign launched! ${totalQueued} emails queued for sending. They'll be sent automatically with proper delays to protect your inbox reputation.`;
     }
 
-    // Update campaign status based on results
-    // Check ALL pending emails (including future-scheduled follow-ups)
-    const { count: pendingCount } = await supabase
-      .from("emails")
-      .select("*", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .in("status", ["pending"]);
-
-    const finalStatus = (pendingCount || 0) === 0
-      ? "completed"
-      : "running";  // Stay "running" so the background queue picks up follow-ups
-
-    await supabase
-      .from("campaigns")
-      .update({ status: finalStatus })
-      .eq("id", campaignId)
-      .eq("user_id", req.userId);
+    logger.info({ campaignId, userId: req.userId, totalQueued, cancelled: cancelledFollowUps.length }, "Campaign queued for sending");
 
     res.json({
-      message: "Email sending completed",
-      sent: sentCount,
-      failed: failedCount,
-      total: emailsToSend.length,
-      dailyLimitRemaining: remaining - sentCount,
+      message,
+      queued: true,
+      total: totalQueued,
+      cancelled: cancelledFollowUps.length,
+      dailyLimitRemaining: remaining,
       plan,
       warmupDay,
       warmupComplete,
       dailyLimit: DAILY_SEND_LIMIT,
     });
   } catch {
-    res.status(500).json({ error: "Failed to send emails" });
+    res.status(500).json({ error: "Failed to queue campaign" });
   }
 });
 

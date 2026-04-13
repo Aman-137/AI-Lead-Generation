@@ -2,6 +2,8 @@ import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import openai from "../services/openai";
+import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan } from "../services/planLimits";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -191,6 +193,18 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
+    // Check daily generation limit (OpenAI cost protection)
+    const genCheck = await checkDailyGenerationLimit(req.userId!);
+    if (!genCheck.allowed) {
+      res.status(403).json({
+        error: `Daily AI generation limit reached (${genCheck.usedToday}/${genCheck.dailyLimit} on ${genCheck.plan} plan). Try again tomorrow.`,
+        usedToday: genCheck.usedToday,
+        dailyLimit: genCheck.dailyLimit,
+        plan: genCheck.plan,
+      });
+      return;
+    }
+
     // Fetch leads for the campaign (only email-contactable leads)
     let query = supabase
       .from("leads")
@@ -211,11 +225,30 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
+    // Skip leads that already have emails (prevents duplicate generation via Postman)
+    const { data: existingEmails } = await supabase
+      .from("emails")
+      .select("lead_id")
+      .eq("campaign_id", campaignId)
+      .eq("user_id", req.userId);
+
+    const existingLeadIds = new Set((existingEmails || []).map((e: any) => e.lead_id));
+    const newLeads = leads.filter(lead => !existingLeadIds.has(lead.id));
+
+    if (newLeads.length === 0) {
+      res.json({ message: "Emails already generated for all leads in this campaign", count: 0, skipped: leads.length });
+      return;
+    }
+
+    // Cap leads to remaining daily generation slots
+    const maxLeads = genCheck.remaining;
+    const cappedLeads = newLeads.slice(0, maxLeads);
+
     const generatedEmails: any[] = [];
     let skippedCount = 0;
 
     // Filter valid leads first
-    const validLeads = leads.filter(lead => {
+    const validLeads = cappedLeads.filter(lead => {
       const check = isValidLead(lead);
       if (!check.valid) { skippedCount++; return false; }
       return true;
@@ -252,7 +285,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
           }
         }
       } catch (err) {
-        console.error(`[Generate] Error for lead ${lead.id}:`, err instanceof Error ? err.message : err);
+        logger.error({ leadId: lead.id, error: err instanceof Error ? err.message : err }, "Generate error for lead");
       }
       return null;
     });
@@ -277,12 +310,14 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     await supabase
       .from("campaigns")
       .update({ status: "draft" })
-      .eq("id", campaignId);
+      .eq("id", campaignId)
+      .eq("user_id", req.userId);
 
     res.json({
       message: "Emails generated successfully",
       count: generatedEmails.length,
       skipped: skippedCount,
+      capped: leads.length > maxLeads ? leads.length - maxLeads : 0,
     });
   } catch {
     res.status(500).json({ error: "Failed to generate emails" });
@@ -296,6 +331,29 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
 
     if (!campaignId) {
       res.status(400).json({ error: "Campaign ID is required" });
+      return;
+    }
+
+    // Check daily generation limit (OpenAI cost protection)
+    const genCheck = await checkDailyGenerationLimit(req.userId!);
+    if (!genCheck.allowed) {
+      res.status(403).json({
+        error: `Daily AI generation limit reached (${genCheck.usedToday}/${genCheck.dailyLimit} on ${genCheck.plan} plan). Try again tomorrow.`,
+        usedToday: genCheck.usedToday,
+        dailyLimit: genCheck.dailyLimit,
+        plan: genCheck.plan,
+      });
+      return;
+    }
+
+    // Calculate how many leads we can process (each lead = 1 or 3 generations)
+    const generationsPerLead = enableFollowups ? 3 : 1;
+    const maxLeads = Math.floor(genCheck.remaining / generationsPerLead);
+
+    if (maxLeads === 0) {
+      res.status(403).json({
+        error: `Not enough daily generation quota remaining. Need ${generationsPerLead} per lead, only ${genCheck.remaining} left.`,
+      });
       return;
     }
 
@@ -336,11 +394,29 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       return;
     }
 
+    // Skip leads that already have emails (prevents duplicate generation via Postman)
+    const { data: existingEmails } = await supabase
+      .from("emails")
+      .select("lead_id")
+      .eq("campaign_id", campaignId)
+      .eq("user_id", req.userId);
+
+    const existingLeadIds = new Set((existingEmails || []).map((e: any) => e.lead_id));
+    const newLeads = leads.filter(lead => !existingLeadIds.has(lead.id));
+
+    if (newLeads.length === 0) {
+      res.json({ message: "Emails already generated for all leads in this campaign", count: 0, skipped: leads.length });
+      return;
+    }
+
+    // Cap leads to remaining daily generation slots
+    const cappedLeads = newLeads.slice(0, maxLeads);
+
     const generatedEmails: any[] = [];
     let skippedCount = 0;
 
     // Filter valid leads first
-    const validLeads = leads.filter(lead => {
+    const validLeads = cappedLeads.filter(lead => {
       const check = isValidLead(lead);
       if (!check.valid) { skippedCount++; return false; }
       return true;
@@ -412,7 +488,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                         };
                       }
                     }
-                  } catch { console.error(`[Generate] Failed follow-up 1 for lead ${lead.id}`); }
+                  } catch { logger.error({ leadId: lead.id }, "Failed follow-up 1"); }
                   return null;
                 })(),
                 // Follow-up 2
@@ -443,7 +519,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                         };
                       }
                     }
-                  } catch { console.error(`[Generate] Failed follow-up 2 for lead ${lead.id}`); }
+                  } catch { logger.error({ leadId: lead.id }, "Failed follow-up 2"); }
                   return null;
                 })(),
               ]);
@@ -454,7 +530,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
           }
         }
       } catch (err) {
-        console.error(`[Generate] Error for lead ${lead.id}:`, err instanceof Error ? err.message : err);
+        logger.error({ leadId: lead.id, error: err instanceof Error ? err.message : err }, "Generate error for lead");
       }
       return emails.length > 0 ? emails : null;
     });
@@ -482,18 +558,20 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       await supabase
         .from("campaigns")
         .update({ enable_followups: true })
-        .eq("id", campaignId);
+        .eq("id", campaignId)
+        .eq("user_id", req.userId);
     }
 
     res.json({
       message: "Advanced emails generated successfully",
       count: generatedEmails.length,
-      initialEmails: leads.length,
+      initialEmails: cappedLeads.length,
       skipped: skippedCount,
       followUpsIncluded: enableFollowups,
+      capped: leads.length > maxLeads ? leads.length - maxLeads : 0,
     });
   } catch (error) {
-    console.error("[Advanced Generate] Error:", error);
+    logger.error({ error }, "Advanced generate error");
     res.status(500).json({ error: "Failed to generate emails" });
   }
 });
@@ -505,6 +583,18 @@ router.post("/call-scripts", authMiddleware, async (req: AuthenticatedRequest, r
 
     if (!campaignId) {
       res.status(400).json({ error: "Campaign ID is required" });
+      return;
+    }
+
+    // Check daily generation limit (OpenAI cost protection)
+    const genCheck = await checkDailyGenerationLimit(req.userId!);
+    if (!genCheck.allowed) {
+      res.status(403).json({
+        error: `Daily AI generation limit reached (${genCheck.usedToday}/${genCheck.dailyLimit} on ${genCheck.plan} plan). Try again tomorrow.`,
+        usedToday: genCheck.usedToday,
+        dailyLimit: genCheck.dailyLimit,
+        plan: genCheck.plan,
+      });
       return;
     }
 
@@ -530,8 +620,11 @@ router.post("/call-scripts", authMiddleware, async (req: AuthenticatedRequest, r
 
     const validLeads = leads.filter(l => l.company && l.company.trim().length >= 2);
 
+    // Cap to remaining daily generation slots
+    const cappedLeads = validLeads.slice(0, genCheck.remaining);
+
     // Generate call scripts in parallel batches of 5
-    const scripts = await processBatch(validLeads, PARALLEL_BATCH_SIZE, async (lead) => {
+    const scripts = await processBatch(cappedLeads, PARALLEL_BATCH_SIZE, async (lead) => {
       const enrichedData = lead.enriched_data || {};
       const prompt = buildCallScriptPrompt(lead, {
         summary: enrichedData.summary,
@@ -559,7 +652,8 @@ router.post("/call-scripts", authMiddleware, async (req: AuthenticatedRequest, r
                 call_script: scriptData,
               },
             })
-            .eq("id", lead.id);
+            .eq("id", lead.id)
+            .eq("user_id", req.userId);
 
           return {
             lead_id: lead.id,
@@ -570,7 +664,7 @@ router.post("/call-scripts", authMiddleware, async (req: AuthenticatedRequest, r
           };
         }
       } catch (err) {
-        console.error(`[CallScript] Error for lead ${lead.id}:`, err instanceof Error ? err.message : err);
+        logger.error({ leadId: lead.id, error: err instanceof Error ? err.message : err }, "CallScript error for lead");
       }
       return null;
     });

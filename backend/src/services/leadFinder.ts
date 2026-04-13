@@ -1,4 +1,5 @@
 import axios from "axios";
+import logger from "../utils/logger";
 
 export interface LeadFinderParams {
   niche: string;
@@ -33,12 +34,12 @@ export async function findLeadsByNiche(
 
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
-    console.error("[LeadFinder] SERPER_API_KEY not set");
+    logger.error("SERPER_API_KEY not set");
     return [];
   }
 
   try {
-    console.log(`[LeadFinder] Searching for "${niche}" in "${location}" (limit: ${limit})`);
+    logger.info({ niche, location, limit }, "Searching for leads");
 
     const leads: FoundLead[] = [];
     let page = 1;
@@ -89,12 +90,12 @@ export async function findLeadsByNiche(
       if (page > 5) break;
     }
 
-    console.log(`[LeadFinder] Found ${leads.length} leads`);
+    logger.info({ count: leads.length }, "Leads found");
     return leads;
   } catch (error) {
-    console.error(
-      "[LeadFinder] Error finding leads:",
-      error instanceof Error ? error.message : error
+    logger.error(
+      { error: error instanceof Error ? error.message : error },
+      "Error finding leads"
     );
     return [];
   }

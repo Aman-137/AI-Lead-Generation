@@ -15,6 +15,10 @@ interface PlanConfig {
   maxDailyEmails: number;
   // Monthly auto-find lead limit
   monthlyLeadFindLimit: number;
+  // Max AI generations per day (initial + follow-ups = 3x daily emails)
+  maxDailyGenerations: number;
+  // Max leads per single enrich request
+  maxEnrichBatchSize: number;
   // Price (for display only — billing handled separately)
   priceMonthly: number;
 }
@@ -24,18 +28,24 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanConfig> = {
     warmup: [10, 20, 35],
     maxDailyEmails: 50,
     monthlyLeadFindLimit: 1100,
-    priceMonthly: 29,
+    maxDailyGenerations: 150,   // 50 leads × 3 emails each
+    maxEnrichBatchSize: 50,
+    priceMonthly: 39,
   },
   growth: {
     warmup: [20, 45, 90],
     maxDailyEmails: 100,
     monthlyLeadFindLimit: 2200,
-    priceMonthly: 59,
+    maxDailyGenerations: 300,   // 100 leads × 3 emails each
+    maxEnrichBatchSize: 100,
+    priceMonthly: 79,
   },
   agency: {
     warmup: [40, 100, 200],
     maxDailyEmails: 200,
     monthlyLeadFindLimit: 4400,
+    maxDailyGenerations: 600,   // 200 leads × 3 emails each
+    maxEnrichBatchSize: 200,
     priceMonthly: 129,
   },
 };
@@ -60,16 +70,16 @@ export async function getUserPlan(userId: string): Promise<{
     .single();
 
   if (error || !data) {
-    // Auto-create a starter plan for new users
+    // Auto-create a starter plan for new users (upsert to avoid race condition)
     const { data: newPlan, error: insertError } = await supabase
       .from("user_plans")
-      .insert({
+      .upsert({
         user_id: userId,
         plan: DEFAULT_PLAN,
         is_active: true,
         leads_found_this_month: 0,
         leads_found_reset_at: new Date().toISOString(),
-      })
+      }, { onConflict: "user_id" })
       .select()
       .single();
 
@@ -183,7 +193,7 @@ export async function getDailyLeadFindLimit(userId: string): Promise<number> {
 // =============================================
 export async function getLeadsFoundToday(userId: string): Promise<number> {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
 
   const { count } = await supabase
     .from("leads")
@@ -233,7 +243,7 @@ export async function checkLeadFindLimit(userId: string): Promise<{
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
 
-  // Check if we need to reset the monthly counter
+  // Check if we need to reset the monthly counter (30 days from last reset)
   const resetAt = new Date(userPlan.leadsFoundResetAt);
   const now = new Date();
   const daysSinceReset = (now.getTime() - resetAt.getTime()) / (1000 * 60 * 60 * 24);
@@ -269,15 +279,26 @@ export async function checkLeadFindLimit(userId: string): Promise<{
 // Increment leads found counter
 // =============================================
 export async function incrementLeadsFound(userId: string, count: number): Promise<void> {
-  const userPlan = await getUserPlan(userId);
-  await supabase
-    .from("user_plans")
-    .update({
-      leads_found_this_month: (userPlan.leadsFoundThisMonth || 0) + count,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
+  await supabase.rpc("increment_leads_found", {
+    p_user_id: userId,
+    p_count: count,
+  });
 }
+
+// =============================================
+// Max Gmail inboxes per plan (inbox rotation)
+// =============================================
+export function getMaxInboxes(plan: PlanTier): number {
+  switch (plan) {
+    case "starter": return 1;
+    case "growth": return 2;
+    case "agency": return 4;
+    default: return 1;
+  }
+}
+
+// Gmail safety cap per inbox/day (buffer below Google's 500 hard limit)
+export const GMAIL_INBOX_CAP = 450;
 
 // =============================================
 // Set Gmail connected timestamp (starts warmup)
@@ -343,4 +364,50 @@ export async function getPlanInfo(userId: string): Promise<{
     leadsFoundToday,
     dailyLeadFindLimit: config.maxDailyEmails,
   };
+}
+
+// =============================================
+// Daily AI generation cap (OpenAI cost protection)
+// Counts emails generated today for a user
+// =============================================
+export async function getGenerationsToday(userId: string): Promise<number> {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("emails")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", today.toISOString());
+
+  return count || 0;
+}
+
+export async function checkDailyGenerationLimit(userId: string): Promise<{
+  allowed: boolean;
+  remaining: number;
+  usedToday: number;
+  dailyLimit: number;
+  plan: PlanTier;
+}> {
+  const userPlan = await getUserPlan(userId);
+  const config = PLAN_CONFIGS[userPlan.plan];
+  const usedToday = await getGenerationsToday(userId);
+  const remaining = Math.max(0, config.maxDailyGenerations - usedToday);
+
+  return {
+    allowed: remaining > 0,
+    remaining,
+    usedToday,
+    dailyLimit: config.maxDailyGenerations,
+    plan: userPlan.plan,
+  };
+}
+
+// =============================================
+// Get max enrich batch size for user's plan
+// =============================================
+export async function getMaxEnrichBatchSize(userId: string): Promise<number> {
+  const userPlan = await getUserPlan(userId);
+  return PLAN_CONFIGS[userPlan.plan].maxEnrichBatchSize;
 }

@@ -1,15 +1,29 @@
 import supabase from "../services/supabase";
-import { sendEmail } from "../services/gmail";
+import { sendEmailUnified, getInboxSentTodayUnified, getPrimaryEmailAccountId, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
 import { isWithinSendWindow } from "../routes/send";
-import { getDailyLimit } from "../services/planLimits";
+import { getDailyLimit, GMAIL_INBOX_CAP } from "../services/planLimits";
+import logger from "../utils/logger";
 
 let isProcessing = false;
 const MAX_RETRIES = 2;
+const INITIAL_BATCH_SIZE = 10;   // Process up to 10 initial emails per campaign per cycle
+const FOLLOW_UP_BATCH_SIZE = 15; // Process up to 15 follow-ups per campaign per cycle
+
+// Exponential backoff: retry 1 = 5 min, retry 2 = 15 min
+function getRetryDelay(retryCount: number): Date {
+  const delayMinutes = retryCount === 1 ? 5 : 15;
+  return new Date(Date.now() + delayMinutes * 60 * 1000);
+}
+
+function delay(minMs: number, maxMs: number): Promise<void> {
+  const ms = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Check how many emails a user sent today
 async function getUserSentToday(userId: string): Promise<number> {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   const { count } = await supabase
     .from("emails")
     .select("*", { count: "exact", head: true })
@@ -17,6 +31,110 @@ async function getUserSentToday(userId: string): Promise<number> {
     .eq("status", "sent")
     .gte("sent_at", today.toISOString());
   return count || 0;
+}
+
+// Send a single email with all safety checks, returns true if sent
+async function sendSingleEmail(
+  email: any,
+  campaign: { id: string; user_id: string },
+): Promise<boolean> {
+  // Resolve which email account to send from
+  let accountInfo = getAccountInfo(email);
+  if (!accountInfo) {
+    const isFollowUp = (email.sequence_step || 1) > 1;
+    if (isFollowUp && email.lead_id) {
+      const { data: initial } = await supabase
+        .from("emails")
+        .select("gmail_account_id, smtp_account_id")
+        .eq("lead_id", email.lead_id)
+        .eq("campaign_id", campaign.id)
+        .eq("sequence_step", 1)
+        .single();
+      if (initial) accountInfo = getAccountInfo(initial);
+    }
+    if (!accountInfo) {
+      const primary = await getPrimaryEmailAccountId(campaign.user_id);
+      if (primary) accountInfo = primary;
+    }
+    if (!accountInfo) {
+      logger.warn({ userId: campaign.user_id, emailId: email.id }, "No email account found, skipping");
+      return false;
+    }
+    // Save assignment for future consistency
+    await supabase
+      .from("emails")
+      .update(buildAccountAssignment(accountInfo.id, accountInfo.type))
+      .eq("id", email.id);
+  }
+
+  // Per-inbox safety cap (450/inbox/day)
+  const inboxSent = await getInboxSentTodayUnified(accountInfo.id, accountInfo.type);
+  if (inboxSent >= GMAIL_INBOX_CAP) {
+    logger.info({ inboxId: accountInfo.id, accountType: accountInfo.type, inboxSent, cap: GMAIL_INBOX_CAP }, "Inbox hit cap, skipping");
+    return false;
+  }
+
+  const result = await sendEmailUnified(
+    accountInfo.id,
+    accountInfo.type,
+    email.to_email,
+    email.subject,
+    email.body
+  );
+
+  if (result.success) {
+    await supabase
+      .from("emails")
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        error_log: null,
+      })
+      .eq("id", email.id);
+
+    // Mark lead as contacted (only on first email)
+    if ((email.sequence_step || 1) === 1 && email.lead_id) {
+      await supabase
+        .from("leads")
+        .update({ contacted: true, contacted_at: new Date().toISOString() })
+        .eq("id", email.lead_id);
+    }
+
+    const sequenceInfo = email.sequence_step === 1 ? "(initial)" : `(follow-up ${email.sequence_step - 1})`;
+    logger.info({ emailId: email.id, to: email.to_email, sequenceInfo, accountType: accountInfo.type }, "Email sent");
+    return true;
+  }
+
+  return false;
+}
+
+// Handle send failure with retry logic
+async function handleSendError(email: any, err: unknown): Promise<void> {
+  const errorMsg = err instanceof Error ? err.message : String(err);
+  const currentRetry = (email.retry_count || 0) + 1;
+
+  if (currentRetry <= MAX_RETRIES) {
+    const retryAt = getRetryDelay(currentRetry);
+    await supabase
+      .from("emails")
+      .update({
+        retry_count: currentRetry,
+        error_log: errorMsg,
+        scheduled_at: retryAt.toISOString(),
+      })
+      .eq("id", email.id);
+    logger.warn({ emailId: email.id, retry: currentRetry, retryAt: retryAt.toISOString(), error: errorMsg }, "Retrying email with backoff");
+  } else {
+    await supabase
+      .from("emails")
+      .update({
+        status: "failed",
+        retry_count: currentRetry,
+        error_log: errorMsg,
+      })
+      .eq("id", email.id);
+    logger.error({ emailId: email.id, retries: MAX_RETRIES, error: errorMsg }, "Email failed permanently");
+  }
 }
 
 async function processEmailQueue() {
@@ -32,132 +150,127 @@ async function processEmailQueue() {
     if (campaignsError || !campaigns || campaigns.length === 0) return;
 
     for (const campaign of campaigns) {
-      // Check business hours for this campaign's timezone
       const timezone = campaign.send_timezone || "US_EAST";
-      const sendWindow = isWithinSendWindow(timezone);
-      if (!sendWindow.canSend) {
-        continue; // Skip — outside business hours for this campaign's timezone
+      const followUpWindow = isWithinSendWindow(timezone, true);
+      const initialWindow = isWithinSendWindow(timezone, false);
+
+      // If neither can send (outside business hours entirely), skip
+      if (!followUpWindow.canSend && !initialWindow.canSend) {
+        continue;
       }
 
       const now = new Date().toISOString();
 
-      const { data: emails, error: emailsError } = await supabase
-        .from("emails")
-        .select("*")
-        .eq("campaign_id", campaign.id)
-        .eq("status", "pending")
-        .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
-        .order("sequence_step", { ascending: true })
-        .limit(1);
-
-      if (emailsError || !emails || emails.length === 0) {
-        // Check if campaign is done
-        const { count: pendingCount } = await supabase
-          .from("emails")
-          .select("*", { count: "exact", head: true })
-          .eq("campaign_id", campaign.id)
-          .eq("status", "pending");
-
-        if (pendingCount === 0) {
-          await supabase
-            .from("campaigns")
-            .update({ status: "completed" })
-            .eq("id", campaign.id);
-          console.log(`[Queue] Campaign ${campaign.id} completed`);
-        }
-        continue;
-      }
-
-      const email = emails[0];
-      const isFollowUp = (email.sequence_step || 1) > 1;
-
-      // Daily limit only applies to initial emails, not follow-ups
-      if (!isFollowUp) {
+      // ===== PROCESS INITIAL EMAILS (batch) =====
+      if (initialWindow.canSend) {
         const sentToday = await getUserSentToday(campaign.user_id);
         const { limit: dailyLimit } = await getDailyLimit(campaign.user_id);
-        if (dailyLimit === 0 || sentToday >= dailyLimit) {
-          console.log(`[Queue] User ${campaign.user_id} hit daily limit (${sentToday}/${dailyLimit}), skipping initial emails`);
-          continue;
-        }
-      }
+        const remaining = Math.max(0, dailyLimit - sentToday);
+        const batchSize = Math.min(INITIAL_BATCH_SIZE, remaining);
 
-      // Skip follow-ups if the lead already replied
-      if (isFollowUp && email.lead_id) {
-        const { data: repliedEmails } = await supabase
-          .from("emails")
-          .select("id")
-          .eq("lead_id", email.lead_id)
-          .eq("replied", true)
-          .limit(1);
-
-        if (repliedEmails && repliedEmails.length > 0) {
-          // Cancel this follow-up — lead already replied
-          await supabase
+        if (batchSize > 0) {
+          const { data: initialEmails } = await supabase
             .from("emails")
-            .update({ status: "cancelled" })
-            .eq("id", email.id);
-          console.log(`[Queue] Cancelled follow-up ${email.id} — lead already replied`);
-          continue;
-        }
-      }
+            .select("*")
+            .eq("campaign_id", campaign.id)
+            .eq("status", "pending")
+            .eq("sequence_step", 1)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+            .order("created_at", { ascending: true })
+            .limit(batchSize);
 
-      try {
-        const result = await sendEmail(
-          campaign.user_id,
-          email.to_email,
-          email.subject,
-          email.body
-        );
+          if (initialEmails && initialEmails.length > 0) {
+            for (let i = 0; i < initialEmails.length; i++) {
+              try {
+                await sendSingleEmail(initialEmails[i], campaign);
+              } catch (err) {
+                await handleSendError(initialEmails[i], err);
+              }
 
-        if (result.success) {
-          await supabase
-            .from("emails")
-            .update({
-              status: "sent",
-              sent_at: new Date().toISOString(),
-              error_log: null,
-            })
-            .eq("id", email.id);
+              // 45-90s delay between cold initial emails (Google safety)
+              if (i < initialEmails.length - 1) {
+                await delay(45000, 90000);
 
-          // Mark lead as contacted (only on first email)
-          if ((email.sequence_step || 1) === 1 && email.lead_id) {
-            await supabase
-              .from("leads")
-              .update({ contacted: true, contacted_at: new Date().toISOString() })
-              .eq("id", email.lead_id);
+                // Re-check business hours
+                const recheck = isWithinSendWindow(timezone, false);
+                if (!recheck.canSend) break;
+              }
+            }
           }
-
-          const sequenceInfo = email.sequence_step === 1 ? "(initial)" : `(follow-up ${email.sequence_step - 1})`;
-          console.log(`[Queue] Sent email ${email.id} to ${email.to_email} ${sequenceInfo}`);
         }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        const currentRetry = (email.retry_count || 0) + 1;
+      }
 
-        if (currentRetry <= MAX_RETRIES) {
-          await supabase
-            .from("emails")
-            .update({
-              retry_count: currentRetry,
-              error_log: errorMsg,
-            })
-            .eq("id", email.id);
-          console.log(`[Queue] Retry ${currentRetry}/${MAX_RETRIES} for email ${email.id}: ${errorMsg}`);
-        } else {
-          await supabase
-            .from("emails")
-            .update({
-              status: "failed",
-              retry_count: currentRetry,
-              error_log: errorMsg,
-            })
-            .eq("id", email.id);
-          console.log(`[Queue] Failed email ${email.id} after ${MAX_RETRIES} retries: ${errorMsg}`);
+      // ===== PROCESS FOLLOW-UP EMAILS (batch) =====
+      if (followUpWindow.canSend) {
+        const { data: followUpEmails } = await supabase
+          .from("emails")
+          .select("*")
+          .eq("campaign_id", campaign.id)
+          .eq("status", "pending")
+          .gt("sequence_step", 1)
+          .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+          .order("sequence_step", { ascending: true })
+          .limit(FOLLOW_UP_BATCH_SIZE);
+
+        if (followUpEmails && followUpEmails.length > 0) {
+          for (let i = 0; i < followUpEmails.length; i++) {
+            const followUp = followUpEmails[i];
+
+            // Skip if lead already replied
+            if (followUp.lead_id) {
+              const { data: replied } = await supabase
+                .from("emails")
+                .select("id")
+                .eq("lead_id", followUp.lead_id)
+                .eq("replied", true)
+                .limit(1);
+
+              if (replied && replied.length > 0) {
+                await supabase
+                  .from("emails")
+                  .update({ status: "cancelled" })
+                  .eq("id", followUp.id);
+                logger.info({ emailId: followUp.id }, "Cancelled follow-up — lead already replied");
+                continue;
+              }
+            }
+
+            try {
+              await sendSingleEmail(followUp, campaign);
+            } catch (err) {
+              await handleSendError(followUp, err);
+              break; // Stop follow-up batch on error
+            }
+
+            // 20-30s delay between follow-ups (same thread, safer)
+            if (i < followUpEmails.length - 1) {
+              await delay(20000, 30000);
+
+              // Re-check business hours
+              const recheck = isWithinSendWindow(timezone, true);
+              if (!recheck.canSend) break;
+            }
+          }
         }
+      }
+
+      // ===== CHECK IF CAMPAIGN IS DONE =====
+      const { count: pendingCount } = await supabase
+        .from("emails")
+        .select("*", { count: "exact", head: true })
+        .eq("campaign_id", campaign.id)
+        .eq("status", "pending");
+
+      if (pendingCount === 0) {
+        await supabase
+          .from("campaigns")
+          .update({ status: "completed" })
+          .eq("id", campaign.id);
+        logger.info({ campaignId: campaign.id }, "Campaign completed");
       }
     }
   } catch (err) {
-    console.error("[Queue] Error processing queue:", err);
+    logger.error({ err }, "Error processing email queue");
   } finally {
     isProcessing = false;
   }
@@ -167,10 +280,10 @@ let intervalId: ReturnType<typeof setInterval> | null = null;
 
 export function startEmailQueue() {
   if (intervalId) {
-    console.log("[Queue] Email queue already running");
+    logger.info("Email queue already running");
     return;
   }
-  console.log("[Queue] Email queue processor started (interval: 60s)");
+  logger.info("Email queue processor started (interval: 60s)");
   processEmailQueue();
   intervalId = setInterval(processEmailQueue, 60 * 1000);
 }
@@ -179,6 +292,6 @@ export function stopEmailQueue() {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
-    console.log("[Queue] Email queue processor stopped");
+    logger.info("Email queue processor stopped");
   }
 }
