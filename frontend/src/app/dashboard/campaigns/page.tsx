@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiDelete } from "@/lib/api";
 
 interface Campaign {
   id: string;
@@ -15,6 +15,7 @@ interface Campaign {
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -31,74 +32,228 @@ export default function CampaignsPage() {
     fetchCampaigns();
   }, [fetchCampaigns]);
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: "bg-gray-100 text-gray-700",
-      running: "bg-blue-100 text-blue-700",
-      completed: "bg-green-100 text-green-700",
-    };
-    return (
-      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || "bg-gray-100 text-gray-700"}`}>
-        {status}
-      </span>
-    );
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This will also delete all leads and emails in this campaign.`)) return;
+    setDeleting(id);
+    try {
+      await apiDelete(`/campaigns/${id}`);
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete campaign:", err);
+      alert("Failed to delete campaign");
+    } finally {
+      setDeleting(null);
+    }
   };
+
+  const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+    draft: { bg: "bg-gray-50", text: "text-gray-700", dot: "bg-gray-400", label: "Draft" },
+    running: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Running" },
+    completed: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Completed" },
+  };
+
+  const totalLeads = campaigns.reduce((sum, c) => sum + c.total_leads, 0);
+  const draftCount = campaigns.filter(c => c.status === "draft").length;
+  const activeCount = campaigns.filter(c => c.status === "running").length;
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-        <Link
-          href="/dashboard/upload"
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-        >
-          + New Campaign
-        </Link>
-      </div>
-
-      <div className="mt-8">
-        {loading ? (
-          <p className="text-gray-500">Loading campaigns...</p>
-        ) : campaigns.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <p className="text-gray-500">No campaigns yet. Upload leads to create your first campaign.</p>
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
+        <div className="absolute inset-0">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-violet-500/10 blur-3xl" />
+        </div>
+        <div className="relative z-10 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-4">
+              <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span className="text-xs font-medium text-gray-300">Campaigns</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Your Campaigns</h1>
+            <p className="mt-2 text-gray-400 text-sm">Manage your outreach campaigns, track leads, and send emails.</p>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Leads</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {campaigns.map((campaign) => (
-                  <tr key={campaign.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{campaign.name}</td>
-                    <td className="px-6 py-4">{statusBadge(campaign.status)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{campaign.total_leads}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {new Date(campaign.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/dashboard/campaigns/${campaign.id}`}
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        View →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <Link
+            href="/dashboard/upload"
+            className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Campaign
+          </Link>
+        </div>
+
+        {/* Stats row */}
+        {!loading && campaigns.length > 0 && (
+          <div className="relative z-10 mt-6 flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{campaigns.length}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Campaigns</p>
+              </div>
+            </div>
+            <div className="w-px h-10 bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{totalLeads}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Total Leads</p>
+              </div>
+            </div>
+            <div className="w-px h-10 bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                <span className="text-xs font-bold text-amber-400">{draftCount}</span>
+              </div>
+              <p className="text-xs text-gray-400">Drafts</p>
+            </div>
+            {activeCount > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-400">{activeCount}</span>
+                  </div>
+                  <p className="text-xs text-gray-400">Active</p>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
+
+      {/* Mobile new campaign button */}
+      <Link
+        href="/dashboard/upload"
+        className="sm:hidden flex items-center justify-center gap-2 w-full mb-6 px-5 py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        New Campaign
+      </Link>
+
+      {/* Content */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 flex items-center justify-center gap-3">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          <span className="text-sm text-gray-500">Loading campaigns...</span>
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-700">No campaigns yet</p>
+          <p className="text-xs text-gray-400 mt-1.5">Upload leads or use Auto Lead Finder to create your first campaign</p>
+          <div className="flex items-center justify-center gap-3 mt-5">
+            <Link
+              href="/dashboard/upload"
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-200 transition-all hover:from-blue-700 hover:to-indigo-700"
+            >
+              Upload Leads
+            </Link>
+            <Link
+              href="/dashboard/auto-leads"
+              className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all"
+            >
+              Auto Find Leads
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {campaigns.map((campaign, index) => {
+            const status = statusConfig[campaign.status] || statusConfig.draft;
+            const colorIdx = index % 5;
+            const colors = {
+              gradient: ["from-blue-500 to-indigo-600", "from-violet-500 to-purple-600", "from-emerald-500 to-teal-600", "from-orange-500 to-amber-500", "from-pink-500 to-rose-600"][colorIdx],
+              bgTint: ["hover:bg-blue-50/30", "hover:bg-violet-50/30", "hover:bg-emerald-50/30", "hover:bg-orange-50/30", "hover:bg-pink-50/30"][colorIdx],
+              hoverText: ["group-hover:text-blue-600", "group-hover:text-violet-600", "group-hover:text-emerald-600", "group-hover:text-orange-600", "group-hover:text-pink-600"][colorIdx],
+              viewBg: ["bg-blue-50 hover:bg-blue-100 text-blue-700 ring-blue-200 hover:ring-blue-300", "bg-violet-50 hover:bg-violet-100 text-violet-700 ring-violet-200 hover:ring-violet-300", "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 ring-emerald-200 hover:ring-emerald-300", "bg-orange-50 hover:bg-orange-100 text-orange-700 ring-orange-200 hover:ring-orange-300", "bg-pink-50 hover:bg-pink-100 text-pink-700 ring-pink-200 hover:ring-pink-300"][colorIdx],
+            };
+            return (
+              <Link
+                key={campaign.id}
+                href={`/dashboard/campaigns/${campaign.id}`}
+                className={`group block bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all overflow-hidden ${colors.bgTint}`}
+              >
+                <div className="flex items-stretch">
+                  <div className={`w-1.5 bg-gradient-to-b ${colors.gradient} flex-shrink-0`} />
+
+                  <div className="flex items-center gap-5 px-6 py-5 flex-1 min-w-0">
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${colors.gradient} flex items-center justify-center shadow-lg`}>
+                      <span className="text-base font-bold text-white">{index + 1}</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-base font-bold text-gray-900 capitalize ${colors.hoverText} transition-colors truncate`}>
+                          {campaign.name}
+                        </span>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-lg ${status.bg} ${status.text}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                          {status.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-5 mt-2">
+                        <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="font-semibold text-gray-700">{campaign.total_leads}</span> leads
+                        </span>
+                        <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <span
+                        className={`px-5 py-2 text-xs font-semibold rounded-xl ring-1 transition-all ${colors.viewBg}`}
+                      >
+                        View →
+                      </span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleDelete(campaign.id, campaign.name); }}
+                        disabled={deleting === campaign.id}
+                        className="p-2.5 text-xs font-semibold text-red-600 bg-red-50 rounded-xl hover:bg-red-100 ring-1 ring-red-200 hover:ring-red-300 transition-all disabled:opacity-50"
+                      >
+                        {deleting === campaign.id ? (
+                          <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ export interface WebsiteData {
   technologies: string[];
   industry: string;
   emails: string[];
+  phones: string[];
 }
 
 // Block private/internal IPs to prevent SSRF
@@ -134,11 +135,81 @@ export async function scrapeWebsite(
     // Extract email addresses from page
     const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
     const rawEmails = ($html.match(emailRegex) || []);
-    // Dedupe and filter out common junk emails
-    const junkDomains = ["example.com", "sentry.io", "wixpress.com", "wordpress.org"];
-    const emails = [...new Set(rawEmails)]
-      .filter(e => !junkDomains.some(d => e.endsWith(d)))
-      .slice(0, 5);
+
+    // Dedupe and filter out junk emails from libraries, frameworks, and code
+    const junkDomains = [
+      "example.com", "sentry.io", "wixpress.com", "wordpress.org",
+      "greensock.com", "broofa.com", "github.com", "npmjs.com",
+      "jquery.com", "google.com", "googleapis.com", "gstatic.com",
+      "facebook.com", "twitter.com", "cloudflare.com", "jsdelivr.net",
+      "w3.org", "schema.org", "mozilla.org", "apache.org",
+      "bootstrapcdn.com", "fontawesome.com", "typekit.net",
+    ];
+    const junkPatterns = [
+      /^noreply@/i, /^no-reply@/i, /^support@.*\.(js|css|json)/i,
+      /\.png$/i, /\.jpg$/i, /\.gif$/i, /\.svg$/i,
+    ];
+
+    // Extract website domain for matching
+    let siteDomain = "";
+    try {
+      siteDomain = new URL(websiteUrl).hostname.replace(/^www\./, "").toLowerCase();
+    } catch { /* ignore */ }
+
+    const uniqueEmails = [...new Set(rawEmails)]
+      .filter(e => {
+        const lower = e.toLowerCase();
+        // Filter out junk domains
+        if (junkDomains.some(d => lower.endsWith(`@${d}`) || lower.endsWith(`.${d}`))) return false;
+        // Filter out junk patterns
+        if (junkPatterns.some(p => p.test(lower))) return false;
+        // Filter out very long emails (likely encoded data)
+        if (e.length > 60) return false;
+        return true;
+      });
+
+    // Prioritize: 1) emails matching website domain, 2) common business emails, 3) others
+    const domainEmails = uniqueEmails.filter(e => {
+      if (!siteDomain) return false;
+      const emailDomain = e.split("@")[1]?.toLowerCase() || "";
+      return emailDomain === siteDomain || siteDomain.includes(emailDomain) || emailDomain.includes(siteDomain);
+    });
+
+    const businessPrefixes = ["info", "contact", "hello", "office", "admin", "dr", "doctor", "team"];
+    const businessEmails = uniqueEmails.filter(e => {
+      const prefix = e.split("@")[0]?.toLowerCase() || "";
+      return businessPrefixes.some(p => prefix === p || prefix.startsWith(p));
+    });
+
+    // Pick best emails: domain matches first, then business-looking ones, then rest
+    const emails = [
+      ...domainEmails,
+      ...businessEmails.filter(e => !domainEmails.includes(e)),
+      ...uniqueEmails.filter(e => !domainEmails.includes(e) && !businessEmails.includes(e)),
+    ].slice(0, 5);
+
+    // Extract phone numbers from page
+    // Match common US/international formats: +1 212-601-2693, (559) 229-6740, 559.229.6740, etc.
+    const phoneRegex = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g;
+    const rawPhones = ($html.match(phoneRegex) || []);
+    // Also check for tel: links which are more reliable
+    const telLinks: string[] = [];
+    $('a[href^="tel:"]').each((_i: number, el: any) => {
+      const href = $(el).attr("href")?.replace("tel:", "").trim();
+      if (href) telLinks.push(href);
+    });
+
+    // Combine and dedupe, prioritize tel: links
+    const allPhones = [...telLinks, ...rawPhones];
+    const phones = [...new Set(
+      allPhones
+        .map(p => p.replace(/\s+/g, " ").trim())
+        .filter(p => {
+          // Must have at least 10 digits
+          const digits = p.replace(/\D/g, "");
+          return digits.length >= 10 && digits.length <= 15;
+        })
+    )].slice(0, 3);
 
     // Detect industry keywords
     let industry = "Unknown";
@@ -172,6 +243,7 @@ export async function scrapeWebsite(
       technologies,
       industry,
       emails,
+      phones,
     };
   } catch (error) {
     logger.error(

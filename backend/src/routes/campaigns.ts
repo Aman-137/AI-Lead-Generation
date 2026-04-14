@@ -135,4 +135,44 @@ router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// DELETE /api/campaigns/:id — Delete a campaign and its associated leads/emails
+router.delete("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidUUID(id)) {
+      res.status(400).json({ error: "Invalid campaign ID" });
+      return;
+    }
+
+    // Verify campaign belongs to user
+    const { data: campaign, error: fetchError } = await supabase
+      .from("campaigns")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.userId)
+      .single();
+
+    if (fetchError || !campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    // Delete campaign (leads and emails cascade via FK)
+    const { error: deleteError } = await supabase
+      .from("campaigns")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", req.userId);
+
+    if (deleteError) {
+      res.status(500).json({ error: "Failed to delete campaign" });
+      return;
+    }
+
+    res.json({ message: "Campaign deleted successfully" });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

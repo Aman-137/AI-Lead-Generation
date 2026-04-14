@@ -191,6 +191,20 @@ export default function AutoLeadsPage() {
   const findProgress = useProgressTracker(findLeadsSteps);
   const toast = useToast();
 
+  // Check daily limit on page load
+  useEffect(() => {
+    const checkLimit = async () => {
+      try {
+        const stats = await apiGet<{ leadsFoundToday: number; dailyLeadFindLimit: number }>("/stats");
+        if (stats.leadsFoundToday >= stats.dailyLeadFindLimit) {
+          setFindLimitReached(true);
+          setFindLimitMsg(`Daily lead find limit reached (${stats.leadsFoundToday}/${stats.dailyLeadFindLimit}). Try again tomorrow.`);
+        }
+      } catch { /* ignore */ }
+    };
+    checkLimit();
+  }, []);
+
   // Fetch existing lead sources on page load
   useEffect(() => {
     const fetchSources = async () => {
@@ -302,109 +316,207 @@ export default function AutoLeadsPage() {
       {/* Toast Notifications */}
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Auto Lead Finder</h1>
-        <p className="text-gray-600 text-sm mt-1">
-          Find, enrich, and score leads automatically by niche and location
-        </p>
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
+        <div className="absolute inset-0">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl" />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl" />
+        </div>
+        <div className="relative z-10 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-4">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="text-xs font-medium text-gray-300">Auto Lead Finder</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Find Your Next Customers</h1>
+            <p className="mt-2 text-gray-400 text-sm max-w-lg">
+              Enter a niche and location — our AI finds, enriches, and scores leads automatically.
+            </p>
+          </div>
+          <div className="hidden lg:flex items-center gap-2">
+            {["Search", "Enrich", "Score", "Email"].map((s, i) => (
+              <div key={s} className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <span className="text-xs font-bold text-white/70">{i + 1}</span>
+                </div>
+                <span className="text-xs text-gray-400 font-medium">{s}</span>
+                {i < 3 && <div className="w-6 h-px bg-white/20" />}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
+      <div className="flex gap-2 mb-6">
         <button
           onClick={() => setActiveTab("find")}
-          className={`px-4 py-3 font-medium text-sm ${
+          className={`flex items-center gap-2 px-6 py-2.5 font-semibold text-sm rounded-xl transition-all ${
             activeTab === "find"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-600 hover:text-gray-900"
+              ? "bg-gray-900 text-white shadow-md"
+              : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:shadow-sm"
           }`}
         >
-          🔍 Find Leads
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          Find Leads
         </button>
         <button
           onClick={() => setActiveTab("manage")}
-          className={`px-4 py-3 font-medium text-sm ${
+          className={`flex items-center gap-2 px-6 py-2.5 font-semibold text-sm rounded-xl transition-all ${
             activeTab === "manage"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-600 hover:text-gray-900"
+              ? "bg-gray-900 text-white shadow-md"
+              : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:shadow-sm"
           }`}
         >
-          📊 Manage Sources
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
+          Manage Sources
+          {sources.length > 0 && (
+            <span className={`ml-0.5 w-5 h-5 text-[10px] font-bold rounded-full inline-flex items-center justify-center ${
+              activeTab === "manage" ? "bg-white/20 text-white" : "bg-orange-50 text-orange-600 border border-orange-300"
+            }`}>
+              {sources.length}
+            </span>
+          )}
         </button>
       </div>
 
       {/* Find Leads Tab */}
       {activeTab === "find" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Form */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Find Leads by Niche & Location
-              </h2>
-
-              <form onSubmit={handleFindLeads} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="niche"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Niche / Industry
-                  </label>
-                  <input
-                    type="text"
-                    id="niche"
-                    value={niche}
-                    onChange={(e) => setNiche(e.target.value)}
-                    placeholder="e.g., dentists, plumbers, lawyers"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={findingLeads}
-                  />
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Form — 3 cols */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden ring-1 ring-emerald-100">
+              <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Find Leads by Niche & Location</h2>
+                    <p className="text-xs text-emerald-100">Our AI searches Google and extracts verified business data</p>
+                  </div>
                 </div>
+              </div>
 
-                <div>
-                  <label
-                    htmlFor="location"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+              <div className="p-6">
+                {findLimitReached && (
+                  <div className="mb-5 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Daily limit reached</p>
+                      <p className="text-xs text-amber-700 mt-0.5">{findLimitMsg}</p>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleFindLeads} className="space-y-5">
+                  <div>
+                    <label htmlFor="niche" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Niche / Industry
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        id="niche"
+                        value={niche}
+                        onChange={(e) => setNiche(e.target.value)}
+                        placeholder="e.g., dentists, plumbers, lawyers"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 focus:bg-white transition-all placeholder-gray-400"
+                        disabled={findingLeads}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="location" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Location
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        id="location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="e.g., San Francisco, California, USA"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 focus:bg-white transition-all placeholder-gray-400"
+                        disabled={findingLeads}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={findingLeads || findLimitReached}
+                    className="w-full px-5 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-teal-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-sm shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.99]"
+                    title={findLimitReached ? findLimitMsg : ""}
                   >
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    id="location"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g., San Francisco, California, USA"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={findingLeads}
-                  />
-                </div>
+                    {findingLeads ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Finding Leads...
+                      </span>
+                    ) : findLimitReached ? (
+                      "Daily Limit Reached — Try Tomorrow"
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Find Leads Now
+                      </span>
+                    )}
+                  </button>
+                </form>
 
-                <button
-                  type="submit"
-                  disabled={findingLeads || findLimitReached}
-                  className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
-                  title={findLimitReached ? findLimitMsg : ""}
-                >
-                  {findingLeads ? "🔄 Finding Leads..." : findLimitReached ? "⛔ Daily Limit Reached — Try Tomorrow" : "🚀 Find Leads"}
-                </button>
-              </form>
+                <ProgressBar tracker={findProgress} />
+              </div>
 
-              <ProgressBar tracker={findProgress} />
-
-              {/* Quick Setup */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <p className="text-xs font-semibold text-gray-600 mb-3">
-                  Quick Setup Examples
-                </p>
-                <div className="space-y-2">
-                  {exampleNiches.slice(0, 2).map((example) => (
+              {/* Quick Fill Footer */}
+              <div className="px-6 py-5 bg-gray-50 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Fill</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {exampleNiches.map((example) => (
                     <button
                       key={example}
                       onClick={() => quickSetup(example, "California")}
-                      className="block w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200"
+                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm"
                     >
-                      {example} in California →
+                      {example}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {exampleLocations.map((loc) => (
+                    <button
+                      key={loc}
+                      onClick={() => setLocation(loc)}
+                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-all shadow-sm"
+                    >
+                      📍 {loc}
                     </button>
                   ))}
                 </div>
@@ -412,31 +524,97 @@ export default function AutoLeadsPage() {
             </div>
           </div>
 
-          {/* Info Panel */}
-          <div className="bg-blue-50 rounded-lg border border-blue-200 p-6">
-            <h3 className="font-semibold text-blue-900 mb-4">How It Works</h3>
-            <div className="space-y-3 text-sm text-blue-800">
-              <div>
-                <p className="font-medium">1️⃣ Search</p>
-                <p className="text-xs">Find businesses in your niche/location</p>
+          {/* Right Panel — 2 cols */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* How It Works */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3.5 bg-gradient-to-r from-blue-500/80 to-indigo-500/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">How It Works</h3>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">2️⃣ Enrich</p>
-                <p className="text-xs">
-                  Extract website data and business context
-                </p>
+              <div className="p-5 space-y-0">
+                <div className="flex items-start gap-4 pb-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <span className="text-sm font-bold text-emerald-600">1</span>
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-sm font-semibold text-gray-900">Search</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Find businesses in your niche and location</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 py-4 border-t border-gray-100">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <span className="text-sm font-bold text-blue-600">2</span>
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-sm font-semibold text-gray-900">Enrich</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Extract emails, phones & business data</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 py-4 border-t border-gray-100">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <span className="text-sm font-bold text-violet-600">3</span>
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-sm font-semibold text-gray-900">Score</p>
+                    <p className="text-xs text-gray-500 mt-0.5">AI scores leads based on fit & opportunity</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 pt-4 border-t border-gray-100">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <span className="text-sm font-bold text-amber-600">4</span>
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-sm font-semibold text-gray-900">Outreach</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Generate personalized emails & follow-ups</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">3️⃣ Score</p>
-                <p className="text-xs">
-                  AI scores leads based on fit and opportunity
-                </p>
+            </div>
+
+            {/* Pro Tips */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3.5 bg-gradient-to-r from-violet-500/80 to-purple-500/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Pro Tips</h3>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">4️⃣ Generate Emails</p>
-                <p className="text-xs">
-                  Create personalized emails with follow-ups
-                </p>
+              <div className="p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center mt-0.5">
+                    <span className="text-violet-600 text-xs font-bold">1</span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed pt-1">
+                    Be specific — <strong className="text-gray-900">&quot;pediatric dentists&quot;</strong> works better than <strong className="text-gray-900">&quot;doctors&quot;</strong>
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center mt-0.5">
+                    <span className="text-blue-600 text-xs font-bold">2</span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed pt-1">
+                    Include <strong className="text-gray-900">city + state</strong> for more targeted and accurate results
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center mt-0.5">
+                    <span className="text-emerald-600 text-xs font-bold">3</span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed pt-1">
+                    Leads scoring <strong className="text-gray-900">70+</strong> are high-quality, ready-to-contact prospects
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -445,82 +623,122 @@ export default function AutoLeadsPage() {
 
       {/* Manage Sources Tab */}
       {activeTab === "manage" && (
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Lead Sources
-            </h2>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-200">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Lead Sources</h2>
+                  <p className="text-xs text-gray-500">{sources.length} total searches</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab("find")}
+                className="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-all"
+              >
+                + New Search
+              </button>
+            </div>
+          </div>
 
+          {/* Table Header */}
+          {!loadingSources && sources.length > 0 && (
+            <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-12 gap-4 items-center">
+              <span className="col-span-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Niche & Location</span>
+              <span className="col-span-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Leads</span>
+              <span className="col-span-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Status</span>
+              <span className="col-span-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Date</span>
+              <span className="col-span-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider text-right">Action</span>
+            </div>
+          )}
+
+          <div className="divide-y divide-gray-50">
             {loadingSources ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500 text-sm">Loading your lead sources...</p>
+              <div className="flex items-center justify-center gap-3 py-12">
+                <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                <span className="text-sm text-gray-500">Loading your lead sources...</span>
               </div>
             ) : sources.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600 text-sm">
-                  No lead sources yet. Find some leads first! 👆
-                </p>
+              <div className="text-center py-16">
+                <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-gray-700">No lead sources yet</p>
+                <p className="text-xs text-gray-400 mt-1.5">Find your first leads to populate this list</p>
+                <button
+                  onClick={() => setActiveTab("find")}
+                  className="mt-5 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-200 transition-all"
+                >
+                  Find Your First Leads
+                </button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-gray-200">
-                    <tr>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">
-                        Niche
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">
-                        Location
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">
-                        Leads Found
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">
-                        Status
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sources.map((source) => (
-                      <tr key={source.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4 font-medium text-gray-900">
-                          {source.niche}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {source.location}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-block px-2.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                            {source.leadsCount || 0}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              source.status === "completed"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-yellow-100 text-yellow-700"
-                            }`}
-                          >
-                            {source.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={() => handleEnrichLeads(source)}
-                            className="text-blue-600 hover:text-blue-700 text-xs font-medium"
-                          >
-                            {source.campaignId ? "View Campaign →" : "Enrich & Score →"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              sources.map((source, index) => (
+                <div
+                  key={source.id}
+                  className={`group grid grid-cols-12 gap-4 items-center px-6 py-4 hover:bg-gray-50/80 transition-all ${
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50/40"
+                  }`}
+                >
+                  {/* Niche & Location */}
+                  <div className="col-span-4 flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+                      <span className="text-sm font-bold text-emerald-600">{index + 1}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 capitalize truncate">{source.niche}</p>
+                      <p className="text-xs text-gray-500 capitalize truncate">{source.location}</p>
+                    </div>
+                  </div>
+
+                  {/* Leads Count */}
+                  <div className="col-span-2">
+                    <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 text-blue-700">
+                      {source.leadsCount || 0} leads
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg ${
+                        source.status === "completed"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        source.status === "completed" ? "bg-emerald-500" : "bg-amber-500"
+                      }`} />
+                      {source.status === "completed" ? "Completed" : "Pending"}
+                    </span>
+                  </div>
+
+                  {/* Date */}
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500">
+                      {new Date(source.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  </div>
+
+                  {/* Action */}
+                  <div className="col-span-2 text-right">
+                    <button
+                      onClick={() => handleEnrichLeads(source)}
+                      className="px-4 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 ring-1 ring-emerald-200 hover:ring-emerald-300 transition-all opacity-70 group-hover:opacity-100"
+                    >
+                      {source.campaignId ? "View →" : "Enrich →"}
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>

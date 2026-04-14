@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const backendOrigin = new URL(backendUrl).origin;
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -20,12 +23,13 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.stripe.com; frame-src 'self' https://*.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self';",
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${backendOrigin} https://*.supabase.co https://*.stripe.com; frame-src 'self' https://*.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self';`,
           },
         ],
       },
     ];
   },
+  devIndicators: false,
 };
 
 export default nextConfig;

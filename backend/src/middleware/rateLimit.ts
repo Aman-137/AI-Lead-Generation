@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { Request } from "express";
 
 // NOTE: Uses in-memory store (default). Fine for single-instance deployments.
@@ -7,7 +7,7 @@ import { Request } from "express";
 //   store: new RedisStore({ sendCommand: (...args) => redisClient.sendCommand(args) })
 
 // Extract user ID from auth token for user-based rate limiting
-// Falls back to IP for unauthenticated routes (login/signup)
+// Falls back to IP (with IPv6 normalization) for unauthenticated routes
 function getUserKey(req: Request): string {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
@@ -23,7 +23,7 @@ function getUserKey(req: Request): string {
       // Malformed token — fall through to IP-based limiting
     }
   }
-  return req.ip || "unknown";
+  return ipKeyGenerator(req.ip || "unknown");
 }
 
 // General API rate limiter: 100 requests per 15 minutes per user

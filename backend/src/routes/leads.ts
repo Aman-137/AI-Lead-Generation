@@ -350,18 +350,19 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
 
     const { data: insertedLeads, error: leadsError } = await supabase
       .from("leads")
-      .upsert(leadsToInsert, { onConflict: "user_id,website", ignoreDuplicates: true })
+      .insert(leadsToInsert)
       .select("id");
 
     const insertedCount = insertedLeads?.length ?? leadsToInsert.length;
 
     if (leadsError) {
+      logger.error({ leadsError, leadsToInsertCount: leadsToInsert.length }, "Failed to insert found leads");
       await supabase
         .from("lead_sources")
         .update({ status: "completed" })
         .eq("id", source.id);
 
-      res.status(500).json({ error: "Failed to insert found leads" });
+      res.status(500).json({ error: "Failed to insert found leads", detail: leadsError.message });
       return;
     }
 
@@ -470,6 +471,11 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
 
           if (!lead.email && websiteData?.emails && websiteData.emails.length > 0) {
             updateFields.email = websiteData.emails[0];
+          }
+
+          // Update phone if not already set
+          if (!lead.phone && websiteData?.phones && websiteData.phones.length > 0) {
+            updateFields.phone = websiteData.phones[0];
           }
 
           const hasEmailNow = lead.email || (websiteData?.emails && websiteData.emails.length > 0);

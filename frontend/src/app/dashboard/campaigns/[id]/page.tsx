@@ -4,6 +4,68 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 
+// ===== Custom Styled Dropdown =====
+function CustomSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+  className,
+}: {
+  value: T;
+  onChange: (val: T) => void;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className={`relative inline-block ${className || ""}`}>
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2.5 hover:bg-gray-100 hover:border-gray-400 transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        <span>{selected?.label || "Select..."}</span>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 z-50 mt-1.5 bg-white border border-gray-300 rounded-xl shadow-xl py-1.5 overflow-hidden" style={{ minWidth: ref.current?.offsetWidth }}>
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-3.5 py-2 text-sm whitespace-nowrap transition-colors ${
+                opt.value === value
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "text-gray-700 hover:bg-gray-50 font-medium"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== Toast Notification System =====
 type ToastType = "success" | "error" | "info";
 
@@ -469,170 +531,236 @@ export default function CampaignDetailPage() {
     }
   };
 
+  const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+    draft: { bg: "bg-gray-100", text: "text-gray-700", dot: "bg-gray-400", label: "Draft" },
+    running: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Running" },
+    completed: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Completed" },
+    pending: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", label: "Pending" },
+    sent: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Sent" },
+    failed: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Failed" },
+  };
+
   const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: "bg-gray-100 text-gray-700",
-      running: "bg-blue-100 text-blue-700",
-      completed: "bg-green-100 text-green-700",
-      pending: "bg-yellow-100 text-yellow-700",
-      sent: "bg-green-100 text-green-700",
-      failed: "bg-red-100 text-red-700",
-    };
+    const cfg = statusConfig[status] || statusConfig.draft;
     return (
-      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || "bg-gray-100 text-gray-700"}`}>
-        {status}
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-lg ${cfg.bg} ${cfg.text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+        {cfg.label}
       </span>
     );
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading campaign...</p>;
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-10 h-10 border-[3px] border-gray-200 border-t-gray-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-500">Loading campaign...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!campaign) {
     return (
-      <div>
-        <p className="text-red-600">Campaign not found.</p>
-        <button onClick={() => router.push("/dashboard/campaigns")} className="mt-4 text-blue-600 hover:underline text-sm">
-          ← Back to campaigns
-        </button>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-700">Campaign not found</p>
+          <button onClick={() => router.push("/dashboard/campaigns")} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            ← Back to campaigns
+          </button>
+        </div>
       </div>
     );
   }
 
   const hasEmails = emails.length > 0;
   const hasPendingEmails = emails.some((e) => e.status === "pending");
+  const contactedLeadCount = leads.filter(l => l.contacted).length;
+  const sentEmailCount = emails.filter(e => e.status === "sent").length;
+  const repliedEmailCount = emails.filter(e => e.replied).length;
+  const heroStatus = statusConfig[campaign.status] || statusConfig.draft;
 
   return (
     <div>
-      {/* Toast Notifications */}
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <button onClick={() => router.push("/dashboard/campaigns")} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block">
-            ← Back to campaigns
-          </button>
-          <h1 className="text-2xl font-bold text-gray-900">{campaign.name}</h1>
-          <div className="flex items-center gap-3 mt-2">
-            {statusBadge(campaign.status)}
-            <span className="text-sm text-gray-500">{campaign.total_leads} leads</span>
-            <span className="text-sm text-gray-500">
-              Created {new Date(campaign.created_at).toLocaleDateString()}
-            </span>
-          </div>
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
+        <div className="absolute inset-0">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl" />
         </div>
+        <div className="relative z-10">
+          <button onClick={() => router.push("/dashboard/campaigns")} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            Back to campaigns
+          </button>
 
-        {/* Action buttons based on campaign flow */}
-        <div className="flex gap-3">
-          {/* Step 3: Generate Emails (only if draft and no emails yet) */}
-          {campaign.status === "draft" && !hasEmails && leads.some(l => l.enriched_data?.summary) && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating || generateLimitReached}
-              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={generateLimitReached ? generateLimitMsg : ""}
-            >
-              {generating ? "Generating..." : generateLimitReached ? "⛔ Daily Limit Reached" : selectedLeadIds.size > 0 ? `🤖 Generate for ${selectedLeadIds.size} Selected` : "🤖 Generate Emails"}
-            </button>
-          )}
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl md:text-3xl font-bold text-white capitalize truncate">{campaign.name}</h1>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-white/10 border border-white/10`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${heroStatus.dot}`} />
+                  <span className="text-gray-300">{heroStatus.label}</span>
+                </span>
+              </div>
+              <p className="text-sm text-gray-400">
+                {campaign.total_leads} leads · Created {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </p>
+            </div>
 
-          {/* Generate Call Scripts (if campaign has call leads and still in draft) */}
-          {campaign.status === "draft" && leads.some(l => l.contact_method === "call") && leads.some(l => l.enriched_data?.summary) && (
-            <button
-              onClick={handleGenerateCallScripts}
-              disabled={generatingScripts || generateLimitReached}
-              className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={generateLimitReached ? generateLimitMsg : ""}
-            >
-              {generatingScripts ? "Generating..." : generateLimitReached ? "⛔ Daily Limit Reached" : "📞 Generate Call Scripts"}
-            </button>
-          )}
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {campaign.status === "draft" && !hasEmails && leads.length > 0 && leads.some(l => !l.enriched_data?.summary) && (
+                <button
+                  onClick={handleEnrich}
+                  disabled={enriching || enrichLimitReached}
+                  className="px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={enrichLimitReached ? enrichLimitMsg : ""}
+                >
+                  {enriching ? "Enriching..." : enrichLimitReached ? "Limit Reached" : selectedLeadIds.size > 0 ? `Enrich ${selectedLeadIds.size} Selected` : "Enrich Leads"}
+                </button>
+              )}
+              {campaign.status === "draft" && !hasEmails && leads.some(l => l.enriched_data?.summary) && (
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating || generateLimitReached}
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={generateLimitReached ? generateLimitMsg : ""}
+                >
+                  {generating ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : selectedLeadIds.size > 0 ? `Generate for ${selectedLeadIds.size} Selected` : "Generate Emails"}
+                </button>
+              )}
+              {campaign.status === "draft" && leads.some(l => l.contact_method === "call") && leads.some(l => l.enriched_data?.summary) && (
+                <button
+                  onClick={handleGenerateCallScripts}
+                  disabled={generatingScripts || generateLimitReached}
+                  className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={generateLimitReached ? generateLimitMsg : ""}
+                >
+                  {generatingScripts ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : "Generate Call Scripts"}
+                </button>
+              )}
+              {campaign.status === "draft" && hasPendingEmails && (
+                <button
+                  onClick={handleSend}
+                  disabled={sending}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sending ? "Sending..." : selectedLeadIds.size > 0 ? `Send to ${selectedLeadIds.size} Selected` : "Start Campaign"}
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Step 2: Enrich (only if draft, has leads, no enrichment yet) */}
-          {campaign.status === "draft" && !hasEmails && leads.length > 0 && !leads.some(l => l.enriched_data?.summary) && (
-            <button
-              onClick={handleEnrich}
-              disabled={enriching || enrichLimitReached}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={enrichLimitReached ? enrichLimitMsg : ""}
-            >
-              {enriching ? "Enriching..." : enrichLimitReached ? "⛔ Limit Reached" : selectedLeadIds.size > 0 ? `🔍 Enrich ${selectedLeadIds.size} Selected` : "🔍 Enrich Leads"}
-            </button>
-          )}
-
-          {/* Step 4 & 5: Start Campaign (only if emails are pending) */}
-          {campaign.status === "draft" && hasPendingEmails && (
-            <button
-              onClick={handleSend}
-              disabled={sending}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {sending ? "Sending..." : selectedLeadIds.size > 0 ? `🚀 Send to ${selectedLeadIds.size} Selected` : "🚀 Start Campaign"}
-            </button>
-          )}
+          {/* Stats Row */}
+          <div className="mt-6 flex items-center gap-6 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{leads.length}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Leads</p>
+              </div>
+            </div>
+            <div className="w-px h-10 bg-white/10" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{contactedLeadCount}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Contacted</p>
+              </div>
+            </div>
+            {hasEmails && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-white">{sentEmailCount}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Sent</p>
+                  </div>
+                </div>
+              </>
+            )}
+            {repliedEmailCount > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-white">{repliedEmailCount}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Replies</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Progress Indicators */}
-      {/* Campaign Settings Bar */}
-      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      {/* Settings Card */}
+      <div className="bg-blue-50/50 rounded-2xl border border-blue-200 p-5 mb-6">
         <div className="flex items-center gap-6 flex-wrap">
-          {/* Timezone Selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">🕐 Send Timezone:</label>
-            <select
-              value={sendTimezone}
-              onChange={(e) => setSendTimezone(e.target.value)}
-              disabled={savingSettings}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {TIMEZONE_OPTIONS.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-gray-400">
-              {TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.hours}
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div className="flex items-center gap-2">
+              <CustomSelect
+                value={sendTimezone}
+                onChange={(val) => setSendTimezone(val)}
+                options={TIMEZONE_OPTIONS.map(tz => ({ value: tz.value, label: tz.label }))}
+                disabled={savingSettings}
+              />
+              <span className="text-xs text-gray-400 hidden md:block">{TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.hours}</span>
+            </div>
           </div>
 
-          {/* Divider */}
-          <div className="h-6 w-px bg-gray-200" />
+          <div className="h-8 w-px bg-gray-200" />
 
-          {/* Follow-ups Toggle */}
-          <div className="flex items-center gap-2">
+          <label htmlFor="followups-toggle" className="flex items-center gap-3 cursor-pointer">
+            <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </div>
             <input
               type="checkbox"
               id="followups-toggle"
               checked={enableFollowups}
               onChange={(e) => setEnableFollowups(e.target.checked)}
               disabled={savingSettings}
-              className="w-4 h-4 rounded cursor-pointer"
+              className="w-4 h-4 rounded cursor-pointer accent-violet-600"
             />
-            <label htmlFor="followups-toggle" className="text-sm text-gray-700 cursor-pointer">
-              Enable follow-up sequences
-            </label>
-          </div>
+            <span className="text-sm text-gray-700 font-medium">Follow-up sequences</span>
+          </label>
 
-          {/* Save Button (shown when settings differ) */}
           {(enableFollowups !== (campaign?.enable_followups || false) ||
             sendTimezone !== (campaign?.send_timezone || "US_EAST")) && (
             <button
               onClick={handleSaveSettings}
               disabled={savingSettings}
-              className="ml-auto px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+              className="ml-auto px-5 py-2 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 font-semibold transition-all"
             >
               {savingSettings ? "Saving..." : "Save Settings"}
             </button>
           )}
-
-          {/* Sending schedule info */}
-          <div className="w-full mt-1 text-xs text-gray-400">
-            📧 Emails send daily during peak open times • Morning: 8–11 AM • Afternoon: 1–5 PM ({TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label})
-          </div>
+        </div>
+        <div className="mt-3 text-xs text-gray-400 pl-11">
+          Emails send during peak open times · Morning: 8–11 AM · Afternoon: 1–5 PM ({TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label})
         </div>
       </div>
 
@@ -642,33 +770,8 @@ export default function CampaignDetailPage() {
       <ProgressBar tracker={sendProgress} />
       <ProgressBar tracker={scriptProgress} />
 
-      {/* Leads Table */}
+      {/* Leads Section */}
       <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Leads ({leads.length})</h2>
-          <div className="flex items-center gap-3">
-            {/* Source Type Filter */}
-            <select
-              value={sourceFilter}
-              onChange={(e) => {
-                setSourceFilter(e.target.value as "all" | "auto_find" | "csv");
-                setSelectedLeadIds(new Set());
-              }}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Sources</option>
-              <option value="auto_find">🔍 Auto-Find</option>
-              <option value="csv">📁 CSV Upload</option>
-            </select>
-            {/* Selected count */}
-            {selectedLeadIds.size > 0 && (
-              <span className="text-sm text-blue-600 font-medium">
-                {selectedLeadIds.size} selected
-              </span>
-            )}
-          </div>
-        </div>
-
         {(() => {
           const filteredLeads = sourceFilter === "all"
             ? leads
@@ -678,27 +781,81 @@ export default function CampaignDetailPage() {
           const uncontactedCount = filteredLeads.filter(l => !l.contacted).length;
 
           return filteredLeads.length === 0 ? (
-            <p className="text-gray-500 text-sm">No leads found for this filter.</p>
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                </div>
+                <CustomSelect
+                  value={sourceFilter}
+                  onChange={(val) => {
+                    setSourceFilter(val as "all" | "auto_find" | "csv");
+                    setSelectedLeadIds(new Set());
+                  }}
+                  options={[
+                    { value: "all" as const, label: "All Sources" },
+                    { value: "auto_find" as const, label: "Auto-Find" },
+                    { value: "csv" as const, label: "CSV Upload" },
+                  ]}
+                />
+              </div>
+              <div className="py-12 text-center">
+                <p className="text-sm text-gray-500">No leads found for this filter.</p>
+              </div>
+            </div>
           ) : (
-            <>
-              {/* Contact Summary Bar */}
-              <div className="mb-3 flex items-center gap-4 text-sm">
-                <span className="text-gray-500">
-                  Showing {filteredLeads.length} leads
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                  ✉ {contactedCount} contacted
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                  {uncontactedCount} uncontacted
-                </span>
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              {/* Table Header */}
+              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                  </div>
+                  <div className="h-6 w-px bg-blue-200" />
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs text-gray-500">{filteredLeads.length} showing</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      {contactedCount} contacted
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-white text-gray-600 rounded-lg border border-gray-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                      {uncontactedCount} uncontacted
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CustomSelect
+                    value={sourceFilter}
+                    onChange={(val) => {
+                      setSourceFilter(val as "all" | "auto_find" | "csv");
+                      setSelectedLeadIds(new Set());
+                    }}
+                    options={[
+                      { value: "all" as const, label: "All Sources" },
+                      { value: "auto_find" as const, label: "Auto-Find" },
+                      { value: "csv" as const, label: "CSV Upload" },
+                    ]}
+                  />
+                  {selectedLeadIds.size > 0 && (
+                    <span className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg ring-1 ring-blue-200">
+                      {selectedLeadIds.size} selected
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left">
+              {/* Table */}
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/80">
+                      <th className="px-4 py-3.5 text-left">
                         <input
                           type="checkbox"
                           checked={filteredLeads.length > 0 && filteredLeads.every(l => selectedLeadIds.has(l.id))}
@@ -709,31 +866,30 @@ export default function CampaignDetailPage() {
                               setSelectedLeadIds(new Set());
                             }
                           }}
-                          className="w-4 h-4 rounded cursor-pointer"
+                          className="w-4 h-4 rounded cursor-pointer accent-blue-600"
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Summary</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Score</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-100">
                     {filteredLeads.map((lead) => {
                       const scoreColor =
                         lead.score && lead.score >= 70
-                          ? "bg-green-100 text-green-700"
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                           : lead.score && lead.score >= 40
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-gray-100 text-gray-700";
+                          ? "bg-amber-50 text-amber-700 ring-amber-200"
+                          : "bg-gray-50 text-gray-600 ring-gray-200";
                       const isCallLead = lead.contact_method === "call";
                       const isSelected = selectedLeadIds.has(lead.id);
                       return (
-                        <tr key={lead.id} className={`hover:bg-gray-50 ${isSelected ? "bg-blue-50" : ""}`}>
-                          <td className="px-4 py-3">
+                        <tr key={lead.id} className={`transition-colors ${isSelected ? "bg-blue-50/70" : "hover:bg-gray-50/70"}`}>
+                          <td className="px-4 py-3.5">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -746,70 +902,60 @@ export default function CampaignDetailPage() {
                                 }
                                 setSelectedLeadIds(next);
                               }}
-                              className="w-4 h-4 rounded cursor-pointer"
+                              className="w-4 h-4 rounded cursor-pointer accent-blue-600"
                             />
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{lead.name}</td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3.5 text-sm font-medium text-gray-900 capitalize">{lead.name}</td>
+                          <td className="px-4 py-3.5 text-sm">
                             {isCallLead ? (
-                              <div>
-                                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 mb-1">
-                                  📞 Call
-                                </span>
-                                {lead.phone && (
-                                  <p className="text-gray-600 text-xs">{lead.phone}</p>
-                                )}
-                              </div>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                {lead.phone && lead.phone.trim() ? lead.phone : "No number"}
+                              </span>
                             ) : (
-                              <span className="text-gray-600">{lead.email}</span>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                {lead.email}
+                              </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{lead.company}</td>
-                          <td className="px-4 py-3 text-xs">
-                            <span className={`px-2 py-0.5 rounded-full font-medium ${
+                          <td className="px-4 py-3.5 text-sm text-gray-600">{lead.company}</td>
+                          <td className="px-4 py-3.5 text-xs">
+                            <span className={`px-2.5 py-1 rounded-lg font-semibold ring-1 ${
                               lead.source_type === "csv"
-                                ? "bg-purple-100 text-purple-700"
-                                : "bg-cyan-100 text-cyan-700"
+                                ? "bg-purple-50 text-purple-700 ring-purple-200"
+                                : "bg-cyan-50 text-cyan-700 ring-cyan-200"
                             }`}>
-                              {lead.source_type === "csv" ? "📁 CSV" : lead.source_type === "auto_find" ? "🔍 Auto" : "—"}
+                              {lead.source_type === "csv" ? "CSV" : lead.source_type === "auto_find" ? "Auto" : "—"}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3.5 text-sm">
                             {lead.score !== undefined && lead.score !== null ? (
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${scoreColor}`}>
+                              <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ring-1 ${scoreColor}`}>
                                 {lead.score}
                               </span>
                             ) : (
-                              <span className="text-gray-400 text-xs">—</span>
+                              <span className="text-gray-300 text-xs">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3.5 text-sm">
                             {lead.contacted ? (
                               <div>
-                                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                  ✉ Contacted
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Contacted
                                 </span>
                                 {lead.contacted_at && (
-                                  <p className="text-xs text-gray-400 mt-0.5">
+                                  <p className="text-[10px] text-gray-400 mt-0.5">
                                     {new Date(lead.contacted_at).toLocaleDateString()}
                                   </p>
                                 )}
                               </div>
                             ) : (
-                              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-500">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                                 Uncontacted
                               </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {lead.enriched_data?.summary ? (
-                              <div className="max-w-xs">
-                                <p className="truncate" title={lead.enriched_data.summary}>
-                                  {lead.enriched_data.summary}
-                                </p>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">Not enriched</span>
                             )}
                           </td>
                         </tr>
@@ -818,106 +964,121 @@ export default function CampaignDetailPage() {
                   </tbody>
                 </table>
               </div>
-            </>
-          );
-        })()}
-      </div>
+            );
+          })()}
+        </div>
 
-      {/* Emails Table */}
+      {/* Emails Section */}
       {hasEmails && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Generated Emails ({emails.length})</h2>
+        <div className="mt-10">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-100">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Generated Emails <span className="text-gray-400 font-medium">({emails.length})</span></h2>
+          </div>
           <div className="space-y-4">
-            {emails.map((email) => (
-              <div key={email.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      (email.sequence_step || 1) === 1
-                        ? "bg-blue-100 text-blue-700"
-                        : (email.sequence_step || 1) === 2
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}>
-                      {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
-                    </span>
-                    <span className="text-sm text-gray-500">To: {email.to_email}</span>
-                    {email.tone_variant && (
-                      <span className="text-xs text-gray-400">({email.tone_variant})</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {email.replied ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">✅ Replied</span>
-                    ) : email.status === "sent" ? (
-                      <button
-                        onClick={() => handleMarkReply(email.id)}
-                        className="px-2 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                      >
-                        Mark as Replied
-                      </button>
-                    ) : null}
-                    {statusBadge(email.status)}
+            {emails.map((email) => {
+              const stepColors = [
+                "from-blue-500 to-indigo-500",
+                "from-violet-500 to-purple-500",
+                "from-orange-500 to-amber-500",
+              ];
+              const stepIdx = Math.min((email.sequence_step || 1) - 1, 2);
+              return (
+                <div key={email.id} className="group bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all overflow-hidden">
+                  <div className={`h-1 bg-gradient-to-r ${stepColors[stepIdx]}`} />
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r ${stepColors[stepIdx]}`}>
+                          {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
+                        </span>
+                        <span className="text-sm text-gray-500">To: <span className="font-medium text-gray-700">{email.to_email}</span></span>
+                        {email.tone_variant && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium uppercase tracking-wider">{email.tone_variant}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {email.replied ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Replied
+                          </span>
+                        ) : email.status === "sent" ? (
+                          <button
+                            onClick={() => handleMarkReply(email.id)}
+                            className="px-3 py-1 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            Mark as Replied
+                          </button>
+                        ) : null}
+                        {statusBadge(email.status)}
+                      </div>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">{email.subject}</h3>
+                    <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{email.body}</p>
+                    <div className="mt-3 flex items-center gap-4 flex-wrap">
+                      {email.gmail_email && (
+                        <p className="text-xs text-gray-400">From: {email.gmail_email}</p>
+                      )}
+                      {email.sent_at && (
+                        <p className="text-xs text-gray-400">Sent {new Date(email.sent_at).toLocaleString()}</p>
+                      )}
+                      {!email.sent_at && email.scheduled_at && (
+                        <p className="text-xs text-amber-600 font-medium">Scheduled: {new Date(email.scheduled_at).toLocaleString()}</p>
+                      )}
+                      {email.replied_at && (
+                        <p className="text-xs text-emerald-600 font-medium">Replied {new Date(email.replied_at).toLocaleString()}</p>
+                      )}
+                      {email.error_log && email.status === "failed" && (
+                        <p className="text-xs text-red-500">Error: {email.error_log}</p>
+                      )}
+                      {email.retry_count && email.retry_count > 0 && email.status !== "sent" && (
+                        <p className="text-xs text-orange-500">Retries: {email.retry_count}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <h3 className="font-medium text-gray-900">{email.subject}</h3>
-                <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{email.body}</p>
-                <div className="mt-2 flex items-center gap-3">
-                  {email.gmail_email && (
-                    <p className="text-xs text-gray-400">
-                      From: {email.gmail_email}
-                    </p>
-                  )}
-                  {email.sent_at && (
-                    <p className="text-xs text-gray-400">
-                      Sent {new Date(email.sent_at).toLocaleString()}
-                    </p>
-                  )}
-                  {!email.sent_at && email.scheduled_at && (
-                    <p className="text-xs text-yellow-600">
-                      Scheduled: {new Date(email.scheduled_at).toLocaleString()}
-                    </p>
-                  )}
-                  {email.replied_at && (
-                    <p className="text-xs text-green-600">
-                      Replied {new Date(email.replied_at).toLocaleString()}
-                    </p>
-                  )}
-                  {email.error_log && email.status === "failed" && (
-                    <p className="text-xs text-red-500">Error: {email.error_log}</p>
-                  )}
-                  {email.retry_count && email.retry_count > 0 && email.status !== "sent" && (
-                    <p className="text-xs text-orange-500">Retries: {email.retry_count}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Call Scripts Section */}
+      {/* Call Scripts */}
       {callScripts.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Call Scripts ({callScripts.length})</h2>
+        <div className="mt-10">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-100">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Call Scripts <span className="text-gray-400 font-medium">({callScripts.length})</span></h2>
+          </div>
           <div className="space-y-4">
             {callScripts.map((script) => (
-              <div key={script.lead_id} className="bg-white rounded-xl shadow-sm border border-orange-200 p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-gray-900">{script.company}</span>
-                  {script.phone && (
-                    <span className="text-sm text-orange-600 font-medium">📞 {script.phone}</span>
-                  )}
-                </div>
-                {script.opening && (
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Opening</p>
-                    <p className="text-sm text-gray-700">{script.opening}</p>
+              <div key={script.lead_id} className="bg-white rounded-2xl border border-gray-200 hover:border-orange-200 hover:shadow-md transition-all overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="font-semibold text-gray-900 capitalize">{script.company}</span>
+                    {script.phone && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-orange-700 bg-orange-50 rounded-lg ring-1 ring-orange-200">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        {script.phone}
+                      </span>
+                    )}
                   </div>
-                )}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Script</p>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{script.script}</p>
+                  {script.opening && (
+                    <div className="mb-4">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Opening</p>
+                      <p className="text-sm text-gray-700 leading-relaxed">{script.opening}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Full Script</p>
+                    <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{script.script}</p>
+                  </div>
                 </div>
               </div>
             ))}
