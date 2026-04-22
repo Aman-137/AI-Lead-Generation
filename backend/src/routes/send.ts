@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import { getAllEmailAccounts, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
-import { getDailyLimit } from "../services/planLimits";
+import { getDailyLimit, getUserPlan } from "../services/planLimits";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -136,19 +136,10 @@ function delay(minMs: number, maxMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Helper: count emails sent today by this user
+// Helper: count emails sent today by this user (monotonic counter)
 async function getEmailsSentToday(userId: string): Promise<number> {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-
-  const { count } = await supabase
-    .from("emails")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "sent")
-    .gte("sent_at", today.toISOString());
-
-  return count || 0;
+  const userPlan = await getUserPlan(userId);
+  return userPlan.emailsSentToday;
 }
 
 // POST /api/send — Queue a campaign for sending (non-blocking)

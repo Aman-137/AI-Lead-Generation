@@ -117,7 +117,7 @@ export default async function DashboardLayout({
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-white tracking-tight">Inertia Leads</h1>
+                <h1 className="text-lg font-semibold text-white whitespace-nowrap" style={{ fontFamily: "var(--font-oughter), sans-serif", letterSpacing: "0.08em" }}>Inertia Leads</h1>
                 <p className="text-[10px] text-purple-300/40 font-semibold tracking-widest uppercase">AI Outreach</p>
               </div>
             </div>

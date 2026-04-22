@@ -13,11 +13,45 @@ function getOAuth2Client() {
   );
 }
 
-// Generate the OAuth2 consent URL with CSRF-protection state parameter
+// HMAC key for signing OAuth state — reuses the encryption key
+function getStateSigningKey(): Buffer {
+  const key = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!key || key.length !== 64) {
+    throw new Error("TOKEN_ENCRYPTION_KEY required for OAuth state signing");
+  }
+  return Buffer.from(key, "hex");
+}
+
+// Sign a payload with HMAC-SHA256 → "payload.signature"
+function signState(payload: string): string {
+  const sig = crypto.createHmac("sha256", getStateSigningKey()).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+
+// Verify HMAC signature and return decoded payload (or null if tampered)
+function verifyAndDecodeState(state: string): { userId: string; ts: number } | null {
+  const dotIndex = state.lastIndexOf(".");
+  if (dotIndex === -1) return null;
+  const payload = state.slice(0, dotIndex);
+  const sig = state.slice(dotIndex + 1);
+  const expected = crypto.createHmac("sha256", getStateSigningKey()).update(payload).digest("base64url");
+  // Timing-safe comparison to prevent timing attacks
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (!decoded.userId || typeof decoded.userId !== "string") return null;
+    if (typeof decoded.ts !== "number") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+// Generate the OAuth2 consent URL with HMAC-signed CSRF-protection state
 export function getAuthUrl(userId: string): string {
   const oauth2Client = getOAuth2Client();
-  // State ties the OAuth flow to this specific user session
-  const state = Buffer.from(JSON.stringify({ userId, ts: Date.now() })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ userId, ts: Date.now() })).toString("base64url");
+  const state = signState(payload);
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -29,30 +63,23 @@ export function getAuthUrl(userId: string): string {
   });
 }
 
-// Verify OAuth state parameter matches the authenticated user
+// Verify OAuth state signature + matches the authenticated user
 export function verifyOAuthState(state: string, userId: string): boolean {
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-    if (decoded.userId !== userId) return false;
-    // Reject states older than 10 minutes
-    if (Date.now() - decoded.ts > 10 * 60 * 1000) return false;
-    return true;
-  } catch {
-    return false;
-  }
+  const decoded = verifyAndDecodeState(state);
+  if (!decoded) return false;
+  if (decoded.userId !== userId) return false;
+  // Reject states older than 10 minutes
+  if (Date.now() - decoded.ts > 10 * 60 * 1000) return false;
+  return true;
 }
 
-// Extract userId from OAuth state (for GET callback where no auth header is present)
+// Extract userId from HMAC-signed OAuth state (for GET callback without auth header)
 export function extractOAuthStateUserId(state: string): string | null {
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-    if (!decoded.userId || typeof decoded.userId !== "string") return null;
-    // Reject states older than 10 minutes
-    if (Date.now() - decoded.ts > 10 * 60 * 1000) return null;
-    return decoded.userId;
-  } catch {
-    return null;
-  }
+  const decoded = verifyAndDecodeState(state);
+  if (!decoded) return null;
+  // Reject states older than 10 minutes
+  if (Date.now() - decoded.ts > 10 * 60 * 1000) return null;
+  return decoded.userId;
 }
 
 // Exchange authorization code for tokens and store them

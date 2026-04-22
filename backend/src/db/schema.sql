@@ -63,6 +63,7 @@ create table if not exists campaigns (
   name text not null,
   status text not null default 'draft' check (status in ('draft', 'running', 'completed')),
   total_leads integer default 0,
+  queued_leads integer default 0,
   enable_followups boolean default false,
   send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_MOUNTAIN', 'US_WEST', 'US_ALASKA', 'US_HAWAII', 'UK', 'EU_CENTRAL', 'EU_EAST')),
   created_at timestamp with time zone default now()
@@ -131,9 +132,109 @@ create table if not exists user_plans (
   is_active boolean default true,
   leads_found_this_month integer default 0,
   leads_found_reset_at timestamp with time zone default now(),
+  leads_found_today integer default 0,
+  leads_found_today_reset_at timestamp with time zone default now(),
+  emails_generated_today integer default 0,
+  emails_generated_today_reset_at timestamp with time zone default now(),
+  emails_sent_today integer default 0,
+  emails_sent_today_reset_at timestamp with time zone default now(),
+  timezone text not null default 'UTC',
+  timezone_updated_at timestamp with time zone,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
+
+-- =============================================
+-- RPC: Atomically increment daily leads counter
+-- Resets at the user's local midnight. The reset_at is compared
+-- against today's midnight in the user's timezone.
+-- Anti-exploit: timezone changes are locked to once per 24h in app code.
+-- =============================================
+create or replace function increment_leads_found_today(p_user_id uuid, p_count integer)
+returns void as $$
+declare
+  v_user_tz text;
+  v_midnight timestamp with time zone;
+begin
+  select coalesce(timezone, 'UTC') into v_user_tz from user_plans where user_id = p_user_id;
+  v_midnight := date_trunc('day', now() at time zone v_user_tz) at time zone v_user_tz;
+
+  update user_plans
+  set
+    leads_found_today = case
+      when leads_found_today_reset_at is null or leads_found_today_reset_at < v_midnight
+      then p_count
+      else leads_found_today + p_count
+    end,
+    leads_found_today_reset_at = case
+      when leads_found_today_reset_at is null or leads_found_today_reset_at < v_midnight
+      then v_midnight
+      else leads_found_today_reset_at
+    end,
+    updated_at = now()
+  where user_id = p_user_id;
+end;
+$$ language plpgsql security definer;
+
+-- =============================================
+-- RPC: Atomically increment daily email generation counter
+-- Same midnight-based reset pattern.
+-- =============================================
+create or replace function increment_emails_generated_today(p_user_id uuid, p_count integer)
+returns void as $$
+declare
+  v_user_tz text;
+  v_midnight timestamp with time zone;
+begin
+  select coalesce(timezone, 'UTC') into v_user_tz from user_plans where user_id = p_user_id;
+  v_midnight := date_trunc('day', now() at time zone v_user_tz) at time zone v_user_tz;
+
+  update user_plans
+  set
+    emails_generated_today = case
+      when emails_generated_today_reset_at is null or emails_generated_today_reset_at < v_midnight
+      then p_count
+      else emails_generated_today + p_count
+    end,
+    emails_generated_today_reset_at = case
+      when emails_generated_today_reset_at is null or emails_generated_today_reset_at < v_midnight
+      then v_midnight
+      else emails_generated_today_reset_at
+    end,
+    updated_at = now()
+  where user_id = p_user_id;
+end;
+$$ language plpgsql security definer;
+
+-- =============================================
+-- RPC: Atomically increment daily email sent counter
+-- Same midnight-based reset pattern.
+-- =============================================
+create or replace function increment_emails_sent_today(p_user_id uuid, p_count integer)
+returns void as $$
+declare
+  v_user_tz text;
+  v_midnight timestamp with time zone;
+begin
+  select coalesce(timezone, 'UTC') into v_user_tz from user_plans where user_id = p_user_id;
+  v_midnight := date_trunc('day', now() at time zone v_user_tz) at time zone v_user_tz;
+
+  update user_plans
+  set
+    emails_sent_today = case
+      when emails_sent_today_reset_at is null or emails_sent_today_reset_at < v_midnight
+      then p_count
+      else emails_sent_today + p_count
+    end,
+    emails_sent_today_reset_at = case
+      when emails_sent_today_reset_at is null or emails_sent_today_reset_at < v_midnight
+      then v_midnight
+      else emails_sent_today_reset_at
+    end,
+    updated_at = now()
+  where user_id = p_user_id;
+end;
+$$ language plpgsql security definer;
 
 -- =============================================
 -- Row Level Security
@@ -302,3 +403,48 @@ create index if not exists idx_smtp_accounts_user_id on smtp_accounts(user_id);
 -- Add smtp_account_id to emails table (nullable, alongside gmail_account_id)
 alter table emails add column if not exists smtp_account_id uuid references smtp_accounts(id) on delete set null;
 create index if not exists idx_emails_smtp_account_id on emails(smtp_account_id);
+
+-- =============================================
+-- Table: job_locks (distributed locking for background jobs)
+-- =============================================
+-- Prevents duplicate processing when multiple server instances run.
+-- Each background job (email queue, CSV drip-feed) claims a named lock
+-- before processing. If the lock is already held, the instance skips.
+-- Stale locks auto-expire after 5 minutes (process crash safety).
+create table if not exists job_locks (
+  lock_name text primary key,
+  locked_at timestamp with time zone not null default now(),
+  locked_by text not null default ''
+);
+
+-- Pre-insert lock rows so we only need UPDATE (no INSERT race conditions)
+insert into job_locks (lock_name, locked_at, locked_by)
+values
+  ('email_queue', '2000-01-01T00:00:00Z', ''),
+  ('csv_drip_feed', '2000-01-01T00:00:00Z', '')
+on conflict (lock_name) do nothing;
+
+-- RPC: Attempt to acquire a named lock.
+-- Returns true if acquired, false if another instance holds it.
+-- Lock expires after 5 minutes (stale lock protection).
+create or replace function acquire_job_lock(p_lock_name text, p_locked_by text)
+returns boolean as $$
+declare
+  rows_updated integer;
+begin
+  update job_locks
+  set locked_at = now(), locked_by = p_locked_by
+  where lock_name = p_lock_name
+    and (locked_by = '' or locked_at < now() - interval '5 minutes');
+  get diagnostics rows_updated = row_count;
+  return rows_updated > 0;
+end;
+$$ language plpgsql volatile security definer;
+
+-- RPC: Release a named lock (only if we hold it).
+create or replace function release_job_lock(p_lock_name text, p_locked_by text)
+returns void as $$
+  update job_locks
+  set locked_at = '2000-01-01T00:00:00Z', locked_by = ''
+  where lock_name = p_lock_name and locked_by = p_locked_by;
+$$ language sql volatile security definer;

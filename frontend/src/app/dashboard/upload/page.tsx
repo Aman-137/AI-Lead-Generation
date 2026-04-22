@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { apiPostFormData } from "@/lib/api";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { apiPostFormData, apiGet } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
 // ===== Toast Notification System =====
@@ -86,9 +86,25 @@ export default function UploadPage() {
   const [campaignName, setCampaignName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [dailyUsed, setDailyUsed] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(50);
+  const [planLabel, setPlanLabel] = useState("Starter");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const toast = useToast();
+
+  const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+  const isAtLimit = dailyRemaining <= 0;
+
+  useEffect(() => {
+    apiGet<{ leadsFoundToday: number; dailyLeadFindLimit: number; planLabel: string }>("/stats")
+      .then((data) => {
+        setDailyUsed(data.leadsFoundToday);
+        setDailyLimit(data.dailyLeadFindLimit);
+        setPlanLabel(data.planLabel);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleFilePick = (selected: File | null) => {
     if (selected && selected.size > 2 * 1024 * 1024) {
@@ -113,12 +129,17 @@ export default function UploadPage() {
     formData.append("campaignName", campaignName);
 
     try {
-      const data = await apiPostFormData<{ count: number; readyNow?: number; queued?: number; dailyLimit?: number }>("/leads/upload", formData);
+      const data = await apiPostFormData<{ count: number; readyNow?: number; queued?: number; skipped?: number; dailyLimit?: number; remaining?: number }>("/leads/upload", formData);
       if (data.queued && data.queued > 0) {
-        toast.addToast(`Uploaded ${data.count} leads! ${data.readyNow} ready now, ${data.queued} queued for upcoming days (${data.dailyLimit}/day limit).`, "success");
+        toast.addToast(`Uploaded ${data.count} leads! ${data.readyNow} ready now, ${data.queued} queued for upcoming days.`, "success");
       } else {
-        toast.addToast(`Successfully uploaded ${data.count} leads!`, "success");
+        toast.addToast(`Successfully uploaded ${data.readyNow || data.count} leads!`, "success");
       }
+      if (data.skipped && data.skipped > 0) {
+        toast.addToast(`${data.skipped} leads from your CSV exceeded the ${data.dailyLimit}/day plan cap and were skipped.`, "info");
+      }
+      // Update daily usage display
+      setDailyUsed(prev => prev + (data.readyNow || 0));
       setFile(null);
       setCampaignName("");
       setTimeout(() => router.push("/dashboard/campaigns"), 1500);
@@ -167,6 +188,32 @@ export default function UploadPage() {
             </div>
 
             <form onSubmit={handleUpload} className="p-6 space-y-6">
+              {/* Daily limit status */}
+              {isAtLimit ? (
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-red-800">Daily limit reached</p>
+                    <p className="text-xs text-red-600 mt-0.5">You&apos;ve found {dailyUsed}/{dailyLimit} leads today ({planLabel} plan). Upload is disabled until tomorrow.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-blue-800">Daily usage: {dailyUsed}/{dailyLimit}</p>
+                    <p className="text-xs text-blue-600 mt-0.5">{dailyRemaining} leads remaining today ({planLabel} plan). Max {dailyLimit} leads per upload.</p>
+                  </div>
+                </div>
+              )}
               {/* Campaign Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Campaign Name</label>
@@ -252,7 +299,7 @@ export default function UploadPage() {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={uploading || !file || !campaignName}
+                disabled={uploading || !file || !campaignName || isAtLimit}
                 className="w-full px-6 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg shadow-amber-200/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 {uploading ? (
@@ -260,6 +307,8 @@ export default function UploadPage() {
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Uploading...
                   </span>
+                ) : isAtLimit ? (
+                  "Daily Limit Reached — Try Tomorrow"
                 ) : (
                   "Upload & Create Campaign"
                 )}

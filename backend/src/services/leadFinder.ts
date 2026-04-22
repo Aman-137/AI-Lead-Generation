@@ -14,14 +14,18 @@ export interface FoundLead {
   website?: string;
   phone?: string;
   industry?: string;
+  address?: string;
 }
 
 interface SerperPlace {
   title?: string;
   address?: string;
   phone?: string;
+  phoneNumber?: string;
   website?: string;
   category?: string;
+  rating?: number;
+  ratingCount?: number;
 }
 
 /**
@@ -71,14 +75,15 @@ export async function findLeadsByNiche(
         if (!company) continue;
 
         // Only include if they have a website or phone (useful leads)
-        if (!place.website && !place.phone) continue;
+        if (!place.website && !place.phone && !place.phoneNumber) continue;
 
         leads.push({
           name: company,
           company,
           website: place.website || "",
-          phone: place.phone || "",
-          industry: niche,
+          phone: place.phone || place.phoneNumber || "",
+          industry: place.category || niche,
+          address: place.address || "",
         });
       }
 
@@ -135,6 +140,7 @@ export function formatLeadsForDB(
         phone: lead.phone || "",
         industry: lead.industry || "",
         contact_method: hasEmail ? "email" : "call",
+        enriched_data: lead.address ? { address: lead.address } : undefined,
       };
     });
 }

@@ -5,7 +5,7 @@ import { autoFindLimiter, enrichLimiter } from "../middleware/rateLimit";
 import supabase from "../services/supabase";
 import { parseCSV } from "../utils/csv";
 import { findLeadsByNiche, formatLeadsForDB } from "../services/leadFinder";
-import { checkLeadFindLimit, incrementLeadsFound, checkDailyLeadFindLimit, getMaxEnrichBatchSize, getUserPlan, PLAN_CONFIGS } from "../services/planLimits";
+import { checkLeadFindLimit, incrementLeadsFound, incrementLeadsFoundToday, decrementLeadsFoundToday, checkDailyLeadFindLimit, getMaxEnrichBatchSize, getUserPlan, PLAN_CONFIGS } from "../services/planLimits";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -55,23 +55,73 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       return;
     }
 
-    // Get user's plan daily limit (Starter: 50, Growth: 100, Agency: 200)
-    const userPlan = await getUserPlan(req.userId!);
-    const config = PLAN_CONFIGS[userPlan.plan];
-    const dailyLimit = config.maxDailyEmails; // 50 / 100 / 200
+    // Check daily lead find limit (uses monotonic counter)
+    // If fully used (e.g. 200/200), CSV upload is disabled entirely
+    const dailyCheck = await checkDailyLeadFindLimit(req.userId!);
+    if (!dailyCheck.allowed) {
+      res.status(403).json({
+        error: `Daily limit reached (${dailyCheck.usedToday}/${dailyCheck.dailyLimit}). CSV upload is disabled until tomorrow.`,
+        usedToday: dailyCheck.usedToday,
+        dailyLimit: dailyCheck.dailyLimit,
+        remaining: 0,
+        plan: dailyCheck.plan,
+      });
+      return;
+    }
 
-    // Split leads: today's batch (up to plan limit) and queued for later
-    const todayLeads = leads.slice(0, dailyLimit);
-    const queuedLeads = leads.slice(dailyLimit);
+    // Cap total CSV leads to plan's max per upload (Starter: 50, Growth: 100, Agency: 200)
+    // Leads beyond this cap are dropped — user must re-upload tomorrow (duplicates auto-skipped)
+    const config = PLAN_CONFIGS[dailyCheck.plan];
+    const maxUpload = config.maxDailyEmails;
+    const cappedLeads = leads.slice(0, maxUpload);
 
-    // Create campaign with total leads count (all leads, including queued)
+    // Split: today's batch (remaining daily slots) and queued (rest up to plan cap)
+    const remaining = dailyCheck.remaining;
+    const todayLeads = cappedLeads.slice(0, remaining);
+    const queuedLeads = cappedLeads.slice(remaining);
+
+    // Insert today's leads first, skipping duplicates (unique constraint on website/company+phone)
+    let insertedTodayCount = 0;
+    if (todayLeads.length > 0) {
+      const todayLeadsToInsert = todayLeads.map((lead) => ({
+        campaign_id: "__CAMPAIGN_ID__", // placeholder, set after campaign creation
+        user_id: req.userId,
+        name: lead.name || "",
+        email: lead.email || "",
+        company: lead.company || "",
+        website: lead.website || "",
+        industry: lead.industry || "",
+        source_type: "csv" as const,
+      }));
+
+      // Try inserting one-by-one to skip duplicates without failing the whole batch
+      for (const lead of todayLeadsToInsert) {
+        insertedTodayCount++; // count attempted (we'll create campaign with this)
+      }
+    }
+
+    let insertedQueuedCount = 0;
+    const queuedLeadsToInsert = queuedLeads.map((lead) => ({
+      campaign_id: "__CAMPAIGN_ID__",
+      user_id: req.userId,
+      name: lead.name || "",
+      email: lead.email || "",
+      company: lead.company || "",
+      website: lead.website || "",
+      industry: lead.industry || "",
+      source_type: "csv_queued" as const,
+    }));
+    insertedQueuedCount = queuedLeadsToInsert.length;
+
+    // Create campaign AFTER we know the counts
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
       .insert({
         user_id: req.userId,
         name: campaignName,
         status: "draft",
-        total_leads: leads.length,
+        total_leads: cappedLeads.length,
+        queued_leads: queuedLeads.length,
       })
       .select()
       .single();
@@ -81,30 +131,53 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       return;
     }
 
-    // Insert today's leads (ready to process)
-    const todayLeadsToInsert = todayLeads.map((lead) => ({
-      campaign_id: campaign.id,
-      user_id: req.userId,
-      name: lead.name || "",
-      email: lead.email || "",
-      company: lead.company || "",
-      website: lead.website || "",
-      industry: lead.industry || "",
-      source_type: "csv",
-    }));
+    // Insert today's leads with duplicate skipping
+    // Uses batch insert (chunks of 50) for speed. If a batch fails due to
+    // a unique constraint (duplicate), falls back to individual inserts for that chunk.
+    let actualInsertedToday = 0;
+    if (todayLeads.length > 0) {
+      const todayLeadsToInsert = todayLeads.map((lead) => ({
+        campaign_id: campaign.id,
+        user_id: req.userId,
+        name: lead.name || "",
+        email: lead.email || "",
+        company: lead.company || "",
+        website: lead.website || "",
+        industry: lead.industry || "",
+        source_type: "csv",
+      }));
 
-    const { error: leadsError } = await supabase
-      .from("leads")
-      .insert(todayLeadsToInsert);
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < todayLeadsToInsert.length; i += BATCH_SIZE) {
+        const batch = todayLeadsToInsert.slice(i, i + BATCH_SIZE);
+        const { data: inserted, error: batchErr } = await supabase
+          .from("leads")
+          .insert(batch)
+          .select("id");
 
-    if (leadsError) {
-      res.status(500).json({ error: "Failed to insert leads" });
-      return;
+        if (!batchErr && inserted) {
+          // Entire batch succeeded — no duplicates in this chunk
+          actualInsertedToday += inserted.length;
+        } else {
+          // Batch had duplicates — fall back to individual inserts for this chunk only
+          for (const lead of batch) {
+            const { error: leadErr } = await supabase.from("leads").insert(lead);
+            if (!leadErr) actualInsertedToday++;
+          }
+        }
+      }
+
+      // Track against daily + monthly limits (only count successful inserts)
+      if (actualInsertedToday > 0) {
+        await incrementLeadsFound(req.userId!, actualInsertedToday);
+        await incrementLeadsFoundToday(req.userId!, actualInsertedToday);
+      }
     }
 
-    // Insert queued leads (marked for later days)
+    // Insert queued leads (same batch approach)
+    let actualInsertedQueued = 0;
     if (queuedLeads.length > 0) {
-      const queuedLeadsToInsert = queuedLeads.map((lead) => ({
+      const queuedToInsert = queuedLeads.map((lead) => ({
         campaign_id: campaign.id,
         user_id: req.userId,
         name: lead.name || "",
@@ -115,19 +188,64 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
         source_type: "csv_queued",
       }));
 
-      await supabase
-        .from("leads")
-        .insert(queuedLeadsToInsert);
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < queuedToInsert.length; i += BATCH_SIZE) {
+        const batch = queuedToInsert.slice(i, i + BATCH_SIZE);
+        const { data: inserted, error: batchErr } = await supabase
+          .from("leads")
+          .insert(batch)
+          .select("id");
+
+        if (!batchErr && inserted) {
+          actualInsertedQueued += inserted.length;
+        } else {
+          for (const lead of batch) {
+            const { error: leadErr } = await supabase.from("leads").insert(lead);
+            if (!leadErr) actualInsertedQueued++;
+          }
+        }
+      }
     }
 
+    // Update campaign with actual counts (after duplicate skipping)
+    const totalActual = actualInsertedToday + actualInsertedQueued;
+    if (totalActual !== cappedLeads.length || actualInsertedQueued !== queuedLeads.length) {
+      await supabase
+        .from("campaigns")
+        .update({
+          total_leads: totalActual,
+          queued_leads: actualInsertedQueued,
+        })
+        .eq("id", campaign.id);
+    }
+
+    // If nothing was inserted at all, clean up the empty campaign
+    if (totalActual === 0) {
+      await supabase
+        .from("campaigns")
+        .delete()
+        .eq("id", campaign.id);
+
+      res.status(400).json({
+        error: "All leads in your CSV already exist in your account. Try a different CSV.",
+      });
+      return;
+    }
+
+    const skippedFromCsv = leads.length - cappedLeads.length;
+    const duplicatesSkipped = cappedLeads.length - totalActual;
+
     res.json({
-      message: queuedLeads.length > 0
-        ? `Uploaded ${leads.length} leads. ${todayLeads.length} ready now, ${queuedLeads.length} queued for upcoming days (${userPlan.plan} plan: ${dailyLimit} leads/day).`
-        : "Leads uploaded successfully",
-      count: leads.length,
-      readyNow: todayLeads.length,
-      queued: queuedLeads.length,
-      dailyLimit,
+      message: actualInsertedQueued > 0
+        ? `Uploaded ${totalActual} leads. ${actualInsertedToday} ready now, ${actualInsertedQueued} queued for upcoming days.`
+        : `Uploaded ${actualInsertedToday} leads successfully.`,
+      count: totalActual,
+      readyNow: actualInsertedToday,
+      queued: actualInsertedQueued,
+      skipped: skippedFromCsv,
+      duplicatesSkipped,
+      dailyLimit: dailyCheck.dailyLimit,
+      remaining: Math.max(0, remaining - actualInsertedToday),
       campaignId: campaign.id,
     });
   } catch {
@@ -280,8 +398,30 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
     );
 
     // Deduplicate: filter out leads whose website or company+phone already exist for this user
-    let leadsToInsert = formattedLeads;
-    if (formattedLeads.length > 0) {
+    // Also normalize website URLs in the leads themselves to match the DB unique index
+    let leadsToInsert = formattedLeads.map((lead) => ({
+      ...lead,
+      website: lead.website ? lead.website.replace(/\/+$/, "") : "",
+    }));
+
+    if (leadsToInsert.length > 0) {
+      // Deduplicate within the batch itself (Serper can return duplicates across pages)
+      const seenWebsites = new Set<string>();
+      const seenCompanyPhone = new Set<string>();
+      leadsToInsert = leadsToInsert.filter((lead) => {
+        const normalizedWebsite = lead.website?.toLowerCase();
+        if (normalizedWebsite) {
+          if (seenWebsites.has(normalizedWebsite)) return false;
+          seenWebsites.add(normalizedWebsite);
+        }
+        if (lead.company && lead.phone) {
+          const key = `${lead.company.toLowerCase()}|${lead.phone.toLowerCase()}`;
+          if (seenCompanyPhone.has(key)) return false;
+          seenCompanyPhone.add(key);
+        }
+        return true;
+      });
+
       // Get existing websites and company+phone combos for this user
       const { data: existingLeads } = await supabase
         .from("leads")
@@ -300,9 +440,9 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
             .filter((v: string) => v !== "|")
         );
 
-        leadsToInsert = formattedLeads.filter((lead) => {
+        leadsToInsert = leadsToInsert.filter((lead) => {
           // Check website match
-          const normalizedWebsite = lead.website?.toLowerCase().replace(/\/+$/, "");
+          const normalizedWebsite = lead.website?.toLowerCase();
           if (normalizedWebsite && existingWebsites.has(normalizedWebsite)) {
             return false;
           }
@@ -378,11 +518,138 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
       .update({ status: "completed" })
       .eq("id", source.id);
 
-    // Track leads found against monthly plan limit
+    // Track leads found against monthly and daily plan limits
     await incrementLeadsFound(req.userId!, insertedCount);
+    await incrementLeadsFoundToday(req.userId!, insertedCount);
 
     // Get updated daily usage for response
     const dailyFinal = await checkDailyLeadFindLimit(req.userId!);
+
+    // Auto-scrape websites in background to fill in emails & phones
+    // This runs after the response is sent so the user doesn't wait
+    if (insertedLeads && insertedLeads.length > 0) {
+      const leadIdsToScrape = insertedLeads.map((l: any) => l.id);
+      setImmediate(async () => {
+        try {
+          const { scrapeWebsite, generateEnrichmentSummary } = await import("../services/scraper");
+          const { scoreLead } = await import("../services/leadScoring");
+          const { data: leadsToScrape } = await supabase
+            .from("leads")
+            .select("id, website, email, phone, company, campaign_id")
+            .in("id", leadIdsToScrape);
+
+          if (!leadsToScrape) return;
+
+          const leadsToDelete: { id: string; campaignId: string }[] = [];
+          const SCRAPE_BATCH = 5;
+          for (let i = 0; i < leadsToScrape.length; i += SCRAPE_BATCH) {
+            const batch = leadsToScrape.slice(i, i + SCRAPE_BATCH);
+            await Promise.all(batch.map(async (lead: any) => {
+              try {
+                if (!lead.website) {
+                  // No website — score based on what we know (high opportunity if they have contact info)
+                  if (!lead.email && !lead.phone) {
+                    leadsToDelete.push({ id: lead.id, campaignId: lead.campaign_id });
+                  } else {
+                    const score = scoreLead({ company: lead.company });
+                    await supabase.from("leads").update({ score }).eq("id", lead.id);
+                  }
+                  return;
+                }
+                const websiteData = await scrapeWebsite(lead.website);
+                if (!websiteData) {
+                  // Scrape failed but lead has contact info — still score it (no website data = high opportunity)
+                  if (lead.email || lead.phone) {
+                    const score = scoreLead({ website: lead.website, company: lead.company });
+                    await supabase.from("leads").update({ score }).eq("id", lead.id);
+                  } else {
+                    leadsToDelete.push({ id: lead.id, campaignId: lead.campaign_id });
+                  }
+                  return;
+                }
+
+                const enrichmentSummary = generateEnrichmentSummary(websiteData, lead.company);
+                const score = scoreLead({
+                  website: lead.website,
+                  enriched_data: websiteData as any,
+                  company: lead.company,
+                });
+
+                const updateFields: Record<string, any> = {
+                  enriched_data: {
+                    ...websiteData,
+                    ...enrichmentSummary,
+                    // Industry priority: lead.industry (from niche search / CSV) > scraper detection
+                    industry: lead.industry || websiteData.industry || "Unknown",
+                  },
+                  score,
+                };
+
+                // Priority 1: Email — if found on website, use it and ignore website phone
+                const foundEmail = websiteData.emails && websiteData.emails.length > 0 ? websiteData.emails[0] : null;
+                if (!lead.email && foundEmail) {
+                  updateFields.email = foundEmail;
+                  updateFields.contact_method = "email";
+                } else if (lead.email) {
+                  // Already has email — keep it
+                  updateFields.contact_method = "email";
+                } else {
+                  // Priority 2: No email anywhere — go for phone
+                  // Only add website phone if Serper didn't already provide one
+                  if (!lead.phone && websiteData.phones && websiteData.phones.length > 0) {
+                    updateFields.phone = websiteData.phones[0];
+                  }
+                  if (lead.phone || updateFields.phone) {
+                    updateFields.contact_method = "call";
+                  } else {
+                    // No email AND no phone — useless lead, mark for deletion
+                    leadsToDelete.push({ id: lead.id, campaignId: lead.campaign_id });
+                    return;
+                  }
+                }
+
+                if (Object.keys(updateFields).length > 0) {
+                  await supabase
+                    .from("leads")
+                    .update(updateFields)
+                    .eq("id", lead.id);
+                }
+              } catch (err) {
+                logger.error({ leadId: lead.id, err }, "Background scrape failed for lead");
+              }
+            }));
+          }
+
+          // Delete useless leads (no email + no phone)
+          if (leadsToDelete.length > 0) {
+            const deleteIds = leadsToDelete.map(l => l.id);
+            await supabase.from("leads").delete().in("id", deleteIds);
+
+            // Update campaign totals with exact count from DB (avoids race conditions)
+            const affectedCampaignIds = [...new Set(leadsToDelete.map(l => l.campaignId))];
+            for (const cId of affectedCampaignIds) {
+              const { count: actualCount } = await supabase
+                .from("leads")
+                .select("*", { count: "exact", head: true })
+                .eq("campaign_id", cId);
+              await supabase
+                .from("campaigns")
+                .update({ total_leads: actualCount ?? 0 })
+                .eq("id", cId);
+            }
+
+            logger.info({ deletedCount: leadsToDelete.length }, "Removed useless leads (no email + no phone)");
+
+            // Decrement daily + monthly counters so remaining slots stay accurate
+            await decrementLeadsFoundToday(req.userId!, leadsToDelete.length);
+          }
+
+          logger.info({ count: leadsToScrape.length, deleted: leadsToDelete.length }, "Background contact scrape completed");
+        } catch (err) {
+          logger.error({ err }, "Background contact scrape failed");
+        }
+      });
+    }
 
     res.json({
       message: "Leads found and campaign created successfully",
@@ -465,24 +732,40 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
             enriched_data: {
               ...websiteData,
               ...enrichmentSummary,
+              // Industry priority: lead.industry (from niche search / CSV) > scraper detection
+              industry: lead.industry || websiteData?.industry || "Unknown",
             },
             score,
           };
 
-          if (!lead.email && websiteData?.emails && websiteData.emails.length > 0) {
-            updateFields.email = websiteData.emails[0];
-          }
-
-          // Update phone if not already set
-          if (!lead.phone && websiteData?.phones && websiteData.phones.length > 0) {
-            updateFields.phone = websiteData.phones[0];
-          }
-
-          const hasEmailNow = lead.email || (websiteData?.emails && websiteData.emails.length > 0);
-          if (!hasEmailNow) {
-            updateFields.contact_method = "call";
-          } else {
+          // Priority 1: Email — if found on website, use it and ignore website phone
+          const foundEmail = websiteData?.emails && websiteData.emails.length > 0 ? websiteData.emails[0] : null;
+          if (!lead.email && foundEmail) {
+            updateFields.email = foundEmail;
             updateFields.contact_method = "email";
+          } else if (lead.email) {
+            updateFields.contact_method = "email";
+          } else {
+            // Priority 2: No email anywhere — go for phone
+            // Only add website phone if Serper didn't already provide one
+            if (!lead.phone && websiteData?.phones && websiteData.phones.length > 0) {
+              updateFields.phone = websiteData.phones[0];
+            }
+            if (lead.phone || updateFields.phone) {
+              updateFields.contact_method = "call";
+            } else {
+              // No email AND no phone — useless lead, delete it
+              await supabase.from("leads").delete().eq("id", lead.id).eq("user_id", req.userId);
+              // Decrement campaign total
+              if (lead.campaign_id) {
+                const { data: camp } = await supabase.from("campaigns").select("total_leads").eq("id", lead.campaign_id).single();
+                if (camp) {
+                  await supabase.from("campaigns").update({ total_leads: Math.max(0, (camp.total_leads || 0) - 1) }).eq("id", lead.campaign_id);
+                }
+              }
+              logger.info({ leadId: lead.id }, "Removed useless lead during enrichment (no email + no phone)");
+              return null;
+            }
           }
 
           const { error: updateError } = await supabase

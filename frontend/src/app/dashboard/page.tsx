@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPut } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { DashboardSkeleton } from "./Skeleton";
 
 interface Stats {
   totalLeads: number;
@@ -90,6 +91,10 @@ export default function DashboardPage() {
 
         const data = await apiGet<Stats>("/stats");
         setStats(data);
+
+        // Sync browser timezone to backend (fire-and-forget)
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) apiPut("/stats/timezone", { timezone: tz }).catch(() => {});
       } catch {
         setError(true);
       } finally {
@@ -109,6 +114,8 @@ export default function DashboardPage() {
   const leadPct = stats.dailyLeadFindLimit > 0 ? Math.round((stats.leadsFoundToday / stats.dailyLeadFindLimit) * 100) : 0;
   const monthPct = stats.monthlyLeadFindLimit > 0 ? Math.round((stats.leadsFoundThisMonth / stats.monthlyLeadFindLimit) * 100) : 0;
   const scorePct = stats.avgLeadScore;
+
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <div>

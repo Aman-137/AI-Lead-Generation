@@ -1,10 +1,15 @@
 import supabase from "../services/supabase";
 import { sendEmailUnified, getInboxSentTodayUnified, getPrimaryEmailAccountId, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
 import { isWithinSendWindow } from "../routes/send";
-import { getDailyLimit, GMAIL_INBOX_CAP } from "../services/planLimits";
+import { getDailyLimit, GMAIL_INBOX_CAP, getUserPlan, incrementEmailsSentToday } from "../services/planLimits";
 import logger from "../utils/logger";
+import crypto from "crypto";
 
-let isProcessing = false;
+// Distributed lock name — must match the pre-inserted row in job_locks table
+const LOCK_NAME = "email_queue";
+// Unique instance ID — identifies which process holds the lock
+const INSTANCE_ID = `eq_${crypto.randomBytes(4).toString("hex")}_${process.pid}`;
+
 const MAX_RETRIES = 2;
 const INITIAL_BATCH_SIZE = 10;   // Process up to 10 initial emails per campaign per cycle
 const FOLLOW_UP_BATCH_SIZE = 15; // Process up to 15 follow-ups per campaign per cycle
@@ -20,17 +25,10 @@ function delay(minMs: number, maxMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Check how many emails a user sent today
+// Check how many emails a user sent today (monotonic counter)
 async function getUserSentToday(userId: string): Promise<number> {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const { count } = await supabase
-    .from("emails")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "sent")
-    .gte("sent_at", today.toISOString());
-  return count || 0;
+  const userPlan = await getUserPlan(userId);
+  return userPlan.emailsSentToday;
 }
 
 // Send a single email with all safety checks, returns true if sent
@@ -92,6 +90,9 @@ async function sendSingleEmail(
       })
       .eq("id", email.id);
 
+    // Increment monotonic daily sent counter (never decrements)
+    await incrementEmailsSentToday(campaign.user_id, 1);
+
     // Mark lead as contacted (only on first email)
     if ((email.sequence_step || 1) === 1 && email.lead_id) {
       await supabase
@@ -138,8 +139,16 @@ async function handleSendError(email: any, err: unknown): Promise<void> {
 }
 
 async function processEmailQueue() {
-  if (isProcessing) return;
-  isProcessing = true;
+  // Acquire table-based distributed lock — if another instance holds it, skip this cycle
+  // Lock auto-expires after 5 minutes (stale lock protection if process crashes)
+  const { data: acquired } = await supabase.rpc("acquire_job_lock", {
+    p_lock_name: LOCK_NAME,
+    p_locked_by: INSTANCE_ID,
+  });
+  if (!acquired) {
+    logger.debug("Email queue: another instance holds the lock, skipping cycle");
+    return;
+  }
 
   try {
     const { data: campaigns, error: campaignsError } = await supabase
@@ -272,7 +281,13 @@ async function processEmailQueue() {
   } catch (err) {
     logger.error({ err }, "Error processing email queue");
   } finally {
-    isProcessing = false;
+    // Always release the lock so the next cycle can acquire it
+    try {
+      await supabase.rpc("release_job_lock", {
+        p_lock_name: LOCK_NAME,
+        p_locked_by: INSTANCE_ID,
+      });
+    } catch { /* lock auto-expires after 5 min if release fails */ }
   }
 }
 

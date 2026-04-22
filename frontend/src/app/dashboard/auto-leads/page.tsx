@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { apiPost, apiGet } from "@/lib/api";
+import SearchBar from "../SearchBar";
+import { SourcesTableSkeleton } from "../Skeleton";
+import Pagination from "../Pagination";
 
 interface LeadSource {
   id: string;
@@ -187,9 +190,29 @@ export default function AutoLeadsPage() {
   const [loadingSources, setLoadingSources] = useState(true);
   const [findLimitReached, setFindLimitReached] = useState(false);
   const [findLimitMsg, setFindLimitMsg] = useState("");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourcePage, setSourcePage] = useState(1);
+  const SOURCES_PER_PAGE = 10;
   const router = useRouter();
   const findProgress = useProgressTracker(findLeadsSteps);
   const toast = useToast();
+
+  const filteredSources = useMemo(() => {
+    if (!sourceSearch.trim()) return sources;
+    const q = sourceSearch.toLowerCase();
+    return sources.filter(s =>
+      s.niche.toLowerCase().includes(q) ||
+      s.location.toLowerCase().includes(q)
+    );
+  }, [sources, sourceSearch]);
+
+  const paginatedSources = useMemo(() => {
+    const start = (sourcePage - 1) * SOURCES_PER_PAGE;
+    return filteredSources.slice(start, start + SOURCES_PER_PAGE);
+  }, [filteredSources, sourcePage]);
+
+  // Reset page on search
+  useEffect(() => { setSourcePage(1); }, [sourceSearch]);
 
   // Check daily limit on page load
   useEffect(() => {
@@ -377,7 +400,7 @@ export default function AutoLeadsPage() {
           </svg>
           Manage Sources
           {sources.length > 0 && (
-            <span className={`ml-0.5 w-5 h-5 text-[10px] font-bold rounded-full inline-flex items-center justify-center ${
+            <span className={`ml-0.5 min-w-5 h-5 px-1 text-[10px] font-bold rounded-full inline-flex items-center justify-center leading-none ${
               activeTab === "manage" ? "bg-white/20 text-white" : "bg-orange-50 text-orange-600 border border-orange-300"
             }`}>
               {sources.length}
@@ -637,12 +660,22 @@ export default function AutoLeadsPage() {
                   <p className="text-xs text-gray-500">{sources.length} total searches</p>
                 </div>
               </div>
-              <button
-                onClick={() => setActiveTab("find")}
-                className="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-all"
-              >
-                + New Search
-              </button>
+              <div className="flex items-center gap-3">
+                {!loadingSources && sources.length > 0 && (
+                  <SearchBar
+                    placeholder="Search sources..."
+                    value={sourceSearch}
+                    onChange={setSourceSearch}
+                    className="w-64"
+                  />
+                )}
+                <button
+                  onClick={() => setActiveTab("find")}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-all"
+                >
+                  + New Search
+                </button>
+              </div>
             </div>
           </div>
 
@@ -659,10 +692,7 @@ export default function AutoLeadsPage() {
 
           <div className="divide-y divide-gray-50">
             {loadingSources ? (
-              <div className="flex items-center justify-center gap-3 py-12">
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                <span className="text-sm text-gray-500">Loading your lead sources...</span>
-              </div>
+              <SourcesTableSkeleton />
             ) : sources.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
@@ -680,7 +710,13 @@ export default function AutoLeadsPage() {
                 </button>
               </div>
             ) : (
-              sources.map((source, index) => (
+              filteredSources.length === 0 && sourceSearch ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-gray-500">No sources matching &ldquo;{sourceSearch}&rdquo;</p>
+                </div>
+              ) : paginatedSources.map((source, index) => {
+                const globalIndex = (sourcePage - 1) * SOURCES_PER_PAGE + index;
+                return (
                 <div
                   key={source.id}
                   className={`group grid grid-cols-12 gap-4 items-center px-6 py-4 hover:bg-gray-50/80 transition-all ${
@@ -690,7 +726,7 @@ export default function AutoLeadsPage() {
                   {/* Niche & Location */}
                   <div className="col-span-4 flex items-center gap-3 min-w-0">
                     <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
-                      <span className="text-sm font-bold text-emerald-600">{index + 1}</span>
+                      <span className="text-sm font-bold text-emerald-600">{globalIndex + 1}</span>
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 capitalize truncate">{source.niche}</p>
@@ -732,15 +768,30 @@ export default function AutoLeadsPage() {
                   <div className="col-span-2 text-right">
                     <button
                       onClick={() => handleEnrichLeads(source)}
-                      className="px-4 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 ring-1 ring-emerald-200 hover:ring-emerald-300 transition-all opacity-70 group-hover:opacity-100"
+                      disabled={!source.leadsCount}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg ring-1 transition-all ${
+                        !source.leadsCount
+                          ? "text-gray-400 bg-gray-50 ring-gray-200 cursor-not-allowed opacity-50"
+                          : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-emerald-200 hover:ring-emerald-300 opacity-70 group-hover:opacity-100"
+                      }`}
                     >
                       {source.campaignId ? "View →" : "Enrich →"}
                     </button>
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
+          {!loadingSources && filteredSources.length > SOURCES_PER_PAGE && (
+            <div className="px-6 pb-4">
+              <Pagination
+                currentPage={sourcePage}
+                totalItems={filteredSources.length}
+                perPage={SOURCES_PER_PAGE}
+                onPageChange={setSourcePage}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

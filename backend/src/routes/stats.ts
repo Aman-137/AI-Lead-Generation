@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
-import { getPlanInfo } from "../services/planLimits";
+import { getPlanInfo, setUserTimezone } from "../services/planLimits";
 import { isValidUUID } from "../middleware/validate";
 
 const router = Router();
@@ -170,6 +170,27 @@ router.get("/campaign/:id", authMiddleware, async (req: AuthenticatedRequest, re
     });
   } catch {
     res.status(500).json({ error: "Failed to fetch campaign stats" });
+  }
+});
+
+// PUT /api/stats/timezone — Set user's timezone (auto-detected from browser)
+router.put("/timezone", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { timezone } = req.body;
+    if (!timezone || typeof timezone !== "string") {
+      res.status(400).json({ error: "Timezone is required" });
+      return;
+    }
+
+    const ok = await setUserTimezone(req.userId!, timezone);
+    if (!ok) {
+      res.status(400).json({ error: "Invalid timezone" });
+      return;
+    }
+
+    res.json({ success: true, timezone });
+  } catch {
+    res.status(500).json({ error: "Failed to set timezone" });
   }
 });
 

@@ -155,9 +155,9 @@ export default function AuthPage() {
       <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full bg-amber-500/[0.05] blur-3xl" />
 
       <div className="relative z-10 h-full flex items-center justify-center px-6">
-        {/* Glass container wrapping both sides */}
+        {/* Glass container wrapping both sides — fixed height */}
         <div
-          className="relative w-full max-w-5xl rounded-3xl border border-white/[0.10] overflow-hidden"
+          className="relative w-full max-w-5xl h-[680px] rounded-3xl border border-white/[0.10] overflow-hidden"
           style={{
             background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 50%, rgba(255,255,255,0.05) 100%)",
             backdropFilter: "blur(20px)",
@@ -170,7 +170,7 @@ export default function AuthPage() {
           {/* Bottom subtle shadow line */}
           <div className="absolute bottom-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-black/20 to-transparent" />
 
-          <div className="flex flex-col lg:flex-row items-stretch">
+          <div className="flex flex-col lg:flex-row items-stretch h-full">
             {/* Left - Branding */}
             <div className="hidden lg:flex flex-1 flex-col justify-center px-12 py-10 border-r border-white/[0.06]">
               <div className="text-white">
@@ -179,15 +179,15 @@ export default function AuthPage() {
             </div>
 
             {/* Right - Auth Card */}
-            <div className="w-full lg:w-[400px] flex-shrink-0 relative">
+            <div className="w-full lg:w-[400px] flex-shrink-0 relative h-full overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
               {/* Inner glow on right panel */}
               <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none rounded-r-3xl" />
-              <div className="relative z-10 px-8 py-8">
+              <div className="relative z-10 px-8 py-8 min-h-full flex flex-col justify-center">
                 {/* Inner glass card for auth form */}
                 <div className="rounded-2xl border border-white/[0.08] p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
           {/* Mobile logo - only shows on small screens */}
           <div className="lg:hidden text-center mb-6">
-            <h1 className="text-2xl font-bold text-white">Inertia Leads</h1>
+            <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "var(--font-oughter), sans-serif" }}>Inertia Leads</h1>
             <p className="text-sm text-white/40">AI-Powered Lead Generation</p>
           </div>
 
@@ -373,6 +373,8 @@ export default function AuthPage() {
             </div>
           </div>
         </div>
+
+
       </div>
     </div>
   );
@@ -388,7 +390,7 @@ function BrandingSide() {
           </svg>
         </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Inertia Leads</h1>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "var(--font-oughter), sans-serif" }}>Inertia Leads</h1>
           <p className="text-[10px] text-purple-300/50 font-semibold tracking-widest uppercase">AI Outreach Platform</p>
         </div>
       </div>
@@ -454,9 +456,15 @@ function BrandingSide() {
         </div>
       </div>
 
-      <p className="mt-12 text-xs text-white/25">
-        Trusted by businesses to automate their outreach pipeline.
-      </p>
+      <div className="mt-12 flex items-center gap-3 text-xs">
+        <Link href="/privacy" className="text-white/25 hover:text-white/50 transition-colors">
+          Privacy Policy
+        </Link>
+        <span className="text-white/15">·</span>
+        <Link href="/terms" className="text-white/25 hover:text-white/50 transition-colors">
+          Terms of Service
+        </Link>
+      </div>
     </>
   );
 }

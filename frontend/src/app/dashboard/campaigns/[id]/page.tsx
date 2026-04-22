@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { apiGet, apiPost, apiPut } from "@/lib/api";
+import { apiGet, apiPost, apiPostLong, apiPut } from "@/lib/api";
+import SearchBar from "../../SearchBar";
+import Loader from "../../Loader";
+import Pagination from "../../Pagination";
 
 // ===== Custom Styled Dropdown =====
 function CustomSelect<T extends string>({
@@ -159,6 +162,16 @@ interface Lead {
     summary?: string;
     issues?: string[];
     opportunity?: string;
+    hasOnlineBooking?: boolean;
+    hasContactForm?: boolean;
+    technologies?: string[];
+    socialLinks?: string[];
+    industry?: string;
+    title?: string;
+    description?: string;
+    emails?: string[];
+    phones?: string[];
+    headings?: string[];
   };
 }
 
@@ -330,6 +343,249 @@ const callScriptSteps: ProgressStep[] = [
   { label: "Finishing up...", delayMs: 15000 },
 ];
 
+// ===== Lead Detail Modal =====
+function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+  const ed = lead.enriched_data;
+  const scoreColor =
+    lead.score && lead.score >= 70
+      ? "text-emerald-700 bg-emerald-50 ring-emerald-200"
+      : lead.score && lead.score >= 40
+      ? "text-amber-700 bg-amber-50 ring-amber-200"
+      : "text-gray-600 bg-gray-50 ring-gray-200";
+
+  const scoreLabel =
+    lead.score && lead.score >= 70
+      ? "High Opportunity"
+      : lead.score && lead.score >= 40
+      ? "Medium Opportunity"
+      : "Low Opportunity";
+
+  // Build scoring reasons
+  const positiveReasons: string[] = [];
+  const negativeReasons: string[] = [];
+
+  if (!lead.website || !lead.website.startsWith("http")) {
+    positiveReasons.push("No website — zero digital presence (+30)");
+  } else {
+    positiveReasons.push("Has a basic website (+15)");
+  }
+
+  if (ed) {
+    if (ed.technologies?.includes("WordPress")) positiveReasons.push("Uses WordPress (legacy platform) (+20)");
+    if (!ed.hasOnlineBooking) positiveReasons.push("No online booking system (+25)");
+    if (!ed.hasContactForm) positiveReasons.push("No contact form on website (+15)");
+    if (!ed.socialLinks || ed.socialLinks.length <= 1) positiveReasons.push("Weak or no social media presence (+10)");
+    if (!ed.technologies || ed.technologies.length === 0) positiveReasons.push("No detectable tech platform (+10)");
+    if (ed.hasOnlineBooking && ed.hasContactForm) negativeReasons.push("Has both booking & contact form (-20)");
+    if (ed.technologies?.some(t => ["Shopify", "Webflow", "Wix"].includes(t))) negativeReasons.push("Uses modern platform (Shopify/Webflow/Wix) (-15)");
+    if (ed.socialLinks && ed.socialLinks.length >= 3) negativeReasons.push("Strong social media (3+ platforms) (-10)");
+
+    // Competitor detection (same logic as backend scoreLead)
+    const companyLower = (lead.company || "").toLowerCase();
+    const titleLower = (ed.title || "").toLowerCase();
+    const descLower = (ed.description || "").toLowerCase();
+    const combinedText = `${companyLower} ${titleLower} ${descLower}`;
+    const competitorSignals = [
+      /\bseo\s+(agency|company|firm|service|expert)/i,
+      /\bweb\s+(design|development|developer)\s+(agency|company|firm|studio)/i,
+      /\bdigital\s+(marketing|agency)/i,
+      /\bmarketing\s+(agency|company|firm)/i,
+      /\bbranding\s+agency/i,
+      /\bsoftware\s+(development|company)/i,
+      /\b(we\s+help|we\s+build|we\s+design|we\s+develop)\b/i,
+    ];
+    if (competitorSignals.some(regex => regex.test(combinedText))) {
+      negativeReasons.push("Detected as a digital/marketing competitor (-30)");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-gray-900 capitalize truncate">{lead.company}</h3>
+            {lead.name && <p className="text-sm text-gray-500 capitalize">{lead.name}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {/* Score */}
+          <div className="flex items-center gap-3">
+            <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-lg font-bold ring-1 ${scoreColor}`}>
+              {lead.score ?? "—"}
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-gray-700">{scoreLabel}</p>
+              <p className="text-xs text-gray-400">Lead quality score (0–100)</p>
+            </div>
+          </div>
+
+          {/* Contact Info */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Contact Info</p>
+            {lead.email && (
+              <div className="flex items-center gap-2 text-sm">
+                <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <span className="text-gray-700 break-all">{lead.email}</span>
+              </div>
+            )}
+            {lead.phone && (
+              <div className="flex items-center gap-2 text-sm">
+                <svg className="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                <span className="text-gray-700">{lead.phone}</span>
+              </div>
+            )}
+            {lead.website && (
+              <div className="flex items-center gap-2 text-sm">
+                <svg className="w-4 h-4 text-violet-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{lead.website}</a>
+              </div>
+            )}
+          </div>
+
+          {/* Enrichment Summary */}
+          {ed?.summary && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Summary</p>
+              <p className="text-sm text-gray-600 leading-relaxed">{ed.summary}</p>
+            </div>
+          )}
+
+          {/* Issues Found */}
+          {ed?.issues && ed.issues.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Issues Found</p>
+              <div className="space-y-1.5">
+                {ed.issues.map((issue, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </span>
+                    <span className="text-sm text-gray-700">{issue}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Opportunity */}
+          {ed?.opportunity && (
+            <div className="bg-emerald-50 rounded-xl p-4">
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Opportunity</p>
+              <p className="text-sm text-emerald-700 font-medium">{ed.opportunity}</p>
+            </div>
+          )}
+
+          {/* Digital Presence */}
+          {ed && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Digital Presence</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className={`rounded-xl p-3 ${ed.hasOnlineBooking ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? 'text-emerald-600' : 'text-red-600'}">
+                    Online Booking
+                  </p>
+                  <p className={`text-sm font-bold ${ed.hasOnlineBooking ? "text-emerald-700" : "text-red-700"}`}>
+                    {ed.hasOnlineBooking ? "Yes" : "No"}
+                  </p>
+                </div>
+                <div className={`rounded-xl p-3 ${ed.hasContactForm ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? 'text-emerald-600' : 'text-red-600'}">
+                    Contact Form
+                  </p>
+                  <p className={`text-sm font-bold ${ed.hasContactForm ? "text-emerald-700" : "text-red-700"}`}>
+                    {ed.hasContactForm ? "Yes" : "No"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Technologies */}
+          {ed?.technologies && ed.technologies.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Technologies</p>
+              <div className="flex flex-wrap gap-1.5">
+                {ed.technologies.map((tech, i) => (
+                  <span key={i} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200">{tech}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Social Links */}
+          {ed?.socialLinks && ed.socialLinks.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Social Media</p>
+              <div className="space-y-1.5">
+                {ed.socialLinks.map((link, i) => (
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline break-all">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    {link}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Industry */}
+          {ed?.industry && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Industry</p>
+              <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 ring-1 ring-blue-200 capitalize">{ed.industry}</span>
+            </div>
+          )}
+
+          {/* Score Breakdown */}
+          {(positiveReasons.length > 0 || negativeReasons.length > 0) && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Score Breakdown</p>
+              <div className="space-y-1.5">
+                {positiveReasons.map((r, i) => (
+                  <div key={`p-${i}`} className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                    </span>
+                    <span className="text-sm text-gray-700">{r}</span>
+                  </div>
+                ))}
+                {negativeReasons.map((r, i) => (
+                  <div key={`n-${i}`} className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" /></svg>
+                    </span>
+                    <span className="text-sm text-gray-700">{r}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Not Enriched */}
+          {!ed && (
+            <div className="bg-amber-50 rounded-xl p-4 text-center">
+              <p className="text-sm text-amber-700 font-medium">This lead has not been enriched yet.</p>
+              <p className="text-xs text-amber-500 mt-1">Click &quot;Enrich Leads&quot; to analyze this lead&apos;s digital presence.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -347,8 +603,15 @@ export default function CampaignDetailPage() {
   const [enriching, setEnriching] = useState(false);
   const [generatingScripts, setGeneratingScripts] = useState(false);
   const [callScripts, setCallScripts] = useState<{ lead_id: string; company: string; phone?: string; opening: string; script: string }[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv" | "csv_queued">("all");
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadPage, setLeadPage] = useState(1);
+  const [detailLead, setDetailLead] = useState<Lead | null>(null);
+  const LEADS_PER_PAGE = 10;
+
+  // Reset lead page when filters change
+  useEffect(() => { setLeadPage(1); }, [leadSearch, sourceFilter]);
 
   // Limit-reached states (disable buttons when daily cap hit)
   const [generateLimitReached, setGenerateLimitReached] = useState(false);
@@ -406,7 +669,7 @@ export default function CampaignDetailPage() {
       const body = enableFollowups
         ? { campaignId, enableFollowups: true, leadIds: leadIdsToUse }
         : { campaignId, leadIds: leadIdsToUse };
-      const data = await apiPost<{ count: number }>(endpoint, body);
+      const data = await apiPostLong<{ count: number }>(endpoint, body);
       generateProgress.finish();
       const selectionNote = leadIdsToUse ? ` (${leadIdsToUse.length} selected)` : "";
       toast.addToast(`Generated ${data.count} personalized emails${selectionNote}!`, "success");
@@ -475,7 +738,7 @@ export default function CampaignDetailPage() {
     enrichProgress.start();
     try {
       const leadIds = selectedLeadIds.size > 0 ? Array.from(selectedLeadIds) : leads.map(l => l.id);
-      const data = await apiPost<{ count: number }>("/leads/enrich", { leadIds });
+      const data = await apiPostLong<{ count: number }>("/leads/enrich", { leadIds });
       enrichProgress.finish();
       const selectionNote = selectedLeadIds.size > 0 ? ` (${selectedLeadIds.size} selected)` : "";
       toast.addToast(`Enriched ${data.count} leads${selectionNote}!`, "success");
@@ -512,7 +775,7 @@ export default function CampaignDetailPage() {
     scriptProgress.start();
     try {
       const leadIdsToUse = selectedLeadIds.size > 0 ? Array.from(selectedLeadIds) : undefined;
-      const data = await apiPost<{ count: number; scripts: { lead_id: string; company: string; phone?: string; opening: string; script: string }[] }>("/generate/call-scripts", { campaignId, leadIds: leadIdsToUse });
+      const data = await apiPostLong<{ count: number; scripts: { lead_id: string; company: string; phone?: string; opening: string; script: string }[] }>("/generate/call-scripts", { campaignId, leadIds: leadIdsToUse });
       scriptProgress.finish();
       setCallScripts(data.scripts);
       toast.addToast(`Generated ${data.count} call scripts!`, "success");
@@ -551,14 +814,7 @@ export default function CampaignDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="w-10 h-10 border-[3px] border-gray-200 border-t-gray-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm text-gray-500">Loading campaign...</p>
-        </div>
-      </div>
-    );
+    return <Loader text="Loading campaign..." fullPage />;
   }
 
   if (!campaign) {
@@ -582,6 +838,8 @@ export default function CampaignDetailPage() {
   const hasEmails = emails.length > 0;
   const hasPendingEmails = emails.some((e) => e.status === "pending");
   const contactedLeadCount = leads.filter(l => l.contacted).length;
+  const queuedLeadCount = leads.filter(l => l.source_type === "csv_queued").length;
+  const activeLeadCount = leads.length - queuedLeadCount;
   const sentEmailCount = emails.filter(e => e.status === "sent").length;
   const repliedEmailCount = emails.filter(e => e.replied).length;
   const heroStatus = statusConfig[campaign.status] || statusConfig.draft;
@@ -589,6 +847,7 @@ export default function CampaignDetailPage() {
   return (
     <div>
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
+      {detailLead && <LeadDetailModal lead={detailLead} onClose={() => setDetailLead(null)} />}
 
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
@@ -618,7 +877,7 @@ export default function CampaignDetailPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              {campaign.status === "draft" && !hasEmails && leads.length > 0 && leads.some(l => !l.enriched_data?.summary) && (
+              {campaign.status === "draft" && !hasEmails && leads.length > 0 && (selectedLeadIds.size > 0 || leads.some(l => !l.enriched_data?.summary)) && (
                 <button
                   onClick={handleEnrich}
                   disabled={enriching || enrichLimitReached}
@@ -667,10 +926,24 @@ export default function CampaignDetailPage() {
                 <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               </div>
               <div>
-                <p className="text-lg font-bold text-white">{leads.length}</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Leads</p>
+                <p className="text-lg font-bold text-white">{activeLeadCount}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Active</p>
               </div>
             </div>
+            {queuedLeadCount > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-white">{queuedLeadCount}</p>
+                    <p className="text-[10px] text-amber-400 uppercase tracking-wider">Queued</p>
+                  </div>
+                </div>
+              </>
+            )}
             <div className="w-px h-10 bg-white/10" />
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
@@ -773,12 +1046,28 @@ export default function CampaignDetailPage() {
       {/* Leads Section */}
       <div className="mt-8">
         {(() => {
-          const filteredLeads = sourceFilter === "all"
+          const sourceFiltered = sourceFilter === "all"
             ? leads
             : leads.filter(l => l.source_type === sourceFilter);
 
+          const filteredLeads = leadSearch.trim()
+            ? sourceFiltered.filter(l => {
+                const q = leadSearch.toLowerCase();
+                return (
+                  (l.name?.toLowerCase().includes(q)) ||
+                  (l.email?.toLowerCase().includes(q)) ||
+                  (l.company?.toLowerCase().includes(q)) ||
+                  (l.phone?.toLowerCase().includes(q))
+                );
+              })
+            : sourceFiltered;
+
           const contactedCount = filteredLeads.filter(l => l.contacted).length;
-          const uncontactedCount = filteredLeads.filter(l => !l.contacted).length;
+          const uncontactedCount = filteredLeads.filter(l => !l.contacted && l.source_type !== "csv_queued").length;
+          const queuedCount = filteredLeads.filter(l => l.source_type === "csv_queued").length;
+
+          const leadStart = (leadPage - 1) * LEADS_PER_PAGE;
+          const paginatedLeads = filteredLeads.slice(leadStart, leadStart + LEADS_PER_PAGE);
 
           return filteredLeads.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -792,13 +1081,14 @@ export default function CampaignDetailPage() {
                 <CustomSelect
                   value={sourceFilter}
                   onChange={(val) => {
-                    setSourceFilter(val as "all" | "auto_find" | "csv");
+                    setSourceFilter(val as "all" | "auto_find" | "csv" | "csv_queued");
                     setSelectedLeadIds(new Set());
                   }}
                   options={[
                     { value: "all" as const, label: "All Sources" },
                     { value: "auto_find" as const, label: "Auto-Find" },
                     { value: "csv" as const, label: "CSV Upload" },
+                    { value: "csv_queued" as const, label: "Queued" },
                   ]}
                 />
               </div>
@@ -820,27 +1110,26 @@ export default function CampaignDetailPage() {
                   <div className="h-6 w-px bg-blue-200" />
                   <div className="flex items-center gap-2.5">
                     <span className="text-xs text-gray-500">{filteredLeads.length} showing</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {contactedCount} contacted
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-white text-gray-600 rounded-lg border border-gray-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                      {uncontactedCount} uncontacted
-                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <SearchBar
+                    placeholder="Search leads..."
+                    value={leadSearch}
+                    onChange={setLeadSearch}
+                    className="w-64"
+                  />
                   <CustomSelect
                     value={sourceFilter}
                     onChange={(val) => {
-                      setSourceFilter(val as "all" | "auto_find" | "csv");
+                      setSourceFilter(val as "all" | "auto_find" | "csv" | "csv_queued");
                       setSelectedLeadIds(new Set());
                     }}
                     options={[
                       { value: "all" as const, label: "All Sources" },
                       { value: "auto_find" as const, label: "Auto-Find" },
                       { value: "csv" as const, label: "CSV Upload" },
+                      { value: "csv_queued" as const, label: "Queued" },
                     ]}
                   />
                   {selectedLeadIds.size > 0 && (
@@ -875,10 +1164,11 @@ export default function CampaignDetailPage() {
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Score</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredLeads.map((lead) => {
+                    {paginatedLeads.map((lead) => {
                       const scoreColor =
                         lead.score && lead.score >= 70
                           ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
@@ -924,9 +1214,11 @@ export default function CampaignDetailPage() {
                             <span className={`px-2.5 py-1 rounded-lg font-semibold ring-1 ${
                               lead.source_type === "csv"
                                 ? "bg-purple-50 text-purple-700 ring-purple-200"
+                                : lead.source_type === "csv_queued"
+                                ? "bg-amber-50 text-amber-700 ring-amber-200"
                                 : "bg-cyan-50 text-cyan-700 ring-cyan-200"
                             }`}>
-                              {lead.source_type === "csv" ? "CSV" : lead.source_type === "auto_find" ? "Auto" : "—"}
+                              {lead.source_type === "csv" ? "CSV" : lead.source_type === "csv_queued" ? "Queued" : lead.source_type === "auto_find" ? "Auto" : "—"}
                             </span>
                           </td>
                           <td className="px-4 py-3.5 text-sm">
@@ -958,11 +1250,28 @@ export default function CampaignDetailPage() {
                               </span>
                             )}
                           </td>
+                          <td className="px-4 py-3.5">
+                            <button
+                              onClick={() => setDetailLead(lead)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg ring-1 ring-blue-200 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                              View
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+                <div className="px-4">
+                  <Pagination
+                    currentPage={leadPage}
+                    totalItems={filteredLeads.length}
+                    perPage={LEADS_PER_PAGE}
+                    onPageChange={setLeadPage}
+                  />
+                </div>
               </div>
             );
           })()}

@@ -2,11 +2,11 @@ import OpenAI from "openai";
 import logger from "../utils/logger";
 
 if (!process.env.OPENAI_API_KEY) {
-  logger.warn("OPENAI_API_KEY not set. AI generation will fail.");
+  throw new Error("OPENAI_API_KEY is not set. AI features require a valid OpenAI API key.");
 }
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "sk-placeholder",
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export default openai;

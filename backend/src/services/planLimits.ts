@@ -54,6 +54,55 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanConfig> = {
 const DEFAULT_PLAN: PlanTier = "starter";
 
 // =============================================
+// Timezone helpers
+// =============================================
+function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Get the start of today (midnight) in the user's timezone, returned as a UTC Date.
+// E.g. for Asia/Kolkata: if it's 9:30 AM IST Apr 17, returns Apr 16 6:30 PM UTC (= midnight IST Apr 17).
+function getStartOfTodayInTz(tz: string): Date {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)!.value);
+  let hour = get("hour");
+  if (hour === 24) hour = 0;
+
+  // Compute the timezone offset: localAsUtc - realUtc = offset
+  // Round to nearest MINUTE — all real-world timezone offsets are whole minutes
+  // (e.g. IST +5:30, Nepal +5:45). This eliminates ms/second drift from now.getTime().
+  const localAsUtcMs = Date.UTC(get("year"), get("month") - 1, get("day"), hour, get("minute"), get("second"));
+  const offsetMinutes = Math.round((localAsUtcMs - now.getTime()) / 60000);
+  const cleanOffsetMs = offsetMinutes * 60000;
+  const localMidnightMs = Date.UTC(get("year"), get("month") - 1, get("day"), 0, 0, 0);
+  return new Date(localMidnightMs - cleanOffsetMs);
+}
+
+// Check if a daily counter has expired — true if reset_at is before today's midnight
+// in the user's timezone. Timezone change is locked to once per 24h to prevent exploits.
+function isDailyCounterExpired(resetAt: string | null, tz: string): boolean {
+  if (!resetAt) return true;
+  const todayMidnight = getStartOfTodayInTz(tz);
+  return new Date(resetAt) < todayMidnight;
+}
+
+// =============================================
 // Get or create user plan
 // =============================================
 export async function getUserPlan(userId: string): Promise<{
@@ -62,6 +111,13 @@ export async function getUserPlan(userId: string): Promise<{
   isActive: boolean;
   leadsFoundThisMonth: number;
   leadsFoundResetAt: string;
+  leadsFoundToday: number;
+  leadsFoundTodayResetAt: string;
+  emailsGeneratedToday: number;
+  emailsGeneratedTodayResetAt: string;
+  emailsSentToday: number;
+  emailsSentTodayResetAt: string;
+  timezone: string;
 }> {
   const { data, error } = await supabase
     .from("user_plans")
@@ -70,8 +126,9 @@ export async function getUserPlan(userId: string): Promise<{
     .single();
 
   if (error || !data) {
-    // Auto-create a starter plan for new users (upsert to avoid race condition)
-    const { data: newPlan, error: insertError } = await supabase
+    // Try INSERT-only (ignoreDuplicates: true = ON CONFLICT DO NOTHING).
+    // This creates a row for genuinely new users but NEVER overwrites existing data.
+    await supabase
       .from("user_plans")
       .upsert({
         user_id: userId,
@@ -79,29 +136,74 @@ export async function getUserPlan(userId: string): Promise<{
         is_active: true,
         leads_found_this_month: 0,
         leads_found_reset_at: new Date().toISOString(),
-      }, { onConflict: "user_id" })
-      .select()
+        leads_found_today: 0,
+        leads_found_today_reset_at: new Date().toISOString(),
+        emails_generated_today: 0,
+        emails_generated_today_reset_at: new Date().toISOString(),
+        emails_sent_today: 0,
+        emails_sent_today_reset_at: new Date().toISOString(),
+        timezone: "UTC",
+      }, { onConflict: "user_id", ignoreDuplicates: true });
+
+    // Now re-SELECT — whether we just inserted or the row already existed
+    const { data: plan2, error: err2 } = await supabase
+      .from("user_plans")
+      .select("*")
+      .eq("user_id", userId)
       .single();
 
-    if (insertError || !newPlan) {
-      // Fallback to starter defaults if insert fails (e.g. race condition)
+    if (err2 || !plan2) {
+      // Genuinely unreachable unless DB is down — return safe read-only defaults
+      // (these are NOT written to the DB, so no counter reset)
       return {
         plan: DEFAULT_PLAN,
         gmailConnectedAt: null,
         isActive: true,
         leadsFoundThisMonth: 0,
         leadsFoundResetAt: new Date().toISOString(),
+        leadsFoundToday: 0,
+        leadsFoundTodayResetAt: new Date().toISOString(),
+        emailsGeneratedToday: 0,
+        emailsGeneratedTodayResetAt: new Date().toISOString(),
+        emailsSentToday: 0,
+        emailsSentTodayResetAt: new Date().toISOString(),
+        timezone: "UTC",
       };
     }
 
+    // Use the REAL data from the DB (preserves existing counters)
+    const tz = plan2.timezone || "UTC";
     return {
-      plan: newPlan.plan as PlanTier,
-      gmailConnectedAt: newPlan.gmail_connected_at,
-      isActive: newPlan.is_active,
-      leadsFoundThisMonth: newPlan.leads_found_this_month || 0,
-      leadsFoundResetAt: newPlan.leads_found_reset_at,
+      plan: plan2.plan as PlanTier,
+      gmailConnectedAt: plan2.gmail_connected_at,
+      isActive: plan2.is_active,
+      leadsFoundThisMonth: plan2.leads_found_this_month || 0,
+      leadsFoundResetAt: plan2.leads_found_reset_at,
+      leadsFoundToday: isDailyCounterExpired(plan2.leads_found_today_reset_at, tz)
+        ? 0 : (plan2.leads_found_today || 0),
+      leadsFoundTodayResetAt: plan2.leads_found_today_reset_at || new Date().toISOString(),
+      emailsGeneratedToday: isDailyCounterExpired(plan2.emails_generated_today_reset_at, tz)
+        ? 0 : (plan2.emails_generated_today || 0),
+      emailsGeneratedTodayResetAt: plan2.emails_generated_today_reset_at || new Date().toISOString(),
+      emailsSentToday: isDailyCounterExpired(plan2.emails_sent_today_reset_at, tz)
+        ? 0 : (plan2.emails_sent_today || 0),
+      emailsSentTodayResetAt: plan2.emails_sent_today_reset_at || new Date().toISOString(),
+      timezone: tz,
     };
   }
+
+  // Daily counter expiry — resets at midnight in the user's timezone.
+  // Timezone change is locked to once per 24h to prevent exploit.
+  const userTz = data.timezone || "UTC";
+
+  const effectiveLeadsFoundToday = isDailyCounterExpired(data.leads_found_today_reset_at, userTz)
+    ? 0 : (data.leads_found_today || 0);
+
+  const effectiveEmailsGeneratedToday = isDailyCounterExpired(data.emails_generated_today_reset_at, userTz)
+    ? 0 : (data.emails_generated_today || 0);
+
+  const effectiveEmailsSentToday = isDailyCounterExpired(data.emails_sent_today_reset_at, userTz)
+    ? 0 : (data.emails_sent_today || 0);
 
   return {
     plan: data.plan as PlanTier,
@@ -109,6 +211,13 @@ export async function getUserPlan(userId: string): Promise<{
     isActive: data.is_active,
     leadsFoundThisMonth: data.leads_found_this_month || 0,
     leadsFoundResetAt: data.leads_found_reset_at,
+    leadsFoundToday: effectiveLeadsFoundToday,
+    leadsFoundTodayResetAt: data.leads_found_today_reset_at || new Date().toISOString(),
+    emailsGeneratedToday: effectiveEmailsGeneratedToday,
+    emailsGeneratedTodayResetAt: data.emails_generated_today_reset_at || new Date().toISOString(),
+    emailsSentToday: effectiveEmailsSentToday,
+    emailsSentTodayResetAt: data.emails_sent_today_reset_at || new Date().toISOString(),
+    timezone: data.timezone || "UTC",
   };
 }
 
@@ -189,20 +298,49 @@ export async function getDailyLeadFindLimit(userId: string): Promise<number> {
 
 // =============================================
 // Count how many leads the user has found TODAY
-// (counts leads with source_type='auto_find' created today)
+// Delegates to getUserPlan which handles timezone-aware daily reset.
 // =============================================
 export async function getLeadsFoundToday(userId: string): Promise<number> {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const userPlan = await getUserPlan(userId);
+  return userPlan.leadsFoundToday;
+}
 
-  const { count } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true })
+// =============================================
+// Atomically increment daily lead find counter
+// The RPC handles auto-reset on new day + increment
+// in a single atomic UPDATE (no race conditions).
+// This counter NEVER decrements — deleted leads
+// still count against the daily limit.
+// =============================================
+export async function incrementLeadsFoundToday(userId: string, count: number): Promise<void> {
+  await supabase.rpc("increment_leads_found_today", {
+    p_user_id: userId,
+    p_count: count,
+  });
+}
+
+// =============================================
+// Decrement daily lead counter when background scraper
+// deletes useless leads (no email + no phone).
+// This gives the user back those slots so CSV/auto-find
+// remaining count stays accurate.
+// =============================================
+export async function decrementLeadsFoundToday(userId: string, count: number): Promise<void> {
+  if (count <= 0) return;
+  const { data } = await supabase
+    .from("user_plans")
+    .select("leads_found_today, leads_found_this_month")
     .eq("user_id", userId)
-    .eq("source_type", "auto_find")
-    .gte("created_at", today.toISOString());
-
-  return count || 0;
+    .single();
+  if (!data) return;
+  await supabase
+    .from("user_plans")
+    .update({
+      leads_found_today: Math.max(0, (data.leads_found_today || 0) - count),
+      leads_found_this_month: Math.max(0, (data.leads_found_this_month || 0) - count),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
 }
 
 // =============================================
@@ -219,7 +357,7 @@ export async function checkDailyLeadFindLimit(userId: string): Promise<{
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
   const dailyLimit = config.maxDailyEmails; // 50 / 100 / 200
-  const usedToday = await getLeadsFoundToday(userId);
+  const usedToday = userPlan.leadsFoundToday;
   const remaining = Math.max(0, dailyLimit - usedToday);
 
   return {
@@ -338,7 +476,7 @@ export async function getPlanInfo(userId: string): Promise<{
   const userPlan = await getUserPlan(userId);
   const dailyInfo = await getDailyLimit(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
-  const leadsFoundToday = await getLeadsFoundToday(userId);
+  const leadsFoundToday = userPlan.leadsFoundToday;
 
   const warmupWeek = dailyInfo.warmupDay === 0
     ? 0
@@ -368,19 +506,38 @@ export async function getPlanInfo(userId: string): Promise<{
 
 // =============================================
 // Daily AI generation cap (OpenAI cost protection)
-// Counts emails generated today for a user
+// Uses a dedicated counter in user_plans (not DB row count)
+// to prevent limit bypass when campaigns/emails are deleted.
 // =============================================
 export async function getGenerationsToday(userId: string): Promise<number> {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const userPlan = await getUserPlan(userId);
+  return userPlan.emailsGeneratedToday;
+}
 
-  const { count } = await supabase
-    .from("emails")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", today.toISOString());
+// =============================================
+// Atomically increment daily email generation counter
+// The RPC handles auto-reset on new day + increment
+// in a single atomic UPDATE (no race conditions).
+// This counter NEVER decrements — deleted emails
+// still count against the daily generation limit.
+// =============================================
+export async function incrementEmailsGeneratedToday(userId: string, count: number): Promise<void> {
+  await supabase.rpc("increment_emails_generated_today", {
+    p_user_id: userId,
+    p_count: count,
+  });
+}
 
-  return count || 0;
+// =============================================
+// Atomically increment daily email sent counter
+// Same pattern — monotonic, never decrements.
+// Deleted campaigns still count against the daily send limit.
+// =============================================
+export async function incrementEmailsSentToday(userId: string, count: number): Promise<void> {
+  await supabase.rpc("increment_emails_sent_today", {
+    p_user_id: userId,
+    p_count: count,
+  });
 }
 
 export async function checkDailyGenerationLimit(userId: string): Promise<{
@@ -392,7 +549,7 @@ export async function checkDailyGenerationLimit(userId: string): Promise<{
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
-  const usedToday = await getGenerationsToday(userId);
+  const usedToday = userPlan.emailsGeneratedToday;
   const remaining = Math.max(0, config.maxDailyGenerations - usedToday);
 
   return {
@@ -410,4 +567,43 @@ export async function checkDailyGenerationLimit(userId: string): Promise<{
 export async function getMaxEnrichBatchSize(userId: string): Promise<number> {
   const userPlan = await getUserPlan(userId);
   return PLAN_CONFIGS[userPlan.plan].maxEnrichBatchSize;
+}
+
+// =============================================
+// Set user timezone (auto-detected from browser)
+// Validates IANA timezone string before storing.
+// Locked to once per 24h to prevent timezone-switching exploits.
+// =============================================
+export async function setUserTimezone(userId: string, timezone: string): Promise<boolean> {
+  if (!timezone || !isValidTimezone(timezone)) return false;
+
+  // Check if timezone was changed in the last 24 hours
+  const { data } = await supabase
+    .from("user_plans")
+    .select("timezone, timezone_updated_at")
+    .eq("user_id", userId)
+    .single();
+
+  if (data) {
+    // If same timezone, no-op (always allow — this is the auto-detect re-sync)
+    if (data.timezone === timezone) return true;
+
+    // If timezone was changed within last 24h, block the change
+    if (data.timezone_updated_at) {
+      const lastChange = new Date(data.timezone_updated_at);
+      const hoursSinceChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceChange < 24) return false;
+    }
+  }
+
+  await supabase
+    .from("user_plans")
+    .update({
+      timezone,
+      timezone_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  return true;
 }

@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { apiGet, apiDelete } from "@/lib/api";
+import SearchBar from "../SearchBar";
+import { CampaignCardsSkeleton } from "../Skeleton";
+import Pagination from "../Pagination";
 
 interface Campaign {
   id: string;
   name: string;
   status: string;
   total_leads: number;
+  queued_leads: number;
   created_at: string;
 }
 
@@ -16,6 +20,9 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 10;
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -55,6 +62,23 @@ export default function CampaignsPage() {
   const totalLeads = campaigns.reduce((sum, c) => sum + c.total_leads, 0);
   const draftCount = campaigns.filter(c => c.status === "draft").length;
   const activeCount = campaigns.filter(c => c.status === "running").length;
+
+  const filteredCampaigns = useMemo(() => {
+    if (!search.trim()) return campaigns;
+    const q = search.toLowerCase();
+    return campaigns.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.status.toLowerCase().includes(q)
+    );
+  }, [campaigns, search]);
+
+  const paginatedCampaigns = useMemo(() => {
+    const start = (page - 1) * PER_PAGE;
+    return filteredCampaigns.slice(start, start + PER_PAGE);
+  }, [filteredCampaigns, page]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => { setPage(1); }, [search]);
 
   return (
     <div>
@@ -145,12 +169,19 @@ export default function CampaignsPage() {
         New Campaign
       </Link>
 
+      {/* Search */}
+      {!loading && campaigns.length > 0 && (
+        <SearchBar
+          placeholder="Search campaigns by name or status..."
+          value={search}
+          onChange={setSearch}
+          className="mb-6"
+        />
+      )}
+
       {/* Content */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-12 flex items-center justify-center gap-3">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-          <span className="text-sm text-gray-500">Loading campaigns...</span>
-        </div>
+        <CampaignCardsSkeleton />
       ) : campaigns.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
@@ -177,9 +208,15 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {campaigns.map((campaign, index) => {
+          {filteredCampaigns.length === 0 && search ? (
+            <div className="bg-white rounded-2xl border border-gray-200 py-12 text-center">
+              <p className="text-sm text-gray-500">No campaigns matching &ldquo;{search}&rdquo;</p>
+            </div>
+          ) : null}
+          {paginatedCampaigns.map((campaign, index) => {
             const status = statusConfig[campaign.status] || statusConfig.draft;
-            const colorIdx = index % 5;
+            const globalIndex = (page - 1) * PER_PAGE + index;
+            const colorIdx = globalIndex % 5;
             const colors = {
               gradient: ["from-blue-500 to-indigo-600", "from-violet-500 to-purple-600", "from-emerald-500 to-teal-600", "from-orange-500 to-amber-500", "from-pink-500 to-rose-600"][colorIdx],
               bgTint: ["hover:bg-blue-50/30", "hover:bg-violet-50/30", "hover:bg-emerald-50/30", "hover:bg-orange-50/30", "hover:bg-pink-50/30"][colorIdx],
@@ -197,7 +234,7 @@ export default function CampaignsPage() {
 
                   <div className="flex items-center gap-5 px-6 py-5 flex-1 min-w-0">
                     <div className={`flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${colors.gradient} flex items-center justify-center shadow-lg`}>
-                      <span className="text-base font-bold text-white">{index + 1}</span>
+                      <span className="text-base font-bold text-white">{globalIndex + 1}</span>
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -209,6 +246,12 @@ export default function CampaignsPage() {
                           <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                           {status.label}
                         </span>
+                        {campaign.queued_leads > 0 && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-lg bg-amber-50 text-amber-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            {campaign.queued_leads} Queued
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-5 mt-2">
                         <span className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -252,6 +295,12 @@ export default function CampaignsPage() {
               </Link>
             );
           })}
+          <Pagination
+            currentPage={page}
+            totalItems={filteredCampaigns.length}
+            perPage={PER_PAGE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

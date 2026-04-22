@@ -19,6 +19,31 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
+    // Compute real lead counts from leads table (total_leads column can be stale
+    // if background scraper deleted useless leads with a race condition)
+    if (campaigns && campaigns.length > 0) {
+      const campaignIds = campaigns.map((c: any) => c.id);
+      const { data: leadCounts } = await supabase
+        .from("leads")
+        .select("campaign_id, source_type")
+        .in("campaign_id", campaignIds)
+        .eq("user_id", req.userId);
+
+      if (leadCounts) {
+        const countMap: Record<string, { total: number; queued: number }> = {};
+        for (const lc of leadCounts) {
+          if (!countMap[lc.campaign_id]) countMap[lc.campaign_id] = { total: 0, queued: 0 };
+          countMap[lc.campaign_id].total++;
+          if (lc.source_type === "csv_queued") countMap[lc.campaign_id].queued++;
+        }
+        for (const c of campaigns) {
+          const counts = countMap[c.id] || { total: 0, queued: 0 };
+          c.total_leads = counts.total;
+          c.queued_leads = counts.queued;
+        }
+      }
+    }
+
     res.json({ campaigns });
   } catch {
     res.status(500).json({ error: "Internal server error" });

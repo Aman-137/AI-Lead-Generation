@@ -88,9 +88,6 @@ export default function SidebarNav() {
                 </svg>
               </div>
               <span className="text-sm font-medium">{item.label}</span>
-              {active && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-400" />
-              )}
             </Link>
           );
         })}

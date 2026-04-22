@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { SettingsAccountSkeleton } from "../Skeleton";
 
 interface GmailAccount {
   id: string;
@@ -102,8 +103,11 @@ export default function SettingsPage() {
   const [profileName, setProfileName] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileAvatarUrl, setProfileAvatarUrl] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [memberSince, setMemberSince] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [profileEditing, setProfileEditing] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,6 +145,11 @@ export default function SettingsPage() {
       setProfileName(user?.user_metadata?.full_name || "");
       setProfileBio(user?.user_metadata?.bio || "");
       setProfileAvatarUrl(user?.user_metadata?.avatar_url || "");
+      setProfileEmail(user?.email || "");
+      if (user?.created_at) {
+        setMemberSince(new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }));
+      }
+      if (!user?.user_metadata?.full_name) setProfileEditing(true);
     };
     loadProfile();
   }, [fetchAccounts]);
@@ -155,6 +164,8 @@ export default function SettingsPage() {
       });
       if (error) throw error;
       setProfileMsg({ type: "success", text: "Profile updated!" });
+      setProfileEditing(false);
+      setTimeout(() => setProfileMsg(null), 3000);
     } catch {
       setProfileMsg({ type: "error", text: "Failed to update profile." });
     } finally {
@@ -372,13 +383,13 @@ export default function SettingsPage() {
           {/* Avatar */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="relative w-22 h-22 rounded-2xl cursor-pointer group flex-shrink-0"
+            className="relative w-20 h-20 rounded-2xl cursor-pointer group flex-shrink-0"
           >
-            <div className="rounded-2xl ring-2 ring-white/20 ring-offset-2 ring-offset-gray-900 overflow-hidden">
+            <div className="w-20 h-20 rounded-2xl ring-2 ring-white/20 ring-offset-2 ring-offset-gray-900 overflow-hidden">
               {profileAvatarUrl ? (
-                <img src={profileAvatarUrl} alt="Avatar" className="w-20 h-20 object-cover" />
+                <img src={profileAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white flex items-center justify-center text-2xl font-bold">
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white flex items-center justify-center text-2xl font-bold">
                   {(profileName?.[0] || "U").toUpperCase()}
                 </div>
               )}
@@ -424,53 +435,154 @@ export default function SettingsPage() {
         {/* Profile Card */}
         <div className="bg-blue-50 rounded-2xl shadow-sm border-2 border-blue-200 overflow-hidden">
           <div className="px-6 py-4 bg-gradient-to-r from-blue-100 to-indigo-100 border-b border-blue-200">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shadow-blue-300">
-                <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shadow-blue-300">
+                  <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Personal Information</h2>
+                  <p className="text-xs text-gray-500">Update your name and bio</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Personal Information</h2>
-                <p className="text-xs text-gray-500">Update your name and bio</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
-              <input
-                type="text"
-                value={profileName}
-                onChange={(e) => { setProfileName(e.target.value); setProfileMsg(null); }}
-                placeholder="Enter your full name"
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">About</label>
-              <textarea
-                value={profileBio}
-                onChange={(e) => { setProfileBio(e.target.value); setProfileMsg(null); }}
-                placeholder="Tell us a little about yourself..."
-                rows={3}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all resize-none"
-              />
-            </div>
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={saveProfile}
-                disabled={profileSaving || !profileName.trim()}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-200 transition-all"
-              >
-                {profileSaving ? "Saving..." : "Save Profile"}
-              </button>
-              {profileMsg && (
-                <span className={`text-sm font-medium ${profileMsg.type === "success" ? "text-emerald-600" : "text-red-500"}`}>
-                  {profileMsg.type === "success" ? "✓ " : ""}{profileMsg.text}
-                </span>
+              {!profileEditing && profileName && (
+                <button
+                  onClick={() => { setProfileEditing(true); setProfileMsg(null); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-white/80 rounded-lg hover:bg-white ring-1 ring-blue-200 hover:ring-blue-300 transition-all"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  Edit
+                </button>
               )}
             </div>
+          </div>
+          <div className="p-6">
+            {profileEditing ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => { setProfileName(e.target.value); setProfileMsg(null); }}
+                    placeholder="Enter your full name"
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">About</label>
+                  <textarea
+                    value={profileBio}
+                    onChange={(e) => { setProfileBio(e.target.value); setProfileMsg(null); }}
+                    placeholder="Tell us a little about yourself..."
+                    rows={3}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all resize-none"
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={saveProfile}
+                    disabled={profileSaving || !profileName.trim()}
+                    className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-200 transition-all"
+                  >
+                    {profileSaving ? "Saving..." : "Save Profile"}
+                  </button>
+                  {profileName.trim() && (
+                    <button
+                      onClick={() => { setProfileEditing(false); setProfileMsg(null); }}
+                      className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {profileMsg && (
+                    <span className={`text-sm font-medium ${profileMsg.type === "success" ? "text-emerald-600" : "text-red-500"}`}>
+                      {profileMsg.type === "success" ? "✓ " : ""}{profileMsg.text}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              (() => {
+                const checks = [
+                  { label: "Name", done: !!profileName.trim() },
+                  { label: "Bio", done: !!profileBio.trim() },
+                  { label: "Avatar", done: !!profileAvatarUrl },
+                  { label: "Inbox", done: totalInboxes > 0 },
+                ];
+                const completed = checks.filter(c => c.done).length;
+                const pct = Math.round((completed / checks.length) * 100);
+                return (
+                  <div className="flex gap-5">
+                    {/* Left: profile info */}
+                    <div className="flex-1 space-y-4 min-w-0">
+                      <div>
+                        <p className="text-lg font-bold text-gray-900">{profileName}</p>
+                        {profileBio && (
+                          <p className="text-sm text-gray-500 mt-1 leading-relaxed">{profileBio}</p>
+                        )}
+                      </div>
+                      <div className="border-t border-blue-100 pt-3 grid grid-cols-1 gap-2.5">
+                        {profileEmail && (
+                          <div className="flex items-center gap-2.5 text-sm">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <span className="text-gray-600 truncate">{profileEmail}</span>
+                          </div>
+                        )}
+                        {memberSince && (
+                          <div className="flex items-center gap-2.5 text-sm">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <span className="text-gray-600">Member since {memberSince}</span>
+                          </div>
+                        )}
+                      </div>
+                      {profileMsg && (
+                        <span className={`text-sm font-medium ${profileMsg.type === "success" ? "text-emerald-600" : "text-red-500"}`}>
+                          {profileMsg.type === "success" ? "✓ " : ""}{profileMsg.text}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: vertical progress bar with checklist on left */}
+                    <div className="flex items-stretch gap-3 pl-4 border-l border-blue-100">
+                      <div className="flex flex-col justify-center gap-3">
+                        {checks.map(c => (
+                          <div key={c.label} className="flex items-center gap-1.5" title={c.label}>
+                            {c.done ? (
+                              <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" />
+                            )}
+                            <span className={`text-[11px] ${c.done ? "text-gray-600" : "text-gray-400"}`}>{c.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className={`text-sm font-bold ${pct === 100 ? "text-emerald-600" : "text-blue-600"}`}>{pct}%</span>
+                        <div className="relative w-3 flex-1 min-h-[100px] rounded-full bg-gray-200 overflow-hidden">
+                          <div
+                            className={`absolute bottom-0 w-full rounded-full transition-all duration-700 ${pct === 100 ? "bg-gradient-to-t from-emerald-500 via-teal-400 to-green-300" : "bg-gradient-to-t from-blue-600 via-violet-500 to-amber-400"}`}
+                            style={{ height: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
           </div>
         </div>
 
@@ -575,10 +687,7 @@ export default function SettingsPage() {
           </div>
           <div className="p-6">
             {loading ? (
-              <div className="flex items-center gap-2 py-4 justify-center">
-                <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                <span className="text-sm text-gray-400">Loading...</span>
-              </div>
+              <SettingsAccountSkeleton />
             ) : gmailAccounts.length === 0 ? (
               <div className="text-center py-6">
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
@@ -655,10 +764,7 @@ export default function SettingsPage() {
           </div>
           <div className="p-6">
             {loading ? (
-              <div className="flex items-center gap-2 py-4 justify-center">
-                <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                <span className="text-sm text-gray-400">Loading...</span>
-              </div>
+              <SettingsAccountSkeleton />
             ) : showSmtpForm ? (
               <div className="space-y-3">
                 {!smtpProvider ? (

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import openai from "../services/openai";
-import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan } from "../services/planLimits";
+import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday } from "../services/planLimits";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -56,65 +56,82 @@ function appendOptOut(body: string): string {
   return body.trimEnd() + "\n\nP.S. If this isn't relevant, just reply \"unsubscribe\" and I won't reach out again.";
 }
 
-function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string }): string {
+function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string; digitalGaps?: string }): string {
   const company = lead.company;
-  const context = enriched
-    ? `Website summary: ${enriched.summary}\nIssues: ${enriched.issues || "General digital presence concerns"}`
-    : `Website: ${lead.website || "N/A"}\nContact Name: ${lead.name}`;
+  const industry = lead.industry || "Local business";
+  const address = lead.enriched_data?.address || "";
+
+  let context: string;
+  if (enriched) {
+    context = `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}\nWebsite summary: ${enriched.summary}`;
+    if (enriched.digitalGaps) {
+      context += `\nDigital gaps found:\n${enriched.digitalGaps}`;
+    }
+    if (enriched.issues) {
+      context += `\nKey issues: ${enriched.issues}`;
+    }
+  } else {
+    context = `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}\nWebsite: ${lead.website || "N/A"}\nContact Name: ${lead.name}`;
+  }
 
   const toneInstructions: Record<ToneKey, string> = {
-    friendly: `Tone: Warm and friendly, like messaging someone you met at a networking event.
-Example style: "Hey — saw your site and thought of something. Mind if I ask a quick question?"`,
+    friendly: `Tone: Warm, genuine, zero pressure. Like a helpful neighbor who happens to know about websites.`,
 
-    direct: `Tone: Short, blunt, no fluff. Like a busy founder who types fast.
-Example style: "Checked out your site. Noticed something — worth a quick chat?"`,
+    direct: `Tone: Short, blunt, confident. Like a busy CEO who types fast and doesn't waste words.`,
 
-    curious: `Tone: Genuinely curious, like you stumbled on something interesting.
-Example style: "Hey — was looking at your site and got curious about something..."`,
+    curious: `Tone: Genuinely curious and observational. Like someone who spotted something interesting and can't help but mention it.`,
   };
 
-  return `Write a cold email that feels like it was written manually in under 2 minutes.
+  return `You are a world-class cold email copywriter. Your emails consistently get 40%+ reply rates because they follow a proven psychological framework.
+
+FRAMEWORK — use this structure:
+1. OPEN with their #1 pain point as a specific observation (NOT "I was checking out your site"). Lead with what you found, not what you did.
+2. AMPLIFY by connecting 2-3 digital gaps to real business consequences specific to their industry — frame it as customers/money they're losing RIGHT NOW, not abstract problems.
+3. CREATE CURIOSITY with a soft, low-commitment question that makes them want to reply. Never ask for a "call" or "chat" in the first email — ask a question they can answer in one sentence.
 
 Lead context:
 Company: ${company}
 ${context}
 
-Rules:
-- Do NOT sound like marketing or sales copy
-- Avoid these words entirely: "revenue", "optimize", "solution", "leverage", "streamline", "maximize", "boost", "transform", "unlock", "empower"
-- Write like a real person who quickly checked their site
-- Mention ONE specific observation
-- Keep it under 80 words
-- Use simple, casual language
-- Slightly imperfect grammar is OK (contractions, fragments fine)
-- End with a simple question, not a formal CTA
+STRICT RULES:
+- BANNED words: "revenue", "optimize", "solution", "leverage", "streamline", "maximize", "boost", "transform", "unlock", "empower", "excited", "thrilled", "growth", "scale", "ROI"
+- Do NOT open with "I was checking/looking at your site" — that's generic. Instead open directly with the observation (e.g. "Patients searching for a dentist in Austin can't book online from your site right now")
+- Mention their city/location if available — hyper-local = hyper-relevant
+- Reference their industry competitors WITHOUT naming them (e.g. "most ${industry} businesses in the area already have...")
+- Weave up to 3 digital gaps naturally as observations with real-world consequences — NEVER bullet-point them
+- Every gap mentioned must tie to a specific customer behavior (e.g. "customers Google you, can't find you on social, and move on to the next option")
+- 80-90 words (sweet spot — long enough to be specific, short enough to read on mobile)
+- Write like a real person, not a marketer. Contractions, fragments, casual language all fine
+- End with a CURIOSITY question they can answer in one line — NOT "want to hop on a call?" but more like "is that something you've been thinking about?" or "curious — is that intentional or just hasn't been a priority yet?"
 - Do NOT use placeholder brackets like [Your Name] or [Agency Name]
-- Do NOT start with "I hope this email finds you well" or similar clichés
-- Subject line should be lowercase, short, no emojis
+- Do NOT start with greetings like "I hope this finds you well", "Hi there", etc.
+- Subject line: lowercase, 3-6 words, sounds like a friend texting — include their company name or city when possible
 
 ${toneInstructions[tone]}
 
 Return ONLY a JSON object with "subject" and "body" fields.`;
 }
 
-function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey): string {
+function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey, topGap?: string): string {
   const toneStyle: Record<ToneKey, string> = {
     friendly: `Style: "Hey — just circling back on this. No rush at all, just curious if you had a sec to think about it?"`,
     direct: `Style: "Bumping this — did you get a chance to look?"`,
     curious: `Style: "Hey — still thinking about that thing I noticed on your site. Worth chatting about?"`,
   };
 
+  const gapContext = topGap || issues || "their website";
+
   return `Write a quick follow-up email — feels like a real person bumping their own thread.
 
 Context:
 - You emailed ${company} a few days ago, no reply
-- Issue you mentioned: ${issues || "their website"}
+- Thing you mentioned: ${gapContext}
 
 Rules:
 - Under 40 words
 - Super casual
 - No marketing language at all
-- Don't re-pitch, just nudge
+- Don't re-pitch, just nudge — vaguely reference what you mentioned before
 - End with a simple question
 - Do NOT use placeholder brackets
 
@@ -156,20 +173,44 @@ function isValidLead(lead: any): { valid: boolean; reason?: string } {
   if (!lead.email || !lead.email.includes("@")) {
     return { valid: false, reason: "no_email" };
   }
+
+  const email = lead.email.toLowerCase();
+  const [localPart, domain] = email.split("@");
+
   // Check for obvious junk emails
   const junkPatterns = ["noreply", "no-reply", "donotreply", "test@", "example.com"];
-  if (junkPatterns.some(p => lead.email.toLowerCase().includes(p))) {
+  if (junkPatterns.some(p => email.includes(p))) {
     return { valid: false, reason: "junk_email" };
   }
+
+  // Reject file-like emails (e.g. flags@2x.webp, icon@3x.png)
+  const junkExtensions = [".webp", ".png", ".jpg", ".gif", ".svg", ".ico", ".js", ".css", ".json", ".woff", ".woff2", ".ttf"];
+  if (junkExtensions.some(ext => email.endsWith(ext))) {
+    return { valid: false, reason: "file_extension_email" };
+  }
+
+  // Local part too short or only digits
+  if (!localPart || localPart.length < 2 || /^\d+$/.test(localPart)) {
+    return { valid: false, reason: "invalid_local_part" };
+  }
+
+  // Domain too short (e.g. @2x)
+  if (!domain || domain.split(".").length < 2 || domain.length < 4) {
+    return { valid: false, reason: "invalid_domain" };
+  }
+
   return { valid: true };
 }
 
 // ===== CALL SCRIPT GENERATION =====
 function buildCallScriptPrompt(lead: any, enriched?: { summary?: string; issues?: string }): string {
+  const industry = lead.industry || "Local business";
+  const address = lead.enriched_data?.address || "";
   return `Write a very short phone call script for cold-calling a local business.
 
 Lead context:
 Company: ${lead.company}
+Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
 Phone: ${lead.phone || "N/A"}
 ${enriched ? `Website summary: ${enriched.summary}\nIssues: ${enriched.issues}` : ""}
 
@@ -307,6 +348,9 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
+    // Increment monotonic daily generation counter (never decrements)
+    await incrementEmailsGeneratedToday(req.userId!, generatedEmails.length);
+
     await supabase
       .from("campaigns")
       .update({ status: "draft" })
@@ -377,7 +421,6 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       .eq("campaign_id", campaignId)
       .eq("user_id", req.userId)
       .neq("contact_method", "call")
-      .gte("score", 40)
       .order("score", { ascending: false });
 
     // If specific lead IDs provided, filter to only those
@@ -430,8 +473,49 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       const tone = pickTone();
       const emails: any[] = [];
 
+      // Build specific digital gaps list from enrichment data, prioritized by industry relevance
+      const industry = (enrichedData.industry || lead.industry || "").toLowerCase();
+      const allGaps: { gap: string; priority: number }[] = [];
+
+      // Booking — highest priority for service businesses
+      if (enrichedData.hasOnlineBooking === false) {
+        const bookingIndustries = ["dental", "medical", "salon", "fitness", "restaurant", "plumbing", "hvac", "automotive"];
+        const isBookingCritical = bookingIndustries.some(i => industry.includes(i));
+        allGaps.push({ gap: "No online booking system — customers can't schedule appointments from the website", priority: isBookingCritical ? 100 : 70 });
+      }
+
+      // Contact form — highest for legal, real estate, professional services
+      if (enrichedData.hasContactForm === false) {
+        const contactIndustries = ["legal", "real estate", "medical", "dental"];
+        const isContactCritical = contactIndustries.some(i => industry.includes(i));
+        allGaps.push({ gap: "No contact form — makes it hard for potential customers to reach out", priority: isContactCritical ? 95 : 65 });
+      }
+
+      // No social media
+      if (!enrichedData.socialLinks || enrichedData.socialLinks.length === 0) {
+        allGaps.push({ gap: "Zero social media presence — invisible to customers searching on social platforms", priority: 60 });
+      } else if (enrichedData.socialLinks.length <= 1) {
+        allGaps.push({ gap: "Weak social media (only on 1 platform) — missing customers on other channels", priority: 40 });
+      }
+
+      // Outdated tech
+      if (enrichedData.technologies?.includes("WordPress")) {
+        allGaps.push({ gap: "Running on WordPress — can be slow, vulnerable, and expensive to maintain", priority: 50 });
+      }
+
+      // No platform detected
+      if (!enrichedData.technologies || enrichedData.technologies.length === 0) {
+        allGaps.push({ gap: "Basic/outdated website with no modern platform — looks unprofessional on mobile", priority: 55 });
+      }
+
+      // Sort by priority (highest first) and take top 3
+      allGaps.sort((a, b) => b.priority - a.priority);
+      const topGaps = allGaps.slice(0, 3);
+      const gaps = topGaps.map(g => `- ${g.gap}`);
+      const digitalGaps = gaps.length > 0 ? gaps.join("\n") : "";
+
       // Initial email
-      const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues });
+      const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues, digitalGaps });
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
@@ -463,7 +547,8 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                 // Follow-up 1
                 (async () => {
                   try {
-                    const f1Prompt = buildFollowup1Prompt(lead.company, issues, tone);
+                    const topGap = gaps.length > 0 ? gaps[0].replace("- ", "") : undefined;
+                    const f1Prompt = buildFollowup1Prompt(lead.company, issues, tone, topGap);
                     const f1 = await openai.chat.completions.create({
                       model: "gpt-4o",
                       messages: [{ role: "user", content: f1Prompt }],
@@ -553,6 +638,9 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       res.status(500).json({ error: "Failed to save generated emails" });
       return;
     }
+
+    // Increment monotonic daily generation counter (never decrements)
+    await incrementEmailsGeneratedToday(req.userId!, generatedEmails.length);
 
     if (enableFollowups) {
       await supabase
