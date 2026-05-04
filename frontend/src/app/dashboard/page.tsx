@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { apiGet, apiPut } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardSkeleton } from "./Skeleton";
@@ -28,6 +29,18 @@ interface Stats {
   monthlyLeadFindLimit: number;
   leadsFoundToday: number;
   dailyLeadFindLimit: number;
+}
+
+interface AuditView {
+  id: string;
+  lead_id: string;
+  device: string;
+  viewed_at: string;
+}
+
+interface AuditViewsResponse {
+  views: AuditView[];
+  leads: Record<string, { company: string; campaign_id: string }>;
 }
 
 function CircularProgress({ value, max, color, size = 80 }: { value: number; max: number; color: string; size?: number }) {
@@ -81,6 +94,9 @@ export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [auditViews, setAuditViews] = useState<AuditViewsResponse>({ views: [], leads: {} });
+  const [onboarding, setOnboarding] = useState<{ hasProfile: boolean; hasEmail: boolean; hasServiceType: boolean; hasLeads: boolean } | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -89,8 +105,33 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser();
         setDisplayName(user?.user_metadata?.full_name || user?.email || "");
 
-        const data = await apiGet<Stats>("/stats");
+        // Check if onboarding already dismissed
+        const onboardingDone = user?.user_metadata?.onboarding_completed === true;
+
+        const data = await apiGet<Stats & { serviceType?: string }>("/stats");
         setStats(data);
+
+        // Determine onboarding state (only if not dismissed)
+        if (!onboardingDone) {
+          const hasProfile = !!(user?.user_metadata?.full_name);
+          const hasEmail = (data.warmupDay || 0) > 0 || (data.dailySendLimit || 0) > 0;
+          const hasServiceType = !!(data.serviceType && data.serviceType !== "web_dev") || !!(user?.user_metadata?.service_type_set);
+          const hasLeads = (data.totalLeads || 0) > 0;
+
+          const allDone = hasProfile && hasEmail && hasServiceType && hasLeads;
+          if (allDone) {
+            // Mark onboarding as complete permanently
+            await supabase.auth.updateUser({ data: { onboarding_completed: true } });
+            setOnboarding(null);
+          } else {
+            setOnboarding({ hasProfile, hasEmail, hasServiceType, hasLeads });
+          }
+        }
+
+        // Fetch recent audit views (fire-and-forget, non-blocking)
+        apiGet<AuditViewsResponse>("/audit/views/recent")
+          .then(vd => setAuditViews(vd))
+          .catch(() => {});
 
         // Sync browser timezone to backend (fire-and-forget)
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -173,6 +214,136 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Onboarding Checklist */}
+      {onboarding && (
+        <div className="mb-6 bg-gradient-to-br from-indigo-50 via-white to-violet-50 rounded-2xl border-2 border-indigo-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Get Started</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Complete these steps to start generating leads and sending emails</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-indigo-600">
+                {[onboarding.hasProfile, onboarding.hasEmail, onboarding.hasServiceType, onboarding.hasLeads].filter(Boolean).length}/4
+              </span>
+              <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+                  style={{ width: `${([onboarding.hasProfile, onboarding.hasEmail, onboarding.hasServiceType, onboarding.hasLeads].filter(Boolean).length / 4) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Step 1: Profile */}
+            <button
+              onClick={() => router.push("/dashboard/settings")}
+              className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                onboarding.hasProfile
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50"
+              }`}
+            >
+              {onboarding.hasProfile && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              )}
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${onboarding.hasProfile ? "bg-emerald-100" : "bg-indigo-100"}`}>
+                <svg className={`w-4 h-4 ${onboarding.hasProfile ? "text-emerald-600" : "text-indigo-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">Complete Profile</p>
+              <p className="text-xs text-gray-500 mt-0.5">Add your name</p>
+            </button>
+
+            {/* Step 2: Email Account */}
+            <button
+              onClick={() => router.push("/dashboard/settings")}
+              className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                onboarding.hasEmail
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50"
+              }`}
+            >
+              {onboarding.hasEmail && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              )}
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${onboarding.hasEmail ? "bg-emerald-100" : "bg-indigo-100"}`}>
+                <svg className={`w-4 h-4 ${onboarding.hasEmail ? "text-emerald-600" : "text-indigo-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">Connect Email</p>
+              <p className="text-xs text-gray-500 mt-0.5">Gmail or SMTP</p>
+            </button>
+
+            {/* Step 3: Service Type */}
+            <button
+              onClick={() => router.push("/dashboard/settings")}
+              className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                onboarding.hasServiceType
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50"
+              }`}
+            >
+              {onboarding.hasServiceType && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              )}
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${onboarding.hasServiceType ? "bg-emerald-100" : "bg-indigo-100"}`}>
+                <svg className={`w-4 h-4 ${onboarding.hasServiceType ? "text-emerald-600" : "text-indigo-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">Select Service</p>
+              <p className="text-xs text-gray-500 mt-0.5">SEO, Web Dev, etc.</p>
+            </button>
+
+            {/* Step 4: Find Leads */}
+            <button
+              onClick={() => router.push("/dashboard/auto-leads")}
+              className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                onboarding.hasLeads
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50"
+              }`}
+            >
+              {onboarding.hasLeads && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              )}
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${onboarding.hasLeads ? "bg-emerald-100" : "bg-indigo-100"}`}>
+                <svg className={`w-4 h-4 ${onboarding.hasLeads ? "text-emerald-600" : "text-indigo-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">Find Leads</p>
+              <p className="text-xs text-gray-500 mt-0.5">Auto-find businesses</p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard content — hidden until onboarding is complete */}
+      {onboarding ? (
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-amber-900">Complete the setup to unlock your dashboard</h3>
+          <p className="text-sm text-amber-700 mt-1">Finish the steps above to start finding leads, generating emails, and tracking your outreach.</p>
+        </div>
+      ) : (
+      <>
+
       {/* Primary Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
         {/* Leads Found Today */}
@@ -244,6 +415,50 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Hot Activity — Audit Views */}
+      {auditViews.views.length > 0 && (
+        <div className="bg-orange-50 rounded-2xl border-2 border-orange-200 p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
+              <svg className="w-4.5 h-4.5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-orange-900">Hot Leads — Audit Viewed</p>
+              <p className="text-xs text-orange-600">These leads opened their website audit report</p>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {auditViews.views.slice(0, 5).map((view) => {
+              const lead = auditViews.leads[view.lead_id];
+              const diff = Date.now() - new Date(view.viewed_at).getTime();
+              const mins = Math.floor(diff / 60000);
+              const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;
+              return (
+                <div key={view.id} className="flex items-center gap-3 bg-white/70 rounded-xl px-4 py-3 border border-orange-100">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 capitalize truncate">
+                      {lead?.company || "Unknown Lead"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Viewed audit report · {view.device === "mobile" ? "📱 Mobile" : "💻 Desktop"}
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-orange-700 flex-shrink-0">{timeAgo}</span>
+                </div>
+              );
+            })}
+          </div>
+          {auditViews.views.length > 5 && (
+            <p className="text-xs text-orange-500 mt-3 text-center font-medium">
+              +{auditViews.views.length - 5} more views
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Analytics Row — Circular Gauges */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
@@ -356,6 +571,8 @@ export default function DashboardPage() {
           <p className="text-3xl font-extrabold text-rose-900 mt-2">{v(stats.emailsFailed)}</p>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

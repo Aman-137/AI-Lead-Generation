@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
-import { getPlanInfo, setUserTimezone } from "../services/planLimits";
+import { getPlanInfo, setUserTimezone, ServiceType } from "../services/planLimits";
 import { isValidUUID } from "../middleware/validate";
 
 const router = Router();
@@ -60,6 +60,7 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       sentToday: sentToday || 0,
       dailySendLimit: planInfo.dailyLimit,
       plan: planInfo.plan,
+      serviceType: planInfo.serviceType,
       planLabel: planInfo.planLabel,
       priceMonthly: planInfo.priceMonthly,
       maxDailyEmails: planInfo.maxDailyEmails,
@@ -191,6 +192,32 @@ router.put("/timezone", authMiddleware, async (req: AuthenticatedRequest, res) =
     res.json({ success: true, timezone });
   } catch {
     res.status(500).json({ error: "Failed to set timezone" });
+  }
+});
+
+// PUT /api/stats/service-type — Set user's service type for AI email generation
+const VALID_SERVICE_TYPES: ServiceType[] = ["web_dev", "seo", "digital_marketing", "social_media"];
+router.put("/service-type", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { serviceType } = req.body;
+    if (!serviceType || !VALID_SERVICE_TYPES.includes(serviceType)) {
+      res.status(400).json({ error: "Invalid service type. Must be one of: web_dev, seo, digital_marketing, social_media" });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("user_plans")
+      .update({ service_type: serviceType, updated_at: new Date().toISOString() })
+      .eq("user_id", req.userId);
+
+    if (error) {
+      res.status(500).json({ error: "Failed to update service type" });
+      return;
+    }
+
+    res.json({ success: true, serviceType });
+  } catch {
+    res.status(500).json({ error: "Failed to update service type" });
   }
 });
 

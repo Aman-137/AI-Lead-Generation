@@ -30,16 +30,23 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
         .eq("user_id", req.userId);
 
       if (leadCounts) {
-        const countMap: Record<string, { total: number; queued: number }> = {};
+        const countMap: Record<string, { total: number; queued: number; sources: Set<string> }> = {};
         for (const lc of leadCounts) {
-          if (!countMap[lc.campaign_id]) countMap[lc.campaign_id] = { total: 0, queued: 0 };
+          if (!countMap[lc.campaign_id]) countMap[lc.campaign_id] = { total: 0, queued: 0, sources: new Set() };
           countMap[lc.campaign_id].total++;
+          countMap[lc.campaign_id].sources.add(lc.source_type);
           if (lc.source_type === "csv_queued") countMap[lc.campaign_id].queued++;
         }
         for (const c of campaigns) {
-          const counts = countMap[c.id] || { total: 0, queued: 0 };
+          const counts = countMap[c.id] || { total: 0, queued: 0, sources: new Set() };
           c.total_leads = counts.total;
           c.queued_leads = counts.queued;
+          // Derive campaign source: auto_find, csv, or mixed
+          const srcs = counts.sources;
+          if (srcs.size === 0) c.source = "csv"; // empty campaign from upload
+          else if (srcs.has("auto_find") && (srcs.has("csv") || srcs.has("csv_queued"))) c.source = "mixed";
+          else if (srcs.has("auto_find")) c.source = "auto_find";
+          else c.source = "csv";
         }
       }
     }

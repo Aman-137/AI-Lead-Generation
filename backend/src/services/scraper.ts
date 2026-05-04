@@ -15,6 +15,20 @@ export interface WebsiteData {
   industry: string;
   emails: string[];
   phones: string[];
+  // New enrichment signals
+  isMobileFriendly: boolean;
+  hasSSL: boolean;
+  hasMetaDescription: boolean;
+  pageLoadTimeMs: number;     // homepage response time in ms
+  pageSizeKB: number;         // homepage size in KB
+  copyrightYear: number | null;  // detected copyright year (null if not found)
+  isSPA: boolean;             // true = JS-rendered site (enrichment data may be partial)
+  isParkedDomain: boolean;    // true = domain is parked/for sale/under construction
+  _siteDown?: boolean;
+  // Ad & analytics detection
+  hasGoogleAds: boolean;      // Google Ads tag detected (AW- conversion tracking)
+  hasFacebookPixel: boolean;  // Meta/Facebook Pixel detected
+  hasAnalytics: boolean;      // Google Analytics or GTM detected
 }
 
 // Block private/internal IPs to prevent SSRF
@@ -96,8 +110,38 @@ export async function scrapeWebsite(
       return null;
     }
 
-    const fetchPage = async (url: string): Promise<cheerio.CheerioAPI | null> => {
+    // Quick HEAD check: if the site is completely down, return a minimal object
+    // so we can distinguish "broken/down site" from "no website at all"
+    try {
+      await axios.head(websiteUrl, {
+        timeout: 4000,
+        maxRedirects: 3,
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+        validateStatus: (status) => status < 500, // Accept 2xx, 3xx, 4xx — only 5xx means truly broken
+      });
+    } catch {
+      // Site is completely unreachable (DNS failure, connection refused, timeout)
+      logger.info({ url: websiteUrl }, "Website unreachable — returning broken site marker");
+      return {
+        title: "",
+        description: "",
+        headings: [],
+        hasOnlineBooking: false,
+        hasContactForm: false,
+        socialLinks: [],
+        technologies: [],
+        industry: "",
+        emails: [],
+        phones: [],
+        _siteDown: true,
+      } as Partial<WebsiteData> & { _siteDown?: boolean };
+    }
+
+    let finalUrl = websiteUrl; // Track the final URL after redirects (for SSL detection)
+
+    const fetchPage = async (url: string, trackFinalUrl = false): Promise<{ $: cheerio.CheerioAPI; loadTimeMs: number; sizeKB: number } | null> => {
       try {
+        const startTime = Date.now();
         const response = await axios.get(url, {
           timeout: 5000,
           maxRedirects: 3,
@@ -108,21 +152,28 @@ export async function scrapeWebsite(
             "Accept": "text/html",
           },
         });
+        const loadTimeMs = Date.now() - startTime;
+        // Capture final URL after redirects (for SSL detection)
+        if (trackFinalUrl && response.request?.res?.responseUrl) {
+          finalUrl = response.request.res.responseUrl;
+        }
         // Only parse HTML responses — skip PDFs, images, binary files
         const contentType = response.headers["content-type"] || "";
         if (!contentType.includes("text/html") && !contentType.includes("text/plain") && !contentType.includes("application/xhtml")) {
           return null;
         }
         if (typeof response.data !== "string") return null;
-        return cheerio.load(response.data);
+        const sizeKB = Math.round(Buffer.byteLength(response.data, "utf8") / 1024);
+        return { $: cheerio.load(response.data), loadTimeMs, sizeKB };
       } catch {
         return null;
       }
     };
 
     // Fetch homepage
-    const $ = await fetchPage(websiteUrl);
-    if (!$) return null;
+    const homeResult = await fetchPage(websiteUrl, true);
+    if (!homeResult) return null;
+    const { $, loadTimeMs: pageLoadTimeMs, sizeKB: pageSizeKB } = homeResult;
 
     // Try to find and fetch the contact page from homepage navigation
     let contactPage$: cheerio.CheerioAPI | null = null;
@@ -159,7 +210,8 @@ export async function scrapeWebsite(
       // Fast path: found a likely contact page URL
       const contactSafe = await isUrlSafe(quickContactMatch);
       if (contactSafe) {
-        contactPage$ = await fetchPage(quickContactMatch);
+        const result = await fetchPage(quickContactMatch);
+        if (result) contactPage$ = result.$;
       }
     }
 
@@ -170,8 +222,9 @@ export async function scrapeWebsite(
       for (const candidateUrl of candidates) {
         const candidateSafe = await isUrlSafe(candidateUrl);
         if (!candidateSafe) continue;
-        const candidate$ = await fetchPage(candidateUrl);
-        if (!candidate$) continue;
+        const result = await fetchPage(candidateUrl);
+        if (!result) continue;
+        const candidate$ = result.$;
         // Check if this page has a contact form (email input + textarea) or mailto link
         const hasForm = candidate$("form").toArray().some(form => {
           const html = candidate$(form).html()?.toLowerCase() || "";
@@ -278,8 +331,9 @@ export async function scrapeWebsite(
         for (const bookingUrl of bookingLinks.slice(0, 2)) {
           const urlSafe = await isUrlSafe(bookingUrl);
           if (!urlSafe) continue;
-          const bookingPage$ = await fetchPage(bookingUrl);
-          if (!bookingPage$) continue;
+          const bookingResult = await fetchPage(bookingUrl);
+          if (!bookingResult) continue;
+          const bookingPage$ = bookingResult.$;
           const pageHtml = bookingPage$.html().toLowerCase();
 
           // Check for platform signatures on the booking page
@@ -384,12 +438,93 @@ export async function scrapeWebsite(
         .map(url => url.replace(/\?.*$/, "").replace(/\/$/, "")) // strip query params and trailing slash
     )].slice(0, 6); // max 6 unique profiles
 
-    // Detect common technology indicators
+    // Detect common technology indicators (expanded list)
     const technologies: string[] = [];
     if (allHtml.includes("shopify")) technologies.push("Shopify");
-    if (allHtml.includes("wordpress")) technologies.push("WordPress");
+    if (allHtml.includes("wordpress") || allHtml.includes("wp-content")) technologies.push("WordPress");
     if (allHtml.includes("webflow")) technologies.push("Webflow");
-    if (allHtml.includes("wix")) technologies.push("Wix");
+    if (allHtml.includes("wix.com") || allHtml.includes("wixsite")) technologies.push("Wix");
+    if (allHtml.includes("squarespace")) technologies.push("Squarespace");
+    if (allHtml.includes("godaddy") || allHtml.includes("secureserver.net")) technologies.push("GoDaddy");
+    if (allHtml.includes("weebly")) technologies.push("Weebly");
+    if (allHtml.includes("duda.co") || allHtml.includes("dudaone")) technologies.push("Duda");
+    if (allHtml.includes("joomla")) technologies.push("Joomla");
+    if (allHtml.includes("drupal")) technologies.push("Drupal");
+
+    // ===== NEW SIGNAL: Mobile-friendly detection =====
+    const isMobileFriendly = (() => {
+      const hasViewport = $('meta[name="viewport"]').length > 0;
+      if (!hasViewport) return false;
+      const viewportContent = ($('meta[name="viewport"]').attr("content") || "").toLowerCase();
+      // Must contain "width=" — just having a viewport tag with no width= doesn't count
+      return viewportContent.includes("width=");
+    })();
+
+    // ===== NEW SIGNAL: SSL detection =====
+    // Check if site actually supports HTTPS — try the HTTPS version of the domain
+    const hasSSL = await (async () => {
+      if (finalUrl.startsWith("https://")) return true;
+      // Site didn't redirect to HTTPS — try HTTPS directly
+      try {
+        const parsed = new URL(finalUrl);
+        const httpsUrl = `https://${parsed.hostname}/`;
+        await axios.head(httpsUrl, {
+          timeout: 4000,
+          maxRedirects: 2,
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+          validateStatus: (status) => status < 500,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+    // ===== NEW SIGNAL: Meta description presence =====
+    const hasMetaDescription = description.length >= 10;
+
+    // ===== NEW SIGNAL: Copyright year detection =====
+    const copyrightYear = (() => {
+      // Check both HTML entities and visible text
+      const yearMatches = allHtml.match(/(?:©|&copy;|\bcopyright\b)\s*(\d{4})/gi) ||
+                          allPageText.match(/(?:©|\bcopyright\b)\s*(\d{4})/gi);
+      if (!yearMatches || yearMatches.length === 0) return null;
+      // Extract years and return the latest one
+      const years = yearMatches.map(m => {
+        const y = m.match(/(\d{4})/);
+        return y ? parseInt(y[1], 10) : 0;
+      }).filter(y => y >= 2000 && y <= new Date().getFullYear());
+      return years.length > 0 ? Math.max(...years) : null;
+    })();
+
+    // ===== NEW SIGNAL: SPA detection =====
+    const isSPA = (() => {
+      // Check for common SPA framework markers
+      if (allHtml.includes("__next_data__") || allHtml.includes("__next")) return true; // Next.js
+      if (allHtml.includes("__nuxt") || allHtml.includes("nuxt")) return true; // Nuxt.js
+      if (allHtml.includes('<div id="root">') || allHtml.includes('<div id="root"></div>')) return true; // React CRA
+      if (allHtml.includes('<div id="app">') || allHtml.includes('<div id="app"></div>')) return true; // Vue
+      if (allHtml.includes("ng-version") || allHtml.includes("ng-app")) return true; // Angular
+      // Body has very little visible text but lots of scripts (JS-rendered page)
+      const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+      const scriptCount = $("script").length;
+      if (bodyText.length < 100 && scriptCount > 5) return true;
+      return false;
+    })();
+
+    // ===== NEW SIGNAL: Parked domain detection =====
+    const isParkedDomain = (() => {
+      const parkedSignals = [
+        "domain is for sale", "this domain is registered", "buy this domain",
+        "domain may be for sale", "parked by", "parked domain", "parked free",
+        "under construction", "coming soon", "website coming soon",
+        "future home of", "this site is under development",
+        "this website is for sale", "make an offer on this domain",
+        "godaddy.com/forsale", "dan.com", "afternic.com", "sedo.com",
+        "hugedomains.com", "undeveloped.com",
+      ];
+      return parkedSignals.some(s => allPageText.includes(s) || allHtml.includes(s));
+    })();
 
     // Extract email addresses from all pages
     const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
@@ -520,6 +655,37 @@ export async function scrapeWebsite(
     // Scraper returns "Unknown" and the enrichment route overrides it with lead.industry if available.
     const industry = "Unknown";
 
+    // ===== NEW SIGNAL: Google Ads detection =====
+    const hasGoogleAds = (() => {
+      // Google Ads conversion tracking uses AW- prefix in gtag config
+      if (/gtag\s*\(\s*['"]config['"]\s*,\s*['"]AW-/i.test(allHtml)) return true;
+      // Google Ads remarketing tag
+      if (allHtml.includes("googleads.g.doubleclick.net") || allHtml.includes("google_conversion_id")) return true;
+      if (/AW-\d{6,}/.test(allHtml)) return true;
+      return false;
+    })();
+
+    // ===== NEW SIGNAL: Facebook/Meta Pixel detection =====
+    const hasFacebookPixel = (() => {
+      if (allHtml.includes("connect.facebook.net/en_US/fbevents.js") || allHtml.includes("connect.facebook.net/en_us/fbevents.js")) return true;
+      if (/fbq\s*\(\s*['"]init['"]/i.test(allHtml)) return true;
+      if (allHtml.includes("facebook.com/tr?") || allHtml.includes("facebook.com/tr/?")) return true;
+      return false;
+    })();
+
+    // ===== NEW SIGNAL: Google Analytics / GTM detection =====
+    const hasAnalytics = (() => {
+      // Google Analytics 4 (G- measurement ID)
+      if (/['"]G-[A-Z0-9]+['"]/i.test(allHtml)) return true;
+      // Universal Analytics (UA- tracking ID)
+      if (/['"]UA-\d+-\d+['"]/i.test(allHtml)) return true;
+      // Google Tag Manager (GTM- container ID)
+      if (/GTM-[A-Z0-9]+/i.test(allHtml)) return true;
+      if (allHtml.includes("googletagmanager.com")) return true;
+      if (allHtml.includes("google-analytics.com/analytics.js") || allHtml.includes("google-analytics.com/ga.js")) return true;
+      return false;
+    })();
+
     return {
       title: title.slice(0, 200),
       description: description.slice(0, 500),
@@ -531,6 +697,18 @@ export async function scrapeWebsite(
       industry,
       emails,
       phones,
+      // New signals
+      isMobileFriendly,
+      hasSSL,
+      hasMetaDescription,
+      pageLoadTimeMs,
+      pageSizeKB,
+      copyrightYear,
+      isSPA,
+      isParkedDomain,
+      hasGoogleAds,
+      hasFacebookPixel,
+      hasAnalytics,
     };
   } catch (error) {
     logger.error(
@@ -557,30 +735,94 @@ export function generateEnrichmentSummary(websiteData: Partial<WebsiteData> | nu
     };
   }
 
+  // Parked/dead domain — treat as near-zero digital presence
+  if (websiteData.isParkedDomain) {
+    return {
+      summary: `${company} has a parked/inactive domain — no real website exists`,
+      issues: [
+        "Domain is parked, for sale, or under construction — no functional website",
+        "Zero online presence for customers searching",
+        "No way for customers to learn about the business online",
+      ],
+      opportunity: "Massive opportunity — business has a domain but no website built on it",
+    };
+  }
+
   const issues: string[] = [];
   let opportunityScore = 0;
 
-  // Analyze issues
+  // --- Critical issues first (visible, verifiable) ---
+
+  // SSL
+  if (websiteData.hasSSL === false) {
+    issues.push("No SSL certificate — browser shows 'Not Secure' warning to visitors");
+    opportunityScore += 3;
+  }
+
+  // Mobile
+  if (websiteData.isMobileFriendly === false && !websiteData.isSPA) {
+    issues.push("Website is not mobile-friendly — broken layout on phones");
+    opportunityScore += 3;
+  }
+
+  // Slow page
+  if (websiteData.pageLoadTimeMs && websiteData.pageLoadTimeMs > 3000) {
+    const seconds = (websiteData.pageLoadTimeMs / 1000).toFixed(1);
+    issues.push(`Slow page load (${seconds}s) — 53% of visitors leave after 3 seconds`);
+    opportunityScore += 2;
+  }
+
+  // Large page
+  if (websiteData.pageSizeKB && websiteData.pageSizeKB > 500) {
+    issues.push(`Heavy page size (${websiteData.pageSizeKB}KB) — slow on mobile data`);
+    opportunityScore += 1;
+  }
+
+  // Booking
   if (!websiteData.hasOnlineBooking) {
     issues.push("No online booking system");
     opportunityScore += 2;
   }
+
+  // Contact form
   if (!websiteData.hasContactForm) {
-    issues.push("Limited contact options");
+    issues.push("Limited contact options — no contact form or live chat");
     opportunityScore += 1;
   }
+
+  // Social
   if (!websiteData.socialLinks || websiteData.socialLinks.length === 0) {
-    issues.push("Minimal social media presence");
+    issues.push("No social media presence found");
     opportunityScore += 1;
   }
+
+  // Meta / SEO
+  if (websiteData.hasMetaDescription === false) {
+    issues.push("Missing meta description — poor Google search appearance");
+    opportunityScore += 1;
+  }
+
+  // Outdated copyright
+  const currentYear = new Date().getFullYear();
+  if (websiteData.copyrightYear && websiteData.copyrightYear < currentYear - 1) {
+    issues.push(`Outdated copyright (© ${websiteData.copyrightYear}) — site looks abandoned`);
+    opportunityScore += 1;
+  }
+
+  // Platform detection
   if (!websiteData.technologies || websiteData.technologies.length === 0) {
     issues.push("No recognizable web platform detected");
     opportunityScore += 1;
   }
-  // Flag actually outdated platforms (WordPress is legacy; Wix/Shopify/Webflow are modern)
   if (websiteData.technologies?.includes("WordPress")) {
-    issues.push("Using WordPress (legacy platform)");
+    issues.push("Using WordPress (legacy platform — often slow and vulnerable)");
     opportunityScore += 2;
+  }
+
+  // SPA caveat
+  if (websiteData.isSPA) {
+    // Don't flag missing booking/forms/social for SPAs — we might just not see them
+    // Already added to data for frontend display
   }
 
   // Generate summary
@@ -588,17 +830,17 @@ export function generateEnrichmentSummary(websiteData: Partial<WebsiteData> | nu
 
   // Generate opportunity
   let opportunity = "Improve online visibility and customer engagement";
-  if (opportunityScore >= 3) {
-    opportunity =
-      "Significant opportunity to modernize digital presence and boost conversions";
+  if (opportunityScore >= 6) {
+    opportunity = "Critical — multiple serious issues driving customers away right now";
+  } else if (opportunityScore >= 4) {
+    opportunity = "Significant opportunity to modernize digital presence and boost conversions";
   } else if (opportunityScore >= 2) {
-    opportunity =
-      "Opportunity to enhance customer experience with modern tools";
+    opportunity = "Opportunity to enhance customer experience with modern tools";
   }
 
   return {
     summary: summary.slice(0, 300),
-    issues: issues.slice(0, 5),
+    issues: issues.slice(0, 8),
     opportunity,
   };
 }

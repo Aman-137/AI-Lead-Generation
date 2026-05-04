@@ -172,6 +172,17 @@ interface Lead {
     emails?: string[];
     phones?: string[];
     headings?: string[];
+    // New signals
+    isMobileFriendly?: boolean;
+    hasSSL?: boolean;
+    hasMetaDescription?: boolean;
+    pageLoadTimeMs?: number;
+    pageSizeKB?: number;
+    copyrightYear?: number | null;
+    isSPA?: boolean;
+    isParkedDomain?: boolean;
+    _siteDown?: boolean;
+    audit_token?: string;
   };
 }
 
@@ -343,9 +354,23 @@ const callScriptSteps: ProgressStep[] = [
   { label: "Finishing up...", delayMs: 15000 },
 ];
 
+// ===== Time Ago Helper =====
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 // ===== Lead Detail Modal =====
 function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const ed = lead.enriched_data;
+  const [auditUrl, setAuditUrl] = useState<string | null>(ed?.audit_token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/audit/${ed.audit_token}` : null);
+  const [auditLoading, setAuditLoading] = useState(false);
   const scoreColor =
     lead.score && lead.score >= 70
       ? "text-emerald-700 bg-emerald-50 ring-emerald-200"
@@ -372,12 +397,20 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
 
   if (ed) {
     if (ed.technologies?.includes("WordPress")) positiveReasons.push("Uses WordPress (legacy platform) (+20)");
+    if (ed.technologies?.some(t => ["Joomla", "Drupal"].includes(t))) positiveReasons.push("Uses outdated CMS (Joomla/Drupal) (+20)");
     if (!ed.hasOnlineBooking) positiveReasons.push("No online booking system (+25)");
     if (!ed.hasContactForm) positiveReasons.push("No contact form on website (+15)");
     if (!ed.socialLinks || ed.socialLinks.length <= 1) positiveReasons.push("Weak or no social media presence (+10)");
     if (!ed.technologies || ed.technologies.length === 0) positiveReasons.push("No detectable tech platform (+10)");
+    if (ed.hasSSL === false) positiveReasons.push("No SSL — browser shows 'Not Secure' (+10)");
+    if (ed.isMobileFriendly === false) positiveReasons.push("Not mobile-friendly — broken on phones (+10)");
+    if (ed.pageLoadTimeMs && ed.pageLoadTimeMs > 3000) positiveReasons.push(`Slow page load (${(ed.pageLoadTimeMs / 1000).toFixed(1)}s) (+5)`);
+    if (ed.hasMetaDescription === false) positiveReasons.push("Missing meta description — poor SEO (+5)");
+    if (ed.copyrightYear && ed.copyrightYear < new Date().getFullYear() - 1) positiveReasons.push(`Outdated copyright © ${ed.copyrightYear} (+5)`);
+    if (ed.isParkedDomain) positiveReasons.push("Domain is parked/under construction (+70)");
+    if (ed._siteDown) positiveReasons.push("Website is completely down/unreachable (+70)");
     if (ed.hasOnlineBooking && ed.hasContactForm) negativeReasons.push("Has both booking & contact form (-20)");
-    if (ed.technologies?.some(t => ["Shopify", "Webflow", "Wix"].includes(t))) negativeReasons.push("Uses modern platform (Shopify/Webflow/Wix) (-15)");
+    if (ed.technologies?.some(t => ["Shopify", "Webflow", "Wix", "Squarespace", "Duda"].includes(t))) negativeReasons.push("Uses modern platform (-15)");
     if (ed.socialLinks && ed.socialLinks.length >= 3) negativeReasons.push("Strong social media (3+ platforms) (-10)");
 
     // Competitor detection (same logic as backend scoreLead)
@@ -431,6 +464,43 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
               <p className="text-xs text-gray-400">Lead quality score (0–100)</p>
             </div>
           </div>
+
+          {/* Audit Report Button */}
+          {ed && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-blue-900">Website Audit Report</p>
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    {auditUrl ? "Share this link in your outreach email" : "Generate a visual report to share with this lead"}
+                  </p>
+                </div>
+                {auditUrl ? (
+                  <button
+                    onClick={() => window.open(auditUrl, "_blank")}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
+                  >
+                    Preview
+                  </button>
+                ) : (
+                  <button
+                    disabled={auditLoading}
+                    onClick={async () => {
+                      setAuditLoading(true);
+                      try {
+                        const data = await apiPost<{ url: string }>("/audit/generate", { leadId: lead.id });
+                        setAuditUrl(data.url);
+                      } catch { /* silently fail */ }
+                      setAuditLoading(false);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
+                  >
+                    {auditLoading ? "Generating..." : "Generate Report"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Contact Info */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
@@ -492,9 +562,26 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
           {ed && (
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Digital Presence</p>
+
+              {/* Alert badges for critical issues */}
+              {(ed._siteDown || ed.isParkedDomain) && (
+                <div className="mb-3 rounded-xl p-3 bg-red-50 ring-1 ring-red-200">
+                  <p className="text-sm font-bold text-red-700">
+                    {ed._siteDown ? "⚠ Website is completely down/unreachable" : "⚠ Domain is parked or under construction"}
+                  </p>
+                  <p className="text-xs text-red-500 mt-0.5">This business has no functional website for customers.</p>
+                </div>
+              )}
+
+              {ed.isSPA && (
+                <div className="mb-3 rounded-xl p-3 bg-amber-50 ring-1 ring-amber-200">
+                  <p className="text-xs font-semibold text-amber-700">⚡ JavaScript-rendered site detected — some signals may be partial</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className={`rounded-xl p-3 ${ed.hasOnlineBooking ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? 'text-emerald-600' : 'text-red-600'}">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? "text-emerald-600" : "text-red-600"}`}>
                     Online Booking
                   </p>
                   <p className={`text-sm font-bold ${ed.hasOnlineBooking ? "text-emerald-700" : "text-red-700"}`}>
@@ -502,13 +589,57 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
                   </p>
                 </div>
                 <div className={`rounded-xl p-3 ${ed.hasContactForm ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? 'text-emerald-600' : 'text-red-600'}">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? "text-emerald-600" : "text-red-600"}`}>
                     Contact Form
                   </p>
                   <p className={`text-sm font-bold ${ed.hasContactForm ? "text-emerald-700" : "text-red-700"}`}>
                     {ed.hasContactForm ? "Yes" : "No"}
                   </p>
                 </div>
+                <div className={`rounded-xl p-3 ${ed.hasSSL !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasSSL !== false ? "text-emerald-600" : "text-red-600"}`}>
+                    SSL (HTTPS)
+                  </p>
+                  <p className={`text-sm font-bold ${ed.hasSSL !== false ? "text-emerald-700" : "text-red-700"}`}>
+                    {ed.hasSSL !== false ? "Secure" : "Not Secure"}
+                  </p>
+                </div>
+                <div className={`rounded-xl p-3 ${ed.isMobileFriendly !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.isMobileFriendly !== false ? "text-emerald-600" : "text-red-600"}`}>
+                    Mobile-Friendly
+                  </p>
+                  <p className={`text-sm font-bold ${ed.isMobileFriendly !== false ? "text-emerald-700" : "text-red-700"}`}>
+                    {ed.isMobileFriendly !== false ? "Yes" : "No"}
+                  </p>
+                </div>
+                <div className={`rounded-xl p-3 ${ed.hasMetaDescription !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-amber-50 ring-1 ring-amber-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasMetaDescription !== false ? "text-emerald-600" : "text-amber-600"}`}>
+                    SEO Meta
+                  </p>
+                  <p className={`text-sm font-bold ${ed.hasMetaDescription !== false ? "text-emerald-700" : "text-amber-700"}`}>
+                    {ed.hasMetaDescription !== false ? "Present" : "Missing"}
+                  </p>
+                </div>
+                {ed.pageLoadTimeMs !== undefined && (
+                  <div className={`rounded-xl p-3 ${ed.pageLoadTimeMs <= 3000 ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.pageLoadTimeMs <= 3000 ? "text-emerald-600" : "text-red-600"}`}>
+                      Page Speed
+                    </p>
+                    <p className={`text-sm font-bold ${ed.pageLoadTimeMs <= 3000 ? "text-emerald-700" : "text-red-700"}`}>
+                      {(ed.pageLoadTimeMs / 1000).toFixed(1)}s {ed.pageSizeKB ? `(${ed.pageSizeKB}KB)` : ""}
+                    </p>
+                  </div>
+                )}
+                {ed.copyrightYear && (
+                  <div className={`rounded-xl p-3 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-amber-50 ring-1 ring-amber-200"}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-emerald-600" : "text-amber-600"}`}>
+                      Copyright Year
+                    </p>
+                    <p className={`text-sm font-bold ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-emerald-700" : "text-amber-700"}`}>
+                      © {ed.copyrightYear}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -603,15 +734,15 @@ export default function CampaignDetailPage() {
   const [enriching, setEnriching] = useState(false);
   const [generatingScripts, setGeneratingScripts] = useState(false);
   const [callScripts, setCallScripts] = useState<{ lead_id: string; company: string; phone?: string; opening: string; script: string }[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv" | "csv_queued">("all");
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [leadSearch, setLeadSearch] = useState("");
   const [leadPage, setLeadPage] = useState(1);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
+  const [auditViews, setAuditViews] = useState<Record<string, { count: number; lastViewed: string; device: string }>>({});
   const LEADS_PER_PAGE = 10;
 
-  // Reset lead page when filters change
-  useEffect(() => { setLeadPage(1); }, [leadSearch, sourceFilter]);
+  // Reset lead page when search changes
+  useEffect(() => { setLeadPage(1); }, [leadSearch]);
 
   // Limit-reached states (disable buttons when daily cap hit)
   const [generateLimitReached, setGenerateLimitReached] = useState(false);
@@ -648,6 +779,11 @@ export default function CampaignDetailPage() {
           return { lead_id: l.id, company: l.company, phone: l.phone, opening: cs.opening || "", script: cs.script || "" };
         });
       if (existingScripts.length > 0) setCallScripts(existingScripts);
+
+      // Fetch audit view data for this campaign
+      apiGet<{ viewData: Record<string, { count: number; lastViewed: string; device: string }> }>(`/audit/views/campaign/${campaignId}`)
+        .then(vd => setAuditViews(vd.viewData))
+        .catch(() => {});
     } catch {
       toast.addToast("Failed to load campaign", "error");
     } finally {
@@ -842,6 +978,7 @@ export default function CampaignDetailPage() {
   const activeLeadCount = leads.length - queuedLeadCount;
   const sentEmailCount = emails.filter(e => e.status === "sent").length;
   const repliedEmailCount = emails.filter(e => e.replied).length;
+  const auditViewedCount = Object.keys(auditViews).length;
   const heroStatus = statusConfig[campaign.status] || statusConfig.draft;
 
   return (
@@ -982,6 +1119,20 @@ export default function CampaignDetailPage() {
                 </div>
               </>
             )}
+            {auditViewedCount > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-white">{auditViewedCount}</p>
+                    <p className="text-[10px] text-orange-400 uppercase tracking-wider">Viewed Audit</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1046,12 +1197,8 @@ export default function CampaignDetailPage() {
       {/* Leads Section */}
       <div className="mt-8">
         {(() => {
-          const sourceFiltered = sourceFilter === "all"
-            ? leads
-            : leads.filter(l => l.source_type === sourceFilter);
-
           const filteredLeads = leadSearch.trim()
-            ? sourceFiltered.filter(l => {
+            ? leads.filter(l => {
                 const q = leadSearch.toLowerCase();
                 return (
                   (l.name?.toLowerCase().includes(q)) ||
@@ -1060,7 +1207,7 @@ export default function CampaignDetailPage() {
                   (l.phone?.toLowerCase().includes(q))
                 );
               })
-            : sourceFiltered;
+            : leads;
 
           const contactedCount = filteredLeads.filter(l => l.contacted).length;
           const uncontactedCount = filteredLeads.filter(l => !l.contacted && l.source_type !== "csv_queued").length;
@@ -1069,7 +1216,7 @@ export default function CampaignDetailPage() {
           const leadStart = (leadPage - 1) * LEADS_PER_PAGE;
           const paginatedLeads = filteredLeads.slice(leadStart, leadStart + LEADS_PER_PAGE);
 
-          return filteredLeads.length === 0 ? (
+          return filteredLeads.length === 0 && leads.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
                 <div className="flex items-center gap-3">
@@ -1078,22 +1225,39 @@ export default function CampaignDetailPage() {
                   </div>
                   <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
                 </div>
-                <CustomSelect
-                  value={sourceFilter}
-                  onChange={(val) => {
-                    setSourceFilter(val as "all" | "auto_find" | "csv" | "csv_queued");
-                    setSelectedLeadIds(new Set());
-                  }}
-                  options={[
-                    { value: "all" as const, label: "All Sources" },
-                    { value: "auto_find" as const, label: "Auto-Find" },
-                    { value: "csv" as const, label: "CSV Upload" },
-                    { value: "csv_queued" as const, label: "Queued" },
-                  ]}
-                />
               </div>
               <div className="py-12 text-center">
-                <p className="text-sm text-gray-500">No leads found for this filter.</p>
+                <p className="text-sm text-gray-500">No leads in this campaign yet.</p>
+              </div>
+            </div>
+          ) : filteredLeads.length === 0 && leads.length > 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <SearchBar
+                    placeholder="Search leads..."
+                    value={leadSearch}
+                    onChange={setLeadSearch}
+                    className="w-64"
+                  />
+                </div>
+              </div>
+              <div className="py-12 text-center">
+                <p className="text-sm text-gray-500">No leads matching &ldquo;{leadSearch}&rdquo;</p>
+                <button
+                  onClick={() => setLeadSearch("")}
+                  className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Clear search
+                </button>
               </div>
             </div>
           ) : (
@@ -1118,19 +1282,6 @@ export default function CampaignDetailPage() {
                     value={leadSearch}
                     onChange={setLeadSearch}
                     className="w-64"
-                  />
-                  <CustomSelect
-                    value={sourceFilter}
-                    onChange={(val) => {
-                      setSourceFilter(val as "all" | "auto_find" | "csv" | "csv_queued");
-                      setSelectedLeadIds(new Set());
-                    }}
-                    options={[
-                      { value: "all" as const, label: "All Sources" },
-                      { value: "auto_find" as const, label: "Auto-Find" },
-                      { value: "csv" as const, label: "CSV Upload" },
-                      { value: "csv_queued" as const, label: "Queued" },
-                    ]}
                   />
                   {selectedLeadIds.size > 0 && (
                     <span className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg ring-1 ring-blue-200">
@@ -1247,6 +1398,12 @@ export default function CampaignDetailPage() {
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-500">
                                 <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                                 Uncontacted
+                              </span>
+                            )}
+                            {auditViews[lead.id] && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200 mt-1 ml-0">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                {auditViews[lead.id].count > 1 ? `${auditViews[lead.id].count} views` : formatTimeAgo(auditViews[lead.id].lastViewed)}
                               </span>
                             )}
                           </td>

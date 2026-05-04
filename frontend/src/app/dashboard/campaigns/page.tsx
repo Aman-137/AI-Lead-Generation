@@ -13,6 +13,7 @@ interface Campaign {
   status: string;
   total_leads: number;
   queued_leads: number;
+  source: string;
   created_at: string;
 }
 
@@ -21,6 +22,7 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv">("all");
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;
 
@@ -64,21 +66,30 @@ export default function CampaignsPage() {
   const activeCount = campaigns.filter(c => c.status === "running").length;
 
   const filteredCampaigns = useMemo(() => {
-    if (!search.trim()) return campaigns;
-    const q = search.toLowerCase();
-    return campaigns.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.status.toLowerCase().includes(q)
-    );
-  }, [campaigns, search]);
+    let filtered = campaigns;
+    if (sourceFilter !== "all") {
+      filtered = filtered.filter(c => {
+        if (sourceFilter === "csv") return c.source === "csv" || c.source === "mixed";
+        return c.source === sourceFilter || c.source === "mixed";
+      });
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.status.toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [campaigns, search, sourceFilter]);
 
   const paginatedCampaigns = useMemo(() => {
     const start = (page - 1) * PER_PAGE;
     return filteredCampaigns.slice(start, start + PER_PAGE);
   }, [filteredCampaigns, page]);
 
-  // Reset to page 1 when search changes
-  useEffect(() => { setPage(1); }, [search]);
+  // Reset to page 1 when search or filter changes
+  useEffect(() => { setPage(1); }, [search, sourceFilter]);
 
   return (
     <div>
@@ -169,14 +180,30 @@ export default function CampaignsPage() {
         New Campaign
       </Link>
 
-      {/* Search */}
+      {/* Search + Source Filter */}
       {!loading && campaigns.length > 0 && (
-        <SearchBar
-          placeholder="Search campaigns by name or status..."
-          value={search}
-          onChange={setSearch}
-          className="mb-6"
-        />
+        <div className="flex items-center gap-3 mb-6">
+          <SearchBar
+            placeholder="Search campaigns by name or status..."
+            value={search}
+            onChange={setSearch}
+            className="flex-1"
+          />
+          <div className="relative">
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value as "all" | "auto_find" | "csv")}
+              className="appearance-none text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 pr-9 hover:bg-gray-100 hover:border-gray-400 transition-all shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            >
+              <option value="all">All Sources</option>
+              <option value="auto_find">Auto-Find</option>
+              <option value="csv">CSV Upload</option>
+            </select>
+            <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       )}
 
       {/* Content */}
@@ -208,9 +235,9 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredCampaigns.length === 0 && search ? (
+          {filteredCampaigns.length === 0 && (search || sourceFilter !== "all") ? (
             <div className="bg-white rounded-2xl border border-gray-200 py-12 text-center">
-              <p className="text-sm text-gray-500">No campaigns matching &ldquo;{search}&rdquo;</p>
+              <p className="text-sm text-gray-500">No campaigns matching your filters</p>
             </div>
           ) : null}
           {paginatedCampaigns.map((campaign, index) => {
@@ -252,6 +279,15 @@ export default function CampaignsPage() {
                             {campaign.queued_leads} Queued
                           </span>
                         )}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-lg ${
+                          campaign.source === "auto_find"
+                            ? "bg-blue-50 text-blue-700"
+                            : campaign.source === "mixed"
+                            ? "bg-purple-50 text-purple-700"
+                            : "bg-teal-50 text-teal-700"
+                        }`}>
+                          {campaign.source === "auto_find" ? "Auto" : campaign.source === "mixed" ? "Mixed" : "CSV"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-5 mt-2">
                         <span className="flex items-center gap-1.5 text-xs text-gray-500">

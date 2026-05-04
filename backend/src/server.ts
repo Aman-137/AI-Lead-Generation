@@ -9,6 +9,7 @@ import sendRouter from "./routes/send";
 import gmailRouter from "./routes/gmail";
 import smtpRouter from "./routes/smtp";
 import statsRouter from "./routes/stats";
+import auditRouter from "./routes/audit";
 import { apiLimiter, sendEmailLimiter, generateLimiter } from "./middleware/rateLimit";
 import { sanitizeBody, validateCampaignId } from "./middleware/validate";
 import { startEmailQueue, stopEmailQueue } from "./jobs/emailQueue";
@@ -46,6 +47,7 @@ app.use("/api/send", sendEmailLimiter, validateCampaignId, sendRouter);
 app.use("/api/gmail", gmailRouter);
 app.use("/api/smtp", smtpRouter);
 app.use("/api/stats", statsRouter);
+app.use("/api/audit", auditRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => {

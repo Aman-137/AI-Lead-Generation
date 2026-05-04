@@ -17,6 +17,17 @@ const REQUIRED_ENV_VARS = [
   "FRONTEND_URL",
 ];
 
+// Optional but recommended
+const OPTIONAL_ENV_VARS = [
+  "PAGESPEED_API_KEY", // Google PageSpeed Insights — free 25k/day
+];
+
+for (const key of OPTIONAL_ENV_VARS) {
+  if (!process.env[key]) {
+    console.warn(`⚠️  Optional env var missing: ${key} — feature will be disabled`);
+  }
+}
+
 const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 if (missing.length > 0) {
   console.error(`\n❌ Missing required environment variables:\n   ${missing.join("\n   ")}\n`);

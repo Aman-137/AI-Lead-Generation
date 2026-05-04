@@ -533,9 +533,10 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
         try {
           const { scrapeWebsite, generateEnrichmentSummary } = await import("../services/scraper");
           const { scoreLead } = await import("../services/leadScoring");
+          const { discoverWebsite } = await import("../services/leadFinder");
           const { data: leadsToScrape } = await supabase
             .from("leads")
-            .select("id, website, email, phone, company, campaign_id")
+            .select("id, website, email, phone, company, industry, campaign_id")
             .in("id", leadIdsToScrape);
 
           if (!leadsToScrape) return;
@@ -546,8 +547,19 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
             const batch = leadsToScrape.slice(i, i + SCRAPE_BATCH);
             await Promise.all(batch.map(async (lead: any) => {
               try {
-                if (!lead.website) {
-                  // No website — score based on what we know (high opportunity if they have contact info)
+                let websiteUrl = lead.website;
+
+                // If no website, try to discover one via web search
+                if (!websiteUrl) {
+                  const discovered = await discoverWebsite(lead.company, lead.industry);
+                  if (discovered) {
+                    websiteUrl = discovered;
+                    await supabase.from("leads").update({ website: discovered }).eq("id", lead.id);
+                  }
+                }
+
+                if (!websiteUrl) {
+                  // Still no website — score based on what we know
                   if (!lead.email && !lead.phone) {
                     leadsToDelete.push({ id: lead.id, campaignId: lead.campaign_id });
                   } else {
@@ -556,11 +568,11 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
                   }
                   return;
                 }
-                const websiteData = await scrapeWebsite(lead.website);
+                const websiteData = await scrapeWebsite(websiteUrl);
                 if (!websiteData) {
                   // Scrape failed but lead has contact info — still score it (no website data = high opportunity)
                   if (lead.email || lead.phone) {
-                    const score = scoreLead({ website: lead.website, company: lead.company });
+                    const score = scoreLead({ website: websiteUrl, company: lead.company });
                     await supabase.from("leads").update({ score }).eq("id", lead.id);
                   } else {
                     leadsToDelete.push({ id: lead.id, campaignId: lead.campaign_id });
@@ -570,7 +582,7 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
 
                 const enrichmentSummary = generateEnrichmentSummary(websiteData, lead.company);
                 const score = scoreLead({
-                  website: lead.website,
+                  website: websiteUrl,
                   enriched_data: websiteData as any,
                   company: lead.company,
                 });
@@ -691,6 +703,7 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
 
     const { scrapeWebsite, generateEnrichmentSummary } = await import("../services/scraper");
     const { scoreLead } = await import("../services/leadScoring");
+    const { getPageSpeedScores } = await import("../services/pageSpeed");
 
     // Fetch leads
     const { data: leads, error: leadsError } = await supabase
@@ -713,8 +726,27 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
       const batchResults = await Promise.all(batch.map(async (lead) => {
         try {
           let websiteData = null;
-          if (lead.website) {
-            websiteData = await scrapeWebsite(lead.website);
+          let websiteUrl = lead.website;
+
+          // If no website, try to discover one via web search
+          if (!websiteUrl) {
+            const { discoverWebsite } = await import("../services/leadFinder");
+            const discovered = await discoverWebsite(lead.company, lead.industry);
+            if (discovered) {
+              websiteUrl = discovered;
+              // Save discovered website to the lead
+              await supabase.from("leads").update({ website: discovered }).eq("id", lead.id).eq("user_id", req.userId);
+            }
+          }
+
+          if (websiteUrl) {
+            websiteData = await scrapeWebsite(websiteUrl);
+          }
+
+          // Fetch PageSpeed scores in parallel with scraping (non-blocking, graceful fallback)
+          let pageSpeedData = null;
+          if (websiteUrl && websiteData && !websiteData._siteDown && !websiteData.isParkedDomain) {
+            pageSpeedData = await getPageSpeedScores(websiteUrl);
           }
 
           const enrichmentSummary = generateEnrichmentSummary(
@@ -724,7 +756,10 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
 
           const score = scoreLead({
             website: lead.website,
-            enriched_data: websiteData as any,
+            enriched_data: {
+              ...websiteData as any,
+              pageSpeed: pageSpeedData || undefined,
+            },
             company: lead.company,
           });
 
@@ -734,6 +769,8 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
               ...enrichmentSummary,
               // Industry priority: lead.industry (from niche search / CSV) > scraper detection
               industry: lead.industry || websiteData?.industry || "Unknown",
+              // PageSpeed Insights data (null if API unavailable — graceful)
+              ...(pageSpeedData ? { pageSpeed: pageSpeedData } : {}),
             },
             score,
           };

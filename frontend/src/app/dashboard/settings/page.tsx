@@ -1,9 +1,77 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { SettingsAccountSkeleton } from "../Skeleton";
+
+// ===== Toast Notification System =====
+type ToastType = "success" | "error" | "info";
+
+interface Toast {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+
+let toastIdCounter = 0;
+
+function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((message: string, type: ToastType = "info") => {
+    const id = ++toastIdCounter;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  return { toasts, addToast, removeToast };
+}
+
+function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast: (id: number) => void }) {
+  if (toasts.length === 0) return null;
+
+  const styles: Record<ToastType, string> = {
+    success: "bg-green-600 text-white",
+    error: "bg-red-600 text-white",
+    info: "bg-gray-800 text-white",
+  };
+
+  const icons: Record<ToastType, string> = {
+    success: "✓",
+    error: "✕",
+    info: "ℹ",
+  };
+
+  return (
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+      {toasts.map(toast => (
+        <div
+          key={toast.id}
+          className={`${styles[toast.type]} px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm`}
+          role="alert"
+        >
+          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
+            {icons[toast.type]}
+          </span>
+          <span className="flex-1">{toast.message}</span>
+          <button
+            onClick={() => removeToast(toast.id)}
+            className="flex-shrink-0 text-white/70 hover:text-white text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface GmailAccount {
   id: string;
@@ -117,6 +185,12 @@ export default function SettingsPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Service type state
+  const [serviceType, setServiceType] = useState("web_dev");
+  const [savedServiceType, setSavedServiceType] = useState("web_dev");
+  const [serviceTypeSaving, setServiceTypeSaving] = useState(false);
+  const toast = useToast();
+
   const totalInboxes = gmailAccounts.length + smtpAccounts.length;
 
   const fetchAccounts = useCallback(async () => {
@@ -152,6 +226,13 @@ export default function SettingsPage() {
       if (!user?.user_metadata?.full_name) setProfileEditing(true);
     };
     loadProfile();
+    // Load service type from stats
+    apiGet<{ serviceType?: string }>("/stats").then((data) => {
+      if (data.serviceType) {
+        setServiceType(data.serviceType);
+        setSavedServiceType(data.serviceType);
+      }
+    }).catch(() => {});
   }, [fetchAccounts]);
 
   const saveProfile = async () => {
@@ -372,6 +453,9 @@ export default function SettingsPage() {
 
   return (
     <div>
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
+
       {/* Hero Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
         <div className="absolute inset-0">
@@ -637,27 +721,6 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-        </div>
-
-        {/* Email Accounts Divider */}
-        <div className="lg:col-span-2 flex items-center gap-4 mt-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm shadow-indigo-300">
-              <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Email Accounts</h2>
-              <p className="text-xs text-gray-500">
-                Connect and manage your inboxes&nbsp;
-                <span className="inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-[10px]">
-                  {totalInboxes}/{maxInboxes} USED
-                </span>
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 h-px bg-gradient-to-r from-indigo-200 to-transparent" />
         </div>
 
         {/* Gmail Card */}
@@ -971,6 +1034,81 @@ export default function SettingsPage() {
                 Upgrade your plan to connect more inboxes
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Service Type Card */}
+        <div className="bg-violet-50 rounded-2xl shadow-sm border-2 border-violet-200 overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-violet-100 to-purple-100 border-b border-violet-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm shadow-violet-300">
+                  <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Your Service</h2>
+                  <p className="text-xs text-gray-500">Controls AI email pitch style</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (serviceType === savedServiceType) return;
+                  setServiceTypeSaving(true);
+                  try {
+                    await apiPut("/stats/service-type", { serviceType });
+                    setSavedServiceType(serviceType);
+                    // Mark service type as explicitly set (for onboarding detection)
+                    const supabase = createClient();
+                    await supabase.auth.updateUser({ data: { service_type_set: true } });
+                    toast.addToast("Service type updated", "success");
+                  } catch {
+                    setServiceType(savedServiceType);
+                    toast.addToast("Failed to update service type", "error");
+                  } finally {
+                    setServiceTypeSaving(false);
+                  }
+                }}
+                disabled={serviceTypeSaving || serviceType === savedServiceType}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
+              >
+                {serviceTypeSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { value: "web_dev", label: "Web Design & Dev", icon: "🌐" },
+                { value: "seo", label: "SEO", icon: "🔍" },
+                { value: "digital_marketing", label: "Digital Marketing", icon: "📈" },
+                { value: "social_media", label: "Social Media", icon: "📱" },
+              ] as const).map((opt) => {
+                const isSelected = serviceType === opt.value;
+                const isSaved = savedServiceType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setServiceType(opt.value)}
+                    disabled={serviceTypeSaving}
+                    className={`relative flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl text-center transition-all ${
+                      isSelected
+                        ? "bg-violet-100 border-2 border-violet-500 shadow-sm shadow-violet-200"
+                        : "bg-white border-2 border-gray-200 hover:border-violet-300 hover:bg-violet-50"
+                    }`}
+                  >
+                    {isSelected && isSaved && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                    )}
+                    <span className="text-2xl">{opt.icon}</span>
+                    <span className={`text-xs font-semibold ${isSelected ? "text-violet-900" : "text-gray-700"}`}>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

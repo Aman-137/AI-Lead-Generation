@@ -15,6 +15,8 @@ export interface FoundLead {
   phone?: string;
   industry?: string;
   address?: string;
+  rating?: number;
+  ratingCount?: number;
 }
 
 interface SerperPlace {
@@ -84,6 +86,8 @@ export async function findLeadsByNiche(
           phone: place.phone || place.phoneNumber || "",
           industry: place.category || niche,
           address: place.address || "",
+          rating: place.rating,
+          ratingCount: place.ratingCount,
         });
       }
 
@@ -140,7 +144,56 @@ export function formatLeadsForDB(
         phone: lead.phone || "",
         industry: lead.industry || "",
         contact_method: hasEmail ? "email" : "call",
-        enriched_data: lead.address ? { address: lead.address } : undefined,
+        enriched_data: {
+          ...(lead.address ? { address: lead.address } : {}),
+          ...(lead.rating !== undefined ? { googleRating: lead.rating } : {}),
+          ...(lead.ratingCount !== undefined ? { googleReviewCount: lead.ratingCount } : {}),
+        },
       };
     });
+}
+
+/**
+ * Discover a business website via Serper web search when Places API didn't return one
+ */
+export async function discoverWebsite(companyName: string, industry?: string): Promise<string | null> {
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const query = industry ? `${companyName} ${industry} official website` : `${companyName} official website`;
+    const response = await axios.post(
+      "https://google.serper.dev/search",
+      { q: query, num: 5 },
+      {
+        headers: {
+          "X-API-KEY": apiKey,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      }
+    );
+
+    const results = response.data?.organic || [];
+    // Skip aggregator/directory sites — we want the actual business website
+    const skipDomains = [
+      "facebook.com", "instagram.com", "twitter.com", "x.com", "linkedin.com",
+      "yelp.com", "yellowpages.com", "bbb.org", "mapquest.com", "tripadvisor.com",
+      "nextdoor.com", "thumbtack.com", "angi.com", "homeadvisor.com", "manta.com",
+      "chamberofcommerce.com", "google.com", "apple.com/maps", "pinterest.com",
+    ];
+
+    for (const result of results) {
+      const link: string = result.link || "";
+      if (!link.startsWith("http")) continue;
+      const domain = new URL(link).hostname.toLowerCase().replace("www.", "");
+      if (skipDomains.some(skip => domain.includes(skip))) continue;
+      // Return the root domain URL
+      const parsed = new URL(link);
+      return `${parsed.protocol}//${parsed.hostname}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }

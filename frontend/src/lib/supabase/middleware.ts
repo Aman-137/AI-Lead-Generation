@@ -35,7 +35,7 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect unauthenticated users to login (except for public routes)
   const publicRoutes = ["/login", "/signup", "/", "/verify-email", "/forgot-password", "/reset-password", "/privacy", "/terms"];
-  const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname);
+  const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/audit");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

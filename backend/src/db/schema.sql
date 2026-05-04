@@ -128,6 +128,7 @@ create table if not exists user_plans (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null unique,
   plan text not null default 'starter' check (plan in ('starter', 'growth', 'agency')),
+  service_type text not null default 'web_dev' check (service_type in ('web_dev', 'seo', 'digital_marketing', 'social_media')),
   gmail_connected_at timestamp with time zone,
   is_active boolean default true,
   leads_found_this_month integer default 0,
@@ -423,6 +424,37 @@ values
   ('email_queue', '2000-01-01T00:00:00Z', ''),
   ('csv_drip_feed', '2000-01-01T00:00:00Z', '')
 on conflict (lock_name) do nothing;
+
+-- =============================================
+-- Table: audit_views (track when leads view their audit report)
+-- =============================================
+-- Records each time a lead opens their personalized audit report link.
+-- Used to notify the sender that a lead is engaged (hot lead signal).
+create table if not exists audit_views (
+  id uuid primary key default uuid_generate_v4(),
+  lead_id uuid references leads(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  ip_hash text default '',
+  device text default 'desktop',
+  viewed_at timestamp with time zone default now()
+);
+
+-- Indexes for fast lookups
+create index if not exists idx_audit_views_lead_id on audit_views(lead_id);
+create index if not exists idx_audit_views_user_id on audit_views(user_id);
+create index if not exists idx_audit_views_viewed_at on audit_views(viewed_at);
+
+-- RLS: Users can only see views for their own leads
+alter table audit_views enable row level security;
+
+create policy "Users can view their own audit views"
+  on audit_views for select using (auth.uid() = user_id);
+
+create policy "Service can insert audit views"
+  on audit_views for insert with check (true);
+
+create policy "Users can delete their own audit views"
+  on audit_views for delete using (auth.uid() = user_id);
 
 -- RPC: Attempt to acquire a named lock.
 -- Returns true if acquired, false if another instance holds it.

@@ -105,8 +105,11 @@ function isDailyCounterExpired(resetAt: string | null, tz: string): boolean {
 // =============================================
 // Get or create user plan
 // =============================================
+export type ServiceType = "web_dev" | "seo" | "digital_marketing" | "social_media";
+
 export async function getUserPlan(userId: string): Promise<{
   plan: PlanTier;
+  serviceType: ServiceType;
   gmailConnectedAt: string | null;
   isActive: boolean;
   leadsFoundThisMonth: number;
@@ -157,6 +160,7 @@ export async function getUserPlan(userId: string): Promise<{
       // (these are NOT written to the DB, so no counter reset)
       return {
         plan: DEFAULT_PLAN,
+        serviceType: "web_dev" as ServiceType,
         gmailConnectedAt: null,
         isActive: true,
         leadsFoundThisMonth: 0,
@@ -175,6 +179,7 @@ export async function getUserPlan(userId: string): Promise<{
     const tz = plan2.timezone || "UTC";
     return {
       plan: plan2.plan as PlanTier,
+      serviceType: (plan2.service_type || "web_dev") as ServiceType,
       gmailConnectedAt: plan2.gmail_connected_at,
       isActive: plan2.is_active,
       leadsFoundThisMonth: plan2.leads_found_this_month || 0,
@@ -207,6 +212,7 @@ export async function getUserPlan(userId: string): Promise<{
 
   return {
     plan: data.plan as PlanTier,
+    serviceType: (data.service_type || "web_dev") as ServiceType,
     gmailConnectedAt: data.gmail_connected_at,
     isActive: data.is_active,
     leadsFoundThisMonth: data.leads_found_this_month || 0,
@@ -461,6 +467,7 @@ export async function setGmailConnectedAt(userId: string): Promise<void> {
 // =============================================
 export async function getPlanInfo(userId: string): Promise<{
   plan: PlanTier;
+  serviceType: ServiceType;
   planLabel: string;
   priceMonthly: number;
   dailyLimit: number;
@@ -490,6 +497,7 @@ export async function getPlanInfo(userId: string): Promise<{
 
   return {
     plan: userPlan.plan,
+    serviceType: userPlan.serviceType,
     planLabel: planLabels[userPlan.plan],
     priceMonthly: config.priceMonthly,
     dailyLimit: dailyInfo.limit,
