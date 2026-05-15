@@ -59,11 +59,13 @@ export default function CampaignsPage() {
     draft: { bg: "bg-gray-50", text: "text-gray-700", dot: "bg-gray-400", label: "Draft" },
     running: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Running" },
     completed: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Completed" },
+    failed: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Failed" },
   };
 
   const totalLeads = campaigns.reduce((sum, c) => sum + c.total_leads, 0);
   const draftCount = campaigns.filter(c => c.status === "draft").length;
   const activeCount = campaigns.filter(c => c.status === "running").length;
+  const failedCount = campaigns.filter(c => c.status === "failed").length;
 
   const filteredCampaigns = useMemo(() => {
     let filtered = campaigns;
@@ -162,6 +164,17 @@ export default function CampaignsPage() {
                     <span className="text-xs font-bold text-blue-400">{activeCount}</span>
                   </div>
                   <p className="text-xs text-gray-400">Active</p>
+                </div>
+              </>
+            )}
+            {failedCount > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                    <span className="text-xs font-bold text-red-400">{failedCount}</span>
+                  </div>
+                  <p className="text-xs text-gray-400">Failed</p>
                 </div>
               </>
             )}

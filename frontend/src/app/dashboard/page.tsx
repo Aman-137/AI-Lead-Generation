@@ -25,6 +25,7 @@ interface Stats {
   warmupDay: number;
   warmupComplete: boolean;
   warmupWeek: number;
+  warmupPaused: boolean;
   leadsFoundThisMonth: number;
   monthlyLeadFindLimit: number;
   leadsFoundToday: number;
@@ -87,7 +88,7 @@ export default function DashboardPage() {
     emailsFailed: 0, repliesReceived: 0, replyRate: "0.0%", avgLeadScore: 0,
     callLeads: 0, sentToday: 0, dailySendLimit: 0,
     plan: "starter", planLabel: "Starter", priceMonthly: 39,
-    maxDailyEmails: 50, warmupDay: 0, warmupComplete: false, warmupWeek: 0,
+    maxDailyEmails: 50, warmupDay: 0, warmupComplete: false, warmupWeek: 0, warmupPaused: false,
     leadsFoundThisMonth: 0, monthlyLeadFindLimit: 100,
     leadsFoundToday: 0, dailyLeadFindLimit: 50,
   });
@@ -178,9 +179,14 @@ export default function DashboardPage() {
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30">
                 {stats.planLabel} Plan
               </span>
-              {stats.warmupDay > 0 && !stats.warmupComplete && (
+              {stats.warmupDay > 0 && !stats.warmupComplete && !stats.warmupPaused && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30">
                   ⏳ Warmup Day {stats.warmupDay}/21
+                </span>
+              )}
+              {stats.warmupPaused && !stats.warmupComplete && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-500/20 text-slate-300 ring-1 ring-slate-500/30">
+                  ⏸ Warmup Paused
                 </span>
               )}
               {stats.warmupComplete && (
@@ -416,50 +422,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Hot Activity — Audit Views */}
-      {auditViews.views.length > 0 && (
-        <div className="bg-orange-50 rounded-2xl border-2 border-orange-200 p-6 mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
-              <svg className="w-4.5 h-4.5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-orange-900">Hot Leads — Audit Viewed</p>
-              <p className="text-xs text-orange-600">These leads opened their website audit report</p>
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            {auditViews.views.slice(0, 5).map((view) => {
-              const lead = auditViews.leads[view.lead_id];
-              const diff = Date.now() - new Date(view.viewed_at).getTime();
-              const mins = Math.floor(diff / 60000);
-              const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;
-              return (
-                <div key={view.id} className="flex items-center gap-3 bg-white/70 rounded-xl px-4 py-3 border border-orange-100">
-                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 capitalize truncate">
-                      {lead?.company || "Unknown Lead"}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Viewed audit report · {view.device === "mobile" ? "📱 Mobile" : "💻 Desktop"}
-                    </p>
-                  </div>
-                  <span className="text-xs font-medium text-orange-700 flex-shrink-0">{timeAgo}</span>
-                </div>
-              );
-            })}
-          </div>
-          {auditViews.views.length > 5 && (
-            <p className="text-xs text-orange-500 mt-3 text-center font-medium">
-              +{auditViews.views.length - 5} more views
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Analytics Row — Circular Gauges */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         {/* Daily Usage */}
@@ -527,26 +489,33 @@ export default function DashboardPage() {
       </div>
 
       {/* Warmup Progress */}
-      {!loading && stats.warmupDay > 0 && !stats.warmupComplete && (
-        <div className="bg-orange-50 rounded-2xl border-2 border-orange-200 p-6 mb-6">
+      {!loading && !stats.warmupComplete && (stats.warmupDay > 0 || stats.warmupPaused) && (
+        <div className={`rounded-2xl border-2 p-6 mb-6 ${stats.warmupPaused ? 'bg-slate-50 border-slate-200' : 'bg-orange-50 border-orange-200'}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stats.warmupPaused ? 'bg-slate-100' : 'bg-orange-100'}`}>
+                <svg className={`w-5 h-5 ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
                 </svg>
               </div>
               <div>
-                <p className="text-base font-bold text-orange-900">Email Warmup in Progress</p>
-                <p className="text-sm text-orange-700">
-                  Week {stats.warmupWeek} · Day {stats.warmupDay}/21 · Sending up to {stats.dailySendLimit}/day
+                <p className={`text-base font-bold ${stats.warmupPaused ? 'text-slate-900' : 'text-orange-900'}`}>
+                  {stats.warmupPaused ? 'Email Warmup Paused' : 'Email Warmup in Progress'}
+                </p>
+                <p className={`text-sm ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-700'}`}>
+                  {stats.warmupPaused
+                    ? stats.warmupDay === 0
+                      ? 'Send your first emails to begin warmup'
+                      : `Day ${stats.warmupDay}/21 · Send emails to continue warmup`
+                    : `Week ${stats.warmupWeek} · Day ${stats.warmupDay}/21 · Sending up to ${stats.dailySendLimit}/day`
+                  }
                 </p>
               </div>
             </div>
-            <span className="text-lg font-bold text-orange-700">{Math.round((stats.warmupDay / 21) * 100)}%</span>
+            <span className={`text-lg font-bold ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-700'}`}>{Math.round((stats.warmupDay / 21) * 100)}%</span>
           </div>
-          <div className="w-full bg-orange-100 rounded-full h-3 overflow-hidden">
-            <div className="h-3 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 transition-all duration-700"
+          <div className={`w-full rounded-full h-3 overflow-hidden ${stats.warmupPaused ? 'bg-slate-200' : 'bg-orange-100'}`}>
+            <div className={`h-3 rounded-full transition-all duration-700 ${stats.warmupPaused ? 'bg-slate-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`}
               style={{ width: `${Math.min(100, (stats.warmupDay / 21) * 100)}%` }} />
           </div>
         </div>

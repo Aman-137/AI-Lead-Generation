@@ -703,7 +703,6 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
 
     const { scrapeWebsite, generateEnrichmentSummary } = await import("../services/scraper");
     const { scoreLead } = await import("../services/leadScoring");
-    const { getPageSpeedScores } = await import("../services/pageSpeed");
 
     // Fetch leads
     const { data: leads, error: leadsError } = await supabase
@@ -743,12 +742,6 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
             websiteData = await scrapeWebsite(websiteUrl);
           }
 
-          // Fetch PageSpeed scores in parallel with scraping (non-blocking, graceful fallback)
-          let pageSpeedData = null;
-          if (websiteUrl && websiteData && !websiteData._siteDown && !websiteData.isParkedDomain) {
-            pageSpeedData = await getPageSpeedScores(websiteUrl);
-          }
-
           const enrichmentSummary = generateEnrichmentSummary(
             websiteData,
             lead.company
@@ -758,7 +751,6 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
             website: lead.website,
             enriched_data: {
               ...websiteData as any,
-              pageSpeed: pageSpeedData || undefined,
             },
             company: lead.company,
           });
@@ -769,8 +761,6 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
               ...enrichmentSummary,
               // Industry priority: lead.industry (from niche search / CSV) > scraper detection
               industry: lead.industry || websiteData?.industry || "Unknown",
-              // PageSpeed Insights data (null if API unavailable — graceful)
-              ...(pageSpeedData ? { pageSpeed: pageSpeedData } : {}),
             },
             score,
           };

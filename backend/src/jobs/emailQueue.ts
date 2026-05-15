@@ -135,6 +135,22 @@ async function handleSendError(email: any, err: unknown): Promise<void> {
       })
       .eq("id", email.id);
     logger.error({ emailId: email.id, retries: MAX_RETRIES, error: errorMsg }, "Email failed permanently");
+
+    // If the initial email failed permanently, cancel all its follow-ups
+    // (no point sending follow-up #2/#3 if the first email never reached the lead)
+    if ((email.sequence_step || 1) === 1 && email.lead_id && email.campaign_id) {
+      const { data: cancelled } = await supabase
+        .from("emails")
+        .update({ status: "cancelled", error_log: "Cancelled: initial email failed" })
+        .eq("lead_id", email.lead_id)
+        .eq("campaign_id", email.campaign_id)
+        .eq("status", "pending")
+        .gt("sequence_step", 1)
+        .select("id");
+      if (cancelled && cancelled.length > 0) {
+        logger.info({ emailId: email.id, leadId: email.lead_id, cancelledCount: cancelled.length }, "Cancelled follow-ups for failed initial email");
+      }
+    }
   }
 }
 
@@ -263,6 +279,28 @@ async function processEmailQueue() {
         }
       }
 
+      // ===== CANCEL ORPHANED FOLLOW-UPS =====
+      // If any initial emails failed permanently, cancel their pending follow-ups
+      const { data: failedInitials } = await supabase
+        .from("emails")
+        .select("lead_id")
+        .eq("campaign_id", campaign.id)
+        .eq("sequence_step", 1)
+        .eq("status", "failed");
+
+      if (failedInitials && failedInitials.length > 0) {
+        const failedLeadIds = failedInitials.map(e => e.lead_id).filter(Boolean);
+        if (failedLeadIds.length > 0) {
+          await supabase
+            .from("emails")
+            .update({ status: "cancelled", error_log: "Cancelled: initial email failed" })
+            .eq("campaign_id", campaign.id)
+            .eq("status", "pending")
+            .gt("sequence_step", 1)
+            .in("lead_id", failedLeadIds);
+        }
+      }
+
       // ===== CHECK IF CAMPAIGN IS DONE =====
       const { count: pendingCount } = await supabase
         .from("emails")
@@ -271,11 +309,19 @@ async function processEmailQueue() {
         .eq("status", "pending");
 
       if (pendingCount === 0) {
+        // Check if any emails were actually sent successfully
+        const { count: sentCount } = await supabase
+          .from("emails")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", campaign.id)
+          .eq("status", "sent");
+
+        const finalStatus = (sentCount && sentCount > 0) ? "completed" : "failed";
         await supabase
           .from("campaigns")
-          .update({ status: "completed" })
+          .update({ status: finalStatus })
           .eq("id", campaign.id);
-        logger.info({ campaignId: campaign.id }, "Campaign completed");
+        logger.info({ campaignId: campaign.id, status: finalStatus, sentCount }, `Campaign ${finalStatus}`);
       }
     }
   } catch (err) {

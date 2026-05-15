@@ -49,6 +49,17 @@ const navItems = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
     ),
   },
+  {
+    href: "/dashboard/hot-leads",
+    label: "Hot Leads",
+    activeBg: "bg-orange-500/15",
+    hoverBg: "group-hover:bg-orange-500/15",
+    activeIcon: "text-orange-400",
+    hoverIcon: "group-hover:text-orange-400",
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+    ),
+  },
 ];
 
 export default function SidebarNav() {

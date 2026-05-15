@@ -313,7 +313,15 @@ export async function removeGmailAccount(userId: string, accountId: string): Pro
     .single();
 
   if (!data) throw new Error("Gmail account not found");
-  if (data.is_primary) throw new Error("Cannot remove your primary Gmail account");
+
+  // Allow removing primary only if it's the sole account (for reconnection)
+  if (data.is_primary) {
+    const { count } = await supabase
+      .from("gmail_accounts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+    if (count && count > 1) throw new Error("Cannot remove your primary Gmail account while other accounts exist. Remove secondary accounts first.");
+  }
 
   // Reassign pending emails from this inbox to the primary inbox
   const primaryId = await getPrimaryGmailAccountId(userId);

@@ -66,6 +66,7 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       maxDailyEmails: planInfo.maxDailyEmails,
       warmupDay: planInfo.warmupDay,
       warmupComplete: planInfo.warmupComplete,
+      warmupPaused: planInfo.warmupPaused,
       warmupWeek: planInfo.warmupWeek,
       leadsFoundThisMonth: planInfo.leadsFoundThisMonth,
       monthlyLeadFindLimit: planInfo.monthlyLeadFindLimit,
@@ -197,6 +198,7 @@ router.put("/timezone", authMiddleware, async (req: AuthenticatedRequest, res) =
 
 // PUT /api/stats/service-type — Set user's service type for AI email generation
 const VALID_SERVICE_TYPES: ServiceType[] = ["web_dev", "seo", "digital_marketing", "social_media"];
+// social_media is accepted for backward compat but treated as digital_marketing
 router.put("/service-type", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { serviceType } = req.body;

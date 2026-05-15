@@ -106,6 +106,7 @@ function isDailyCounterExpired(resetAt: string | null, tz: string): boolean {
 // Get or create user plan
 // =============================================
 export type ServiceType = "web_dev" | "seo" | "digital_marketing" | "social_media";
+// NOTE: social_media is deprecated — treated as digital_marketing. Kept for backward compat.
 
 export async function getUserPlan(userId: string): Promise<{
   plan: PlanTier;
@@ -228,14 +229,53 @@ export async function getUserPlan(userId: string): Promise<{
 }
 
 // =============================================
-// Calculate warmup day (days since Gmail connected)
+// Calculate warmup day (based on actual sending activity)
+// Counts distinct days the user has sent at least 1 email.
+// Also detects if warmup is "paused" (no sends in last 48h).
 // =============================================
-function getWarmupDay(gmailConnectedAt: string | null): number {
-  if (!gmailConnectedAt) return 0; // Gmail not connected yet
-  const connected = new Date(gmailConnectedAt);
-  const now = new Date();
-  const diffMs = now.getTime() - connected.getTime();
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // Day 1 = connection day
+async function getWarmupInfo(userId: string, gmailConnectedAt: string | null): Promise<{
+  warmupDay: number;
+  warmupPaused: boolean;
+  lastSentAt: string | null;
+}> {
+  if (!gmailConnectedAt) return { warmupDay: 0, warmupPaused: false, lastSentAt: null };
+
+  // Count distinct days user has sent at least 1 email
+  const { data: sentDays, error } = await supabase
+    .from("emails")
+    .select("sent_at")
+    .eq("user_id", userId)
+    .eq("status", "sent")
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: true });
+
+  if (error || !sentDays || sentDays.length === 0) {
+    // Gmail connected but never sent — day 0, paused
+    return { warmupDay: 0, warmupPaused: true, lastSentAt: null };
+  }
+
+  // Count unique calendar days (UTC)
+  const uniqueDays = new Set<string>();
+  let lastSentAt: string | null = null;
+  for (const row of sentDays) {
+    if (row.sent_at) {
+      const day = row.sent_at.substring(0, 10); // "YYYY-MM-DD"
+      uniqueDays.add(day);
+      lastSentAt = row.sent_at;
+    }
+  }
+
+  const warmupDay = uniqueDays.size;
+
+  // Paused = no email sent in the last 48 hours
+  let warmupPaused = true;
+  if (lastSentAt) {
+    const lastSent = new Date(lastSentAt);
+    const hoursSinceLastSend = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+    warmupPaused = hoursSinceLastSend > 48;
+  }
+
+  return { warmupDay, warmupPaused, lastSentAt };
 }
 
 // =============================================
@@ -246,19 +286,33 @@ export async function getDailyLimit(userId: string): Promise<{
   plan: PlanTier;
   warmupDay: number;
   warmupComplete: boolean;
+  warmupPaused: boolean;
   maxCap: number;
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
-  const warmupDay = getWarmupDay(userPlan.gmailConnectedAt);
+  const { warmupDay, warmupPaused } = await getWarmupInfo(userId, userPlan.gmailConnectedAt);
 
   // Gmail not connected — no sending allowed
-  if (warmupDay === 0) {
+  if (!userPlan.gmailConnectedAt) {
     return {
       limit: 0,
       plan: userPlan.plan,
       warmupDay: 0,
       warmupComplete: false,
+      warmupPaused: false,
+      maxCap: config.maxDailyEmails,
+    };
+  }
+
+  // Never sent any email — allow week 1 limit so they can start
+  if (warmupDay === 0) {
+    return {
+      limit: config.warmup[0],
+      plan: userPlan.plan,
+      warmupDay: 0,
+      warmupComplete: false,
+      warmupPaused: true,
       maxCap: config.maxDailyEmails,
     };
   }
@@ -286,6 +340,7 @@ export async function getDailyLimit(userId: string): Promise<{
     plan: userPlan.plan,
     warmupDay,
     warmupComplete,
+    warmupPaused,
     maxCap: config.maxDailyEmails,
   };
 }
@@ -474,6 +529,7 @@ export async function getPlanInfo(userId: string): Promise<{
   maxDailyEmails: number;
   warmupDay: number;
   warmupComplete: boolean;
+  warmupPaused: boolean;
   warmupWeek: number;
   leadsFoundThisMonth: number;
   monthlyLeadFindLimit: number;
@@ -504,6 +560,7 @@ export async function getPlanInfo(userId: string): Promise<{
     maxDailyEmails: config.maxDailyEmails,
     warmupDay: dailyInfo.warmupDay,
     warmupComplete: dailyInfo.warmupComplete,
+    warmupPaused: dailyInfo.warmupPaused,
     warmupWeek,
     leadsFoundThisMonth: userPlan.leadsFoundThisMonth,
     monthlyLeadFindLimit: config.monthlyLeadFindLimit,

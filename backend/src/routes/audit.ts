@@ -2,6 +2,8 @@ import { Router } from "express";
 import crypto from "crypto";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
+import { getPageSpeedScores } from "../services/pageSpeed";
+import { getUserPlan } from "../services/planLimits";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -20,7 +22,7 @@ router.post("/generate", authMiddleware, async (req: AuthenticatedRequest, res) 
     // Fetch lead (must belong to user)
     const { data: lead, error } = await supabase
       .from("leads")
-      .select("id, enriched_data")
+      .select("id, website, enriched_data")
       .eq("id", leadId)
       .eq("user_id", req.userId)
       .single();
@@ -40,23 +42,33 @@ router.post("/generate", authMiddleware, async (req: AuthenticatedRequest, res) 
       return;
     }
 
-    // Check lead has enriched data
-    if (!lead.enriched_data || (!lead.enriched_data.hasOnlineBooking && lead.enriched_data.hasOnlineBooking !== false)) {
+    // Check lead has enriched data (any non-empty object means it was processed)
+    if (!lead.enriched_data || Object.keys(lead.enriched_data).length === 0) {
       res.status(400).json({ error: "Lead must be enriched before generating an audit report. Click 'Enrich Leads' first." });
       return;
     }
 
+    // Get user's service type to store with the audit
+    const userPlan = await getUserPlan(req.userId!);
+    const serviceType = userPlan.serviceType;
+
     // Generate a short, URL-safe token
     const token = crypto.randomBytes(12).toString("base64url"); // 16-char token
 
-    // Store token in enriched_data
+    // Fetch PageSpeed only for web_dev and seo (not needed for digital_marketing)
+    let enrichedUpdate = { ...lead.enriched_data, audit_token: token, audit_service_type: serviceType };
+    const needsPageSpeed = (serviceType === "web_dev" || serviceType === "seo") && !lead.enriched_data.pageSpeed && lead.website && !lead.enriched_data._siteDown && !lead.enriched_data.isParkedDomain;
+    if (needsPageSpeed) {
+      const pageSpeedData = await getPageSpeedScores(lead.website);
+      if (pageSpeedData) {
+        enrichedUpdate.pageSpeed = pageSpeedData;
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("leads")
       .update({
-        enriched_data: {
-          ...lead.enriched_data,
-          audit_token: token,
-        },
+        enriched_data: enrichedUpdate,
       })
       .eq("id", leadId)
       .eq("user_id", req.userId);
@@ -76,6 +88,114 @@ router.post("/generate", authMiddleware, async (req: AuthenticatedRequest, res) 
   } catch (err) {
     logger.error({ err }, "Audit generate error");
     res.status(500).json({ error: "Failed to generate audit report" });
+  }
+});
+
+// GET /api/audit/hot-leads — Get all leads who viewed their audit report, with view stats
+// Requires auth — only the lead owner sees their views
+// IMPORTANT: Must be defined BEFORE /:token to avoid route collision
+router.get("/hot-leads", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    // Get all audit views for this user
+    const { data: views, error: viewsError } = await supabase
+      .from("audit_views")
+      .select("lead_id, device, viewed_at")
+      .eq("user_id", req.userId)
+      .order("viewed_at", { ascending: false });
+
+    if (viewsError || !views || views.length === 0) {
+      res.json({ hotLeads: [] });
+      return;
+    }
+
+    // Aggregate views per lead
+    const viewStats: Record<string, { totalViews: number; firstViewed: string; lastViewed: string; devices: Set<string> }> = {};
+    for (const v of views) {
+      if (!viewStats[v.lead_id]) {
+        viewStats[v.lead_id] = { totalViews: 0, firstViewed: v.viewed_at, lastViewed: v.viewed_at, devices: new Set() };
+      }
+      viewStats[v.lead_id].totalViews++;
+      viewStats[v.lead_id].devices.add(v.device || "desktop");
+      if (v.viewed_at < viewStats[v.lead_id].firstViewed) {
+        viewStats[v.lead_id].firstViewed = v.viewed_at;
+      }
+      if (v.viewed_at > viewStats[v.lead_id].lastViewed) {
+        viewStats[v.lead_id].lastViewed = v.viewed_at;
+      }
+    }
+
+    const leadIds = Object.keys(viewStats);
+
+    // Fetch lead details
+    const { data: leads, error: leadsError } = await supabase
+      .from("leads")
+      .select("id, name, email, company, website, phone, industry, score, campaign_id, contact_method, contacted")
+      .in("id", leadIds);
+
+    if (leadsError || !leads) {
+      res.json({ hotLeads: [] });
+      return;
+    }
+
+    // Fetch campaign names
+    const campaignIds = [...new Set(leads.map(l => l.campaign_id).filter(Boolean))];
+    let campaignNames: Record<string, string> = {};
+    if (campaignIds.length > 0) {
+      const { data: campaigns } = await supabase
+        .from("campaigns")
+        .select("id, name")
+        .in("id", campaignIds);
+      if (campaigns) {
+        for (const c of campaigns) {
+          campaignNames[c.id] = c.name;
+        }
+      }
+    }
+
+    // Check which leads have replied
+    const { data: repliedEmails } = await supabase
+      .from("emails")
+      .select("lead_id")
+      .eq("user_id", req.userId)
+      .eq("replied", true)
+      .in("lead_id", leadIds);
+
+    const repliedLeadIds = new Set((repliedEmails || []).map((e: any) => e.lead_id));
+
+    // Build hot leads response
+    const hotLeads = leads.map(lead => {
+      const stats = viewStats[lead.id];
+      return {
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        company: lead.company,
+        website: lead.website,
+        phone: lead.phone,
+        industry: lead.industry,
+        score: lead.score,
+        contactMethod: lead.contact_method,
+        contacted: lead.contacted,
+        campaignId: lead.campaign_id,
+        campaignName: campaignNames[lead.campaign_id] || "Unknown",
+        replied: repliedLeadIds.has(lead.id),
+        totalViews: stats.totalViews,
+        firstViewed: stats.firstViewed,
+        lastViewed: stats.lastViewed,
+        devices: [...stats.devices],
+      };
+    });
+
+    // Sort by total views (most engaged first), then by recency
+    hotLeads.sort((a, b) => {
+      if (b.totalViews !== a.totalViews) return b.totalViews - a.totalViews;
+      return new Date(b.lastViewed).getTime() - new Date(a.lastViewed).getTime();
+    });
+
+    res.json({ hotLeads });
+  } catch (err) {
+    logger.error({ err }, "Hot leads error");
+    res.status(500).json({ error: "Failed to fetch hot leads" });
   }
 });
 
@@ -175,7 +295,8 @@ router.get("/views/campaign/:id", authMiddleware, async (req: AuthenticatedReque
 // NO AUTH required — this is what the prospect sees
 router.get("/:token", async (req, res) => {
   try {
-    const { token } = req.params;
+    // Strip trailing punctuation that email clients may attach to URLs
+    const token = req.params.token.replace(/[.,;:!?)]+$/, "");
 
     if (!token || token.length < 10 || token.length > 30) {
       res.status(400).json({ error: "Invalid audit token" });
@@ -185,7 +306,7 @@ router.get("/:token", async (req, res) => {
     // Find lead by audit token in enriched_data JSONB
     const { data: leads, error } = await supabase
       .from("leads")
-      .select("company, website, industry, score, enriched_data")
+      .select("id, company, website, industry, score, enriched_data")
       .eq("enriched_data->>audit_token", token)
       .limit(1);
 
@@ -195,7 +316,22 @@ router.get("/:token", async (req, res) => {
     }
 
     const lead = leads[0];
-    const ed = lead.enriched_data || {};
+    let ed = lead.enriched_data || {};
+    const serviceType = ed.audit_service_type || "web_dev";
+
+    // Fetch PageSpeed in background if not yet stored (only for web_dev and seo)
+    // Don't block the response — prospect sees the report immediately, PageSpeed loads on next visit
+    if ((serviceType === "web_dev" || serviceType === "seo") && !ed.pageSpeed && lead.website && !ed._siteDown && !ed.isParkedDomain) {
+      logger.info({ website: lead.website, leadId: lead.id }, "Fetching PageSpeed in background for audit view");
+      getPageSpeedScores(lead.website).then(pageSpeedData => {
+        if (pageSpeedData) {
+          supabase.from("leads")
+            .update({ enriched_data: { ...ed, pageSpeed: pageSpeedData } })
+            .eq("id", lead.id)
+            .then(() => {});
+        }
+      }).catch(() => {});
+    }
 
     // Return only safe, public-facing data — strip internal fields
     res.json({
@@ -203,6 +339,7 @@ router.get("/:token", async (req, res) => {
       website: lead.website,
       industry: lead.industry || ed.industry || "Local Business",
       score: lead.score,
+      serviceType,
       summary: ed.summary || null,
       issues: ed.issues || [],
       opportunity: ed.opportunity || null,
@@ -225,6 +362,13 @@ router.get("/:token", async (req, res) => {
         hasAnalytics: ed.hasAnalytics ?? null,
         googleRating: ed.googleRating ?? null,
         googleReviewCount: ed.googleReviewCount ?? null,
+        // Digital marketing signals
+        hasLeadCaptureForm: ed.hasLeadCaptureForm ?? null,
+        hasOpenGraph: ed.hasOpenGraph ?? null,
+        hasSchemaMarkup: ed.hasSchemaMarkup ?? null,
+        hasEmailMarketing: ed.hasEmailMarketing ?? null,
+        hasCTA: ed.hasCTA ?? null,
+        hasRetargeting: ed.hasRetargeting ?? null,
       },
     });
   } catch (err) {
@@ -237,7 +381,7 @@ router.get("/:token", async (req, res) => {
 // NO AUTH required — this is called from the public audit page
 router.post("/:token/view", async (req, res) => {
   try {
-    const { token } = req.params;
+    const token = req.params.token.replace(/[.,;:!?)]+$/, "");
 
     if (!token || token.length < 10 || token.length > 30) {
       res.status(400).json({ error: "Invalid token" });

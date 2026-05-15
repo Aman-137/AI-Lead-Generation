@@ -29,6 +29,13 @@ export interface WebsiteData {
   hasGoogleAds: boolean;      // Google Ads tag detected (AW- conversion tracking)
   hasFacebookPixel: boolean;  // Meta/Facebook Pixel detected
   hasAnalytics: boolean;      // Google Analytics or GTM detected
+  // Digital marketing signals
+  hasLeadCaptureForm: boolean;   // Email signup, newsletter, gated content form
+  hasOpenGraph: boolean;         // OG tags for social sharing (og:title, og:image)
+  hasSchemaMarkup: boolean;      // Structured data (LocalBusiness, Organization, FAQ, etc.)
+  hasEmailMarketing: boolean;    // Mailchimp, ConvertKit, HubSpot, Klaviyo, etc.
+  hasCTA: boolean;               // Clear call-to-action button/form above the fold
+  hasRetargeting: boolean;       // Any retargeting pixel beyond FB (TikTok, LinkedIn, Twitter, Pinterest)
 }
 
 // Block private/internal IPs to prevent SSRF
@@ -110,17 +117,40 @@ export async function scrapeWebsite(
       return null;
     }
 
-    // Quick HEAD check: if the site is completely down, return a minimal object
+    // Quick connectivity check: if the site is completely down, return a minimal object
     // so we can distinguish "broken/down site" from "no website at all"
+    // Strategy: Try HEAD first, then GET as fallback (some sites block HEAD or return 503 via WAF/Cloudflare)
+    let siteReachable = false;
+    const connectHeaders = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    };
     try {
       await axios.head(websiteUrl, {
-        timeout: 4000,
-        maxRedirects: 3,
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-        validateStatus: (status) => status < 500, // Accept 2xx, 3xx, 4xx — only 5xx means truly broken
+        timeout: 8000,
+        maxRedirects: 5,
+        headers: connectHeaders,
+        validateStatus: () => true, // Accept ANY status — if the server responds at all, it's up
       });
+      siteReachable = true;
     } catch {
-      // Site is completely unreachable (DNS failure, connection refused, timeout)
+      // HEAD failed — try GET (some servers/WAFs block HEAD entirely)
+      try {
+        await axios.get(websiteUrl, {
+          timeout: 8000,
+          maxRedirects: 5,
+          maxContentLength: 100 * 1024, // only need first 100KB to confirm site is up
+          headers: connectHeaders,
+          validateStatus: () => true,
+        });
+        siteReachable = true;
+      } catch {
+        // Both failed — site is genuinely unreachable
+      }
+    }
+
+    if (!siteReachable) {
       logger.info({ url: websiteUrl }, "Website unreachable — returning broken site marker");
       return {
         title: "",
@@ -143,13 +173,14 @@ export async function scrapeWebsite(
       try {
         const startTime = Date.now();
         const response = await axios.get(url, {
-          timeout: 5000,
-          maxRedirects: 3,
+          timeout: 10000,
+          maxRedirects: 5,
           maxContentLength: 2 * 1024 * 1024, // 2MB max — skip huge pages
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
           },
         });
         const loadTimeMs = Date.now() - startTime;
@@ -686,6 +717,122 @@ export async function scrapeWebsite(
       return false;
     })();
 
+    // ===== DIGITAL MARKETING SIGNALS =====
+
+    // Lead capture form (email signup, newsletter, gated content — distinct from contact form)
+    const hasLeadCaptureForm = (() => {
+      // Known email marketing platform embeds
+      const emailPlatforms = [
+        "mailchimp.com", "list-manage.com", "convertkit.com", "beehiiv.com",
+        "klaviyo.com", "hubspot.com/forms", "activecampaign.com", "drip.com",
+        "mailerlite.com", "sendinblue.com", "brevo.com", "getresponse.com",
+        "aweber.com", "constantcontact.com", "flodesk.com", "kit.com",
+        "optinmonster.com", "sumo.com", "leadpages.com", "unbounce.com",
+      ];
+      if (emailPlatforms.some(p => allHtml.includes(p))) return true;
+
+      // Forms with email input but NO textarea (= signup, not contact)
+      for (const p of pages) {
+        const forms = p("form");
+        let hasSignup = false;
+        forms.each((_i: number, form: any) => {
+          const formHtml = p(form).html()?.toLowerCase() || "";
+          const hasEmail = formHtml.includes('type="email"') || formHtml.includes('name="email"');
+          const hasTextarea = formHtml.includes("<textarea");
+          // Email field without message textarea = likely a signup form
+          if (hasEmail && !hasTextarea) {
+            hasSignup = true;
+          }
+        });
+        if (hasSignup) return true;
+      }
+
+      // Popup/modal signup patterns
+      if (allHtml.includes("subscribe") && allHtml.includes('type="email"')) return true;
+      if (allHtml.includes("newsletter") && allHtml.includes('type="email"')) return true;
+
+      return false;
+    })();
+
+    // Open Graph tags (for social sharing)
+    const hasOpenGraph = (() => {
+      const hasOgTitle = $('meta[property="og:title"]').length > 0;
+      const hasOgImage = $('meta[property="og:image"]').length > 0;
+      const hasOgDesc = $('meta[property="og:description"]').length > 0;
+      // Need at least title + image for decent social sharing
+      return hasOgTitle && hasOgImage;
+    })();
+
+    // Schema / structured data markup
+    const hasSchemaMarkup = (() => {
+      // JSON-LD (most common modern approach)
+      if ($('script[type="application/ld+json"]').length > 0) return true;
+      // Microdata
+      if ($('[itemscope][itemtype*="schema.org"]').length > 0) return true;
+      // RDFa
+      if ($('[typeof][vocab*="schema.org"]').length > 0) return true;
+      return false;
+    })();
+
+    // Email marketing tool integration (distinct from lead capture — checks for platform JS/pixels)
+    const hasEmailMarketing = (() => {
+      const platforms = [
+        "mailchimp.com", "list-manage.com", "mc.us", // Mailchimp
+        "convertkit.com", "kit.com",                  // ConvertKit/Kit
+        "klaviyo.com",                                 // Klaviyo
+        "hubspot.com", "hs-scripts.com", "hsforms.com", // HubSpot
+        "activecampaign.com",                          // ActiveCampaign
+        "drip.com",                                    // Drip
+        "mailerlite.com",                              // MailerLite
+        "sendinblue.com", "brevo.com",                 // Brevo
+        "getresponse.com",                             // GetResponse
+        "aweber.com",                                  // AWeber
+        "constantcontact.com",                         // Constant Contact
+        "flodesk.com",                                 // Flodesk
+      ];
+      return platforms.some(p => allHtml.includes(p));
+    })();
+
+    // Call-to-action detection (prominent button/link in header or first section)
+    const hasCTA = (() => {
+      // Check header + first section for buttons/links that look like CTAs
+      const headerHtml = ($("header").html() || "").toLowerCase();
+      const heroSection = ($("section").first().html() || $("main").children().first().html() || "").toLowerCase();
+      const aboveFold = headerHtml + " " + heroSection;
+
+      // CTA keywords in buttons or links
+      const ctaPatterns = [
+        "get started", "book now", "schedule", "free quote", "free consultation",
+        "get a quote", "contact us", "call now", "request", "sign up",
+        "start free", "try free", "get free", "learn more", "shop now",
+        "buy now", "order now", "get in touch", "let's talk", "book a call",
+      ];
+      if (ctaPatterns.some(p => aboveFold.includes(p))) return true;
+
+      // Any button element in the header
+      if (/<button|<a[^>]*class[^>]*btn|<a[^>]*class[^>]*button/i.test(headerHtml)) return true;
+
+      return false;
+    })();
+
+    // Other retargeting pixels (beyond Facebook)
+    const hasRetargeting = (() => {
+      // TikTok Pixel
+      if (allHtml.includes("analytics.tiktok.com") || /ttq\.load/i.test(allHtml)) return true;
+      // LinkedIn Insight Tag
+      if (allHtml.includes("snap.licdn.com") || allHtml.includes("linkedin.com/insight") || /_linkedin_partner_id/i.test(allHtml)) return true;
+      // Twitter/X Pixel
+      if (allHtml.includes("static.ads-twitter.com") || /twq\s*\(/i.test(allHtml)) return true;
+      // Pinterest Tag
+      if (allHtml.includes("s.pinimg.com/ct") || /pintrk\s*\(/i.test(allHtml)) return true;
+      // Snapchat Pixel
+      if (allHtml.includes("sc-static.net/scevent") || /snaptr\s*\(/i.test(allHtml)) return true;
+      // Microsoft/Bing UET
+      if (allHtml.includes("bat.bing.com") || /uetq/i.test(allHtml)) return true;
+      // Already has Facebook Pixel (counted separately but relevant)
+      return false;
+    })();
+
     return {
       title: title.slice(0, 200),
       description: description.slice(0, 500),
@@ -709,6 +856,12 @@ export async function scrapeWebsite(
       hasGoogleAds,
       hasFacebookPixel,
       hasAnalytics,
+      hasLeadCaptureForm,
+      hasOpenGraph,
+      hasSchemaMarkup,
+      hasEmailMarketing,
+      hasCTA,
+      hasRetargeting,
     };
   } catch (error) {
     logger.error(

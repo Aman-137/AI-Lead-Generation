@@ -4,6 +4,7 @@ import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import openai from "../services/openai";
 import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday, ServiceType } from "../services/planLimits";
+import { getPageSpeedScores } from "../services/pageSpeed";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -64,160 +65,159 @@ function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: str
   const hasNoWebsite = enriched?.noWebsite || (!lead.website || !lead.website.startsWith("http"));
   const hasBrokenWebsite = enriched?.brokenWebsite || false;
 
-  // Service-specific role descriptions
-  const serviceRoles: Record<ServiceType, string> = {
-    web_dev: "a web designer/developer who builds, redesigns, and develops websites for local businesses",
-    seo: "an SEO specialist who helps local businesses rank higher on Google and get more organic traffic",
-    digital_marketing: "a digital marketing expert who helps local businesses get more customers through Google Ads, Facebook Ads, analytics, and online strategy",
-    social_media: "a social media manager who helps local businesses grow their presence on Instagram, Facebook, TikTok, and other platforms",
-  };
+  // Extract city from address for hyper-local references
+  const city = address ? address.split(",")[0].trim() : "";
 
   let context: string;
   if (hasNoWebsite) {
-    const noWebsiteContexts: Record<ServiceType, string> = {
-      web_dev: `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
-⚠️ THIS BUSINESS HAS NO WEBSITE AT ALL — only a Google listing with a phone number.
-Digital gaps found:
-- No website — customers searching online for ${industry.toLowerCase()} in their area will never find them
-- No online presence means zero bookings, zero inquiries, zero reviews happening online
-- Competitors in the area ARE showing up online and capturing all the search traffic`,
-      seo: `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
-⚠️ THIS BUSINESS HAS NO WEBSITE AT ALL — only a Google listing.
-Digital gaps found:
-- No website means they CANNOT rank on Google — zero organic search visibility
-- When someone Googles "${industry.toLowerCase()} near me" they will never appear in results
-- Competitors with even basic websites are capturing ALL the search traffic in their area`,
-      digital_marketing: `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
-⚠️ THIS BUSINESS HAS NO WEBSITE AT ALL — only a Google listing with a phone number.
-Digital gaps found:
-- No website means they can't run Google Ads (no landing page to send traffic to)
-- No way to track customer behaviour or measure marketing ROI
-- Competitors are running ads and getting ALL the online customers in the area`,
-      social_media: `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
-⚠️ THIS BUSINESS HAS NO WEBSITE AT ALL — only a Google listing with a phone number.
-Digital gaps found:
-- No website AND likely no social media presence — completely invisible online
-- Customers who find them on Google Maps have nowhere to learn more or see their work
-- Competitors with active social profiles are building trust and getting all the engagement`,
-    };
-    context = noWebsiteContexts[serviceType];
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}
+⚠️ THIS BUSINESS HAS NO WEBSITE — only a Google listing with a phone number.
+What this means:
+- When someone in ${city || "their area"} Googles "${industry.toLowerCase()} near me", this business will never show up in organic results
+- Every potential customer goes to a competitor who HAS a website
+- They are completely invisible online — no way for anyone to check their services, prices, or reviews before calling`;
   } else if (hasBrokenWebsite) {
-    context = `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
-⚠️ THIS BUSINESS HAS A BROKEN/UNREACHABLE WEBSITE — their site is down or so broken it won't load.
-Website URL: ${lead.website}
-Digital gaps found:
-- Website is currently down or broken — anyone who searches for them online sees an error page
-- A broken website is worse than no website — it signals the business is closed or doesn't care
-- Every day the site is down, potential customers bounce to competitors who show up properly`;
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}
+⚠️ BROKEN WEBSITE — ${lead.website} is down or unreachable.
+What this means:
+- Anyone searching for them online right now sees an error page
+- A broken site is worse than no site — it screams "this business is closed" to customers
+- Every day it stays broken, they lose walk-in and phone customers who check online first`;
   } else if (enriched) {
-    context = `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}\nWebsite summary: ${enriched.summary}`;
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${lead.website}\nWhat their site does: ${enriched.summary}`;
     if (enriched.digitalGaps) {
-      context += `\nDigital gaps found:\n${enriched.digitalGaps}`;
+      context += `\nSpecific problems found on their site:\n${enriched.digitalGaps}`;
     }
     if (enriched.issues) {
-      context += `\nKey issues: ${enriched.issues}`;
+      context += `\nTechnical issues: ${enriched.issues}`;
     }
-    // Add Google review data for marketing/social media pitches
     if ((serviceType === "digital_marketing" || serviceType === "social_media") && lead.enriched_data) {
       const rating = lead.enriched_data.googleRating;
       const reviewCount = lead.enriched_data.googleReviewCount;
       if (rating !== undefined) context += `\nGoogle Rating: ${rating}/5 (${reviewCount || 0} reviews)`;
       if (lead.enriched_data.hasGoogleAds === false) context += `\nNot running Google Ads`;
-      if (lead.enriched_data.hasFacebookPixel === false) context += `\nNo Facebook/Meta Pixel detected (not running social ads)`;
-      if (lead.enriched_data.hasAnalytics === false) context += `\nNo Google Analytics — not tracking website visitors`;
+      if (lead.enriched_data.hasFacebookPixel === false) context += `\nNo Facebook/Meta Pixel (not retargeting visitors)`;
+      if (lead.enriched_data.hasAnalytics === false) context += `\nNo Google Analytics (flying blind — no visitor data)`;
     }
   } else {
-    context = `Industry: ${industry}${address ? `\nLocation: ${address}` : ""}\nWebsite: ${lead.website || "N/A"}\nContact Name: ${lead.name}`;
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${lead.website || "N/A"}\nContact: ${lead.name}`;
   }
 
   const toneInstructions: Record<ToneKey, string> = {
-    friendly: `Tone: Warm, genuine, zero pressure. Like a helpful neighbor who happens to know about ${serviceType === "web_dev" ? "websites" : serviceType === "seo" ? "SEO" : serviceType === "digital_marketing" ? "marketing" : "social media"}.`,
+    friendly: `TONE: Write like a genuinely helpful person who noticed something and wants to point it out — zero sales pressure. Think "friendly local expert who saw something and couldn't NOT say something." Use contractions, conversational fragments. Sound human.`,
 
-    direct: `Tone: Short, blunt, confident. Like a busy CEO who types fast and doesn't waste words.`,
+    direct: `TONE: Write like someone who's busy, confident, and doesn't waste words. No fluff, no pleasantries — get straight to the point. Think "friend who shoots you a quick text about something important." Short sentences, punchy.`,
 
-    curious: `Tone: Genuinely curious and observational. Like someone who spotted something interesting and can't help but mention it.`,
+    curious: `TONE: Write like someone who's genuinely puzzled by what they found. Not pitching — just confused why a clearly good business has this obvious problem. Think "wait, this doesn't make sense for a business like yours." Questions feel authentic, not selling.`,
   };
 
-  // Service-specific frameworks
-  const serviceFrameworks: Record<ServiceType, string> = {
-    web_dev: `FRAMEWORK — use this structure:
-1. OPEN with a specific, verifiable observation the reader can CHECK THEMSELVES in 10 seconds (e.g. "Pull up your site on your phone right now — the menu overlaps the header and half the page is cut off"). This creates an immediate "oh shit" moment.
-2. AMPLIFY by connecting 2-3 digital gaps to MONEY they're losing RIGHT NOW — frame it as customers they're sending straight to competitors. Be specific to their industry.
-3. PLANT THE SEED — mention that you fixed this exact thing for a similar business recently (don't name them, just reference the type and results: "fixed this for a ${industry} in the area last month — they went from 2 online bookings/week to 15").
-4. CLOSE WITH IRRESISTIBLE CURIOSITY — ask a question so specific they can't help but reply.`,
+  // Service-specific writing approach
+  const serviceApproach: Record<ServiceType, string> = {
+    web_dev: `YOUR ANGLE: You build websites for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
 
-    seo: `FRAMEWORK — use this structure:
-1. OPEN with a specific, verifiable observation about their Google presence (e.g. "Google '${industry.toLowerCase()} near me' in ${address ? address.split(",")[0] : "your city"} right now — you won't find your business in the first 3 pages"). The reader must be able to verify this in 10 seconds.
-2. AMPLIFY by connecting their SEO gaps to CUSTOMERS they're losing — people search for their service daily but find competitors instead. Reference their specific PageSpeed score, missing meta descriptions, or mobile issues.
-3. PLANT THE SEED — mention that you helped a similar ${industry.toLowerCase()} business appear on page 1 within X weeks (don't name them, keep it vague: "helped a ${industry.toLowerCase()} nearby go from invisible to top 3 in Google Maps last month").
-4. CLOSE WITH CURIOSITY — ask something like "curious — do you know where you show up when someone searches '${industry.toLowerCase()} in [their city]' right now?"`,
+WRITING STRUCTURE:
+1. OPEN with ONE hyper-specific thing wrong with their site that the reader can verify in 10 seconds. Not "your site has issues" — describe the EXACT problem: what page, what element, what happens. If their site is not mobile-friendly, tell them to pull it up on their phone and describe what they'll see. If the loading time is bad, tell them to try loading it and count the seconds. The reader should think "wait, let me go check that right now."
+2. CONNECT to real-world consequences in ONE sentence — how does this specific thing cost them customers? Be concrete: "That means anyone searching '${industry.toLowerCase()} in ${city || "your area"}' on their phone bounces within 3 seconds."
+3. SOCIAL PROOF in ONE casual sentence — reference a real-sounding result with a specific ${industry.toLowerCase()} (not by name): "Fixed this exact thing for a ${industry.toLowerCase()} down the road — their online bookings went from 2/week to 11." Use realistic, SMALL numbers. Never say "doubled" or "tripled."
+4. END with a specific question they want to answer — not "want to chat?" but something about their specific situation: "Out of curiosity — do you know what your site looks like on an iPhone right now?"`,
 
-    digital_marketing: `FRAMEWORK — use this structure:
-1. OPEN with a specific, verifiable observation about their marketing (e.g. "I searched for '${industry.toLowerCase()} in ${address ? address.split(",")[0] : "your area"}' — your competitors are running ads at the top but you're nowhere to be found" or "checked your site — no tracking, no pixel, no analytics — you're spending money but have no idea what's working").
-2. AMPLIFY by showing how competitors are actively spending money to steal their customers. Reference specifics: no Google Ads, no Facebook pixel, no analytics, low review count vs competitors.
-3. PLANT THE SEED — mention you helped a similar business go from 0 online leads to X per month with a simple ads + tracking setup (keep it vague, don't name them).
-4. CLOSE WITH CURIOSITY — ask something like "quick question — do you know how many people Google '${industry.toLowerCase()} near me' in your area each month? It's probably higher than you'd expect."`,
+    seo: `YOUR ANGLE: You do SEO for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
 
-    social_media: `FRAMEWORK — use this structure:
-1. OPEN with a verifiable observation about their social media absence (e.g. "I looked up ${company} on Instagram — nothing. For a ${industry.toLowerCase()}, that's like having a shop with blacked-out windows" or "Your Google listing has X reviews — most ${industry.toLowerCase()} businesses in the area have 50+").
-2. AMPLIFY by showing what competitors are doing on social — posting before/afters, getting reviews, building a following. Their absence means customers can't see their work or verify they're trustworthy.
-3. PLANT THE SEED — mention you helped a similar ${industry.toLowerCase()} grow from 0 to X followers and Y inquiries per month through consistent social content.
-4. CLOSE WITH CURIOSITY — ask something like "curious — when customers Google you, what do they see to help them decide? Social proof is the #1 thing people look for now."`,
+WRITING STRUCTURE:
+1. OPEN with a specific, verifiable observation about where they rank. Tell them to Google something specific and describe what they'll find (or won't find). Example: "Google '${industry.toLowerCase()} ${city || "near me"}' — scroll through the first 3 pages. You're not there. But [vague competitor description] on [street/area] is #2."
+2. CONNECT to consequences in ONE sentence — how many customers per day search for this and click competitors instead.
+3. SOCIAL PROOF in ONE casual sentence — "Helped a ${industry.toLowerCase()} a few miles from you go from page 6 to the top 3 map results in about 5 weeks." Use realistic, modest numbers and timeframes.
+4. END with a question about their Google presence: "Do you know where you show up when someone searches '${industry.toLowerCase()} in ${city || "your area"}' right now?"`,
+
+    digital_marketing: `YOUR ANGLE: You do digital marketing for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
+
+WRITING STRUCTURE:
+1. OPEN with a specific, verifiable observation about their online marketing (or lack of it). Tell them what you found when you searched for their type of business: "Searched '${industry.toLowerCase()} in ${city || "your area"}' — your competitors are running Google Ads at the top of every search. You're not."
+2. CONNECT to consequences in ONE sentence — people searching right now are clicking on competitors' ads instead.
+3. SOCIAL PROOF in ONE casual sentence — "Set up ads + tracking for a ${industry.toLowerCase()} nearby — they went from zero online leads to about 8-12/week within the first month." Use realistic, modest numbers.
+4. END with a question about their customer acquisition: "Quick question — do you track where your new customers actually come from right now?"`,
+
+    social_media: `YOUR ANGLE: You manage social media for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
+
+WRITING STRUCTURE:
+1. OPEN with a specific observation about their social media absence or state. What did you find (or not find) when you looked them up? "Looked up ${company} on Instagram — nothing comes up. For a ${industry.toLowerCase()}, that's like having a storefront with no sign."
+2. CONNECT to consequences in ONE sentence — customers check social media before choosing a business. No presence = no trust.
+3. SOCIAL PROOF in ONE casual sentence — "Helped a ${industry.toLowerCase()} nearby go from zero social presence to 400+ followers and 5-6 DM inquiries a week in about 2 months." Use realistic, modest numbers.
+4. END with a question about how customers find/trust them: "When someone Googles your business, what do they see that makes them choose you over the place down the street?"`,
   };
 
-  return `You are a world-class cold email copywriter specializing in outreach for ${serviceRoles[serviceType]}. Your emails consistently get 40%+ reply rates because they follow a proven psychological framework that triggers the reader to WANT a conversation.
+  return `Write a cold email that reads like a personal message, NOT a marketing email.
 
-${serviceFrameworks[serviceType]}
+The reader should feel like a real human noticed something about their business and took 2 minutes to write them about it. The email should feel so personal and specific that they think "this person actually looked at my business" — not "this is a mass email."
 
-Lead context:
-Company: ${company}
+${serviceApproach[serviceType]}
+
+LEAD DATA:
+Company name: ${company}
+Contact name: ${lead.name || ""}
 ${context}
 
-STRICT RULES:
-- BANNED words: "revenue", "optimize", "solution", "leverage", "streamline", "maximize", "boost", "transform", "unlock", "empower", "excited", "thrilled", "growth", "scale", "ROI", "synergy", "game-changer"
-- Do NOT open with "I was checking/looking at your site" — that's generic. Instead open DIRECTLY with the verifiable observation
-- ALWAYS include at least one "go check it yourself" moment — something the reader can verify in seconds
-- Mention their city/location if available — hyper-local = hyper-relevant
-- Reference their industry competitors WITHOUT naming them
-- Weave up to 3 digital gaps naturally as observations with real-world consequences — NEVER bullet-point them
-- Every gap mentioned must tie to MONEY or CUSTOMERS lost
-- 80-100 words (long enough to be specific, short enough to read on mobile)
-- Write like a real person, not a marketer. Contractions, fragments, casual language all fine
-- End with a CURIOSITY question they MUST answer — make it so specific to their situation that ignoring it feels wrong
-- Do NOT use placeholder brackets like [Your Name] or [Agency Name]
-- Do NOT start with greetings like "I hope this finds you well", "Hi there", etc.
-- Subject line: lowercase, 3-6 words, sounds like a friend texting — include their company name or city when possible. Should create enough curiosity to open.
+CRITICAL RULES:
+- NEVER use placeholder brackets like [City], [Your Name], [Industry], [X%], [Number] — NEVER. If you don't have a piece of data, either use the actual data provided above or skip that detail entirely. Using brackets = immediate fail.
+- ${city ? `Use "${city}" as their city — it's confirmed data.` : "Do NOT guess their city. Skip location references if no city is provided."}
+- BANNED words/phrases: "revenue", "optimize", "solution", "leverage", "streamline", "maximize", "boost", "transform", "unlock", "empower", "excited", "thrilled", "growth", "scale", "ROI", "synergy", "game-changer", "I was just browsing", "I came across", "I hope this finds you"
+- Do NOT start with a greeting ("Hi", "Hey", "Hello", "I hope this"). Start directly with the observation.
+- 75-110 words maximum. Every word must earn its place — if a sentence doesn't add specificity or curiosity, delete it.
+- Do NOT use bullet points or numbered lists — this is a personal message, not a report.
+- Write in plain English. If your grandmother wouldn't say it in conversation, rewrite it.
+- Social proof numbers must be REALISTIC and modest — not "10x", not "doubled revenue", not "hundreds of leads." Think: "went from 2 to 11 bookings/week" or "started getting 5-6 calls a week from Google."
+- Every claim must sound like something a small local business would actually experience.
+- Leave a blank line (\\n\\n) between paragraphs for readability.
+- The closing question must be SO specific to their business that they feel compelled to answer or at least think about it.
+
+SUBJECT LINE RULES:
+- Lowercase, 3-6 words
+- Must sound like a friend texting about something they noticed — NOT like a marketing email subject
+- Include their company name or city when natural
+- Create curiosity without being clickbaity
+- Examples of GOOD subjects: "noticed something on ${company.toLowerCase().split(" ")[0]}'s site", "${city ? city.toLowerCase() : industry.toLowerCase()} question for you", "quick ${company.toLowerCase().split(" ")[0]} question"
+- Examples of BAD subjects: "Boost Your Business!", "Your Website Needs Help", "Partnership Opportunity"
 
 ${toneInstructions[tone]}
 ${enriched?.auditUrl ? `
-AUDIT REPORT LINK: ${enriched.auditUrl}
-You MUST include this link in the email body. Introduce it naturally — e.g. "I put together a quick breakdown of what I found: ${enriched.auditUrl}" or "Here's a 30-second snapshot of where things stand: ${enriched.auditUrl}". Do NOT say "audit report" — call it a "quick breakdown", "snapshot", or "overview". Place the link after you mention 1-2 specific issues, NOT at the very beginning or very end of the email. The link should feel like a helpful bonus, not the main pitch.` : ""}
+AUDIT LINK: ${enriched.auditUrl}
+Include this link naturally in the email after mentioning 1-2 specific issues. Introduce it as "a quick snapshot of what I found" or "put together a quick breakdown" — NOT "audit report." The link MUST be on its own line with \\n before it. Do NOT put any punctuation right after the URL. The link should feel like a helpful extra, not the main pitch. Example:
+"Here's a quick breakdown of what I found:
+${enriched.auditUrl}"` : ""}
 
-Return ONLY a JSON object with "subject" and "body" fields.`;
+Return ONLY a JSON object with "subject" and "body" fields. The body should NOT include a sign-off name or signature.`;
 }
 
 function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey, topGap?: string): string {
   const toneStyle: Record<ToneKey, string> = {
-    friendly: `Style: "Hey — just circling back on this. No rush at all, just curious if you had a sec to think about it?"`,
-    direct: `Style: "Bumping this — did you get a chance to look?"`,
-    curious: `Style: "Hey — still thinking about that thing I noticed on your site. Worth chatting about?"`,
+    friendly: `TONE: Warm, zero pressure — like texting a friend you haven't heard back from.`,
+    direct: `TONE: Brief and matter-of-fact — one quick bump, no fluff.`,
+    curious: `TONE: Still thinking about what you noticed — genuinely curious if they checked.`,
   };
 
   const gapContext = topGap || issues || "their website";
 
-  return `Write a quick follow-up email — feels like a real person bumping their own thread.
+  return `Write a follow-up email that feels like a real person bumping their own thread. NOT a marketing email — a human checking in.
 
 Context:
-- You emailed ${company} a few days ago, no reply
-- Thing you mentioned: ${gapContext}
+- You emailed ${company} a few days ago about: ${gapContext}
+- No reply yet
+- You want to re-engage them WITHOUT re-pitching
+
+APPROACH: Add NEW value — don't just say "bumping this." Give them one small, useful insight they didn't get in the first email. Something like:
+- A quick stat about their industry ("btw — looked into this more, about 60% of ${company.split(" ")[0].toLowerCase()}-type businesses in the area have this same issue")
+- A new observation you "just noticed" ("was on your site again and realized the contact form doesn't actually work on mobile — not sure if you knew that")
+- A competitor reference ("noticed a ${gapContext.split(" ")[0].toLowerCase()} competitor nearby just redid their site — figured you'd want to know")
 
 Rules:
-- Under 40 words
-- Super casual
-- No marketing language at all
-- Don't re-pitch, just nudge — vaguely reference what you mentioned before
-- End with a simple question
-- Do NOT use placeholder brackets
+- 30-50 words — short enough to read in 3 seconds
+- MUST add something new — a small nugget of value, not just "did you see my last email?"
+- End with a casual, specific question
+- No marketing language, no formal greetings
+- Do NOT use placeholder brackets like [City], [Name], etc.
+- Do NOT include a sign-off name or signature
+
+Subject line: A reply-style subject — "re: [original subject variation]" or something casual like "one more thing" or "forgot to mention"
 
 ${toneStyle[tone]}
 
@@ -226,23 +226,31 @@ Return ONLY JSON with "subject" and "body" fields.`;
 
 function buildFollowup2Prompt(company: string, tone: ToneKey): string {
   const toneStyle: Record<ToneKey, string> = {
-    friendly: `Style: "Hey — totally fine if the timing's off. Just wanted to close the loop. Hope things are going well!"`,
-    direct: `Style: "Last ping on this. No worries either way."`,
-    curious: `Style: "Figured I'd check one last time — if not, no sweat at all."`,
+    friendly: `TONE: Genuinely no-pressure — like closing a thread with a friend. Zero guilt.`,
+    direct: `TONE: Quick, clean close. One sentence, done.`,
+    curious: `TONE: Leave them with one final thought-provoking observation.`,
   };
 
-  return `Write a final follow-up email — sounds like a real person closing the loop.
+  return `Write a final follow-up that ends the thread naturally. This is the last email — it should feel like a real person wrapping up, not a marketer doing a "last chance!" push.
 
 Context:
 - You emailed ${company} twice, no reply
-- This is your last email
+- This is genuinely the last email — you're moving on
+
+APPROACH: Use the "breakup + door open" technique:
+- Acknowledge they're busy (NOT guilt-trip)
+- Leave ONE final thought — a tiny value nugget or observation that might stick in their mind
+- Make it clear you won't email again — but the door is open if they want to reach out later
 
 Rules:
-- Under 30 words
-- Very casual and low-pressure
-- No guilt-tripping or marketing speak
-- Just a simple "no worries if not" vibe
-- Do NOT use placeholder brackets
+- 25-40 words maximum
+- Sound like a real person, not a drip sequence
+- ZERO pressure, zero urgency tactics, zero "last chance" energy
+- The reader should feel GOOD after reading this, not guilty
+- Do NOT use placeholder brackets like [City], [Name], etc.
+- Do NOT include a sign-off name or signature
+
+Subject line: Something casual like "closing the loop" or "last one from me"
 
 ${toneStyle[tone]}
 
@@ -250,22 +258,42 @@ Return ONLY JSON with "subject" and "body" fields.`;
 }
 
 // ===== AUTO-GENERATE AUDIT TOKEN =====
-async function ensureAuditToken(lead: any): Promise<string | undefined> {
+async function ensureAuditToken(lead: any, serviceType: ServiceType = "web_dev"): Promise<string | undefined> {
   const ed = lead.enriched_data || {};
   // Skip if no enrichment data at all (nothing to show in audit)
-  const hasEnrichment = ed.hasOnlineBooking !== undefined || ed.hasContactForm !== undefined || ed.hasSSL !== undefined;
+  const hasEnrichment = ed.summary || ed.hasOnlineBooking !== undefined || ed.hasContactForm !== undefined || ed.hasSSL !== undefined || ed._siteDown || ed.isParkedDomain;
   if (!hasEnrichment) return undefined;
 
-  // Already has a token
+  // Already has a token — fetch PageSpeed if missing (only for web_dev and seo)
   if (ed.audit_token) {
+    const needsPageSpeed = (serviceType === "web_dev" || serviceType === "seo") && !ed.pageSpeed && lead.website && !ed._siteDown && !ed.isParkedDomain;
+    if (needsPageSpeed) {
+      const pageSpeedData = await getPageSpeedScores(lead.website);
+      if (pageSpeedData) {
+        await supabase.from("leads")
+          .update({ enriched_data: { ...ed, pageSpeed: pageSpeedData, audit_service_type: serviceType } })
+          .eq("id", lead.id);
+      }
+    } else if (!ed.audit_service_type) {
+      // Backfill service type for existing tokens
+      await supabase.from("leads")
+        .update({ enriched_data: { ...ed, audit_service_type: serviceType } })
+        .eq("id", lead.id);
+    }
     return `${process.env.FRONTEND_URL || "http://localhost:3000"}/audit/${ed.audit_token}`;
   }
 
-  // Generate new token and store it
+  // Generate new token + fetch PageSpeed only for web_dev/seo
   const token = crypto.randomBytes(12).toString("base64url");
+
+  let pageSpeedData = null;
+  if ((serviceType === "web_dev" || serviceType === "seo") && lead.website && !ed._siteDown && !ed.isParkedDomain) {
+    pageSpeedData = await getPageSpeedScores(lead.website);
+  }
+
   const { error } = await supabase
     .from("leads")
-    .update({ enriched_data: { ...ed, audit_token: token } })
+    .update({ enriched_data: { ...ed, audit_token: token, audit_service_type: serviceType, ...(pageSpeedData ? { pageSpeed: pageSpeedData } : {}) } })
     .eq("id", lead.id);
 
   if (error) {
@@ -317,20 +345,32 @@ function isValidLead(lead: any): { valid: boolean; reason?: string } {
 function buildCallScriptPrompt(lead: any, enriched?: { summary?: string; issues?: string }): string {
   const industry = lead.industry || "Local business";
   const address = lead.enriched_data?.address || "";
-  return `Write a very short phone call script for cold-calling a local business.
+  const city = address ? address.split(",")[0].trim() : "";
 
-Lead context:
+  return `Write a natural phone call script for cold-calling a local ${industry.toLowerCase()} business.
+
+LEAD DATA:
 Company: ${lead.company}
-Industry: ${industry}${address ? `\nLocation: ${address}` : ""}
+Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}
 Phone: ${lead.phone || "N/A"}
-${enriched ? `Website summary: ${enriched.summary}\nIssues: ${enriched.issues}` : ""}
+Contact: ${lead.name || "the owner"}
+${enriched ? `Website: ${enriched.summary}\nIssues found: ${enriched.issues}` : "No website or website not analyzed."}
 
-Rules:
-- Opening line + 1 question + 1 value statement
-- Under 50 words total
-- Sound natural, not scripted
-- Casual and friendly
-- End with asking for a quick meeting or call back
+SCRIPT STRUCTURE:
+1. OPENING (1 line): "Hi, is this [contact name or company]?" — simple, human, gets them talking.
+2. INTRO (1-2 sentences): Who you are (first name only), what you do in plain English, and WHY you're calling them specifically. Reference something specific — their city, their industry, something you noticed about their business. NOT "I help businesses grow online."
+3. HOOK (1 sentence): One specific observation about their business that creates curiosity. Example: "I was looking up ${industry.toLowerCase()} in ${city || "your area"} and noticed your business doesn't come up on Google — but your competitor on [nearby street] does." This should be verifiable and specific.
+4. ASK (1 sentence): Simple, low-commitment ask. NOT "Can we schedule a call?" — they're already ON a call. Instead: "Would it be cool if I sent you a quick breakdown of what I found? Takes 30 seconds to look at."
+
+RULES:
+- Total script under 80 words (people hang up on long pitches)
+- Sound like a real person, not reading from a telemarketer script
+- Use their company name and city naturally
+- NEVER say: "I'm calling from [Agency Name]", "partnership opportunity", "I'd love to help you grow"
+- If they have no website, lead with that: "I noticed ${lead.company} doesn't have a website yet — in ${city || "your area"}, about 70% of people search online before picking a ${industry.toLowerCase()}. Just wanted to see if that's something you've been thinking about."
+- NEVER use placeholder brackets like [City], [Your Name], etc. Use actual data or skip.
+- The "opening" field should ONLY be the first greeting line
+- The "script" field should contain the full conversation flow after the opening
 
 Return ONLY JSON with "opening" and "script" fields.`;
 }
@@ -416,7 +456,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       const hasNoWebsite = !lead.website || !lead.website.startsWith("http");
       const enrichedData = lead.enriched_data || {};
       const hasBrokenWebsite = !hasNoWebsite && (enrichedData._siteDown === true || (!enrichedData.title && !enrichedData.description && (!enrichedData.technologies || enrichedData.technologies.length === 0)));
-      const auditUrl = await ensureAuditToken(lead);
+      const auditUrl = await ensureAuditToken(lead, basicServiceType);
       const summary = enrichedData.summary || lead.company;
       const prompt = buildInitialPrompt(lead, tone, hasNoWebsite ? { noWebsite: true, auditUrl } : hasBrokenWebsite ? { brokenWebsite: true, auditUrl } : { summary, auditUrl }, basicServiceType);
 
@@ -675,7 +715,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       }
 
       // --- MARKETING / ADS gaps (higher priority for digital_marketing service type) ---
-      const isMarketingUser = userServiceType === "digital_marketing";
+      const isMarketingUser = userServiceType === "digital_marketing" || userServiceType === "social_media";
       const isSocialUser = userServiceType === "social_media";
 
       // No Google Ads
@@ -691,6 +731,36 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       // No analytics
       if (enrichedData.hasAnalytics === false) {
         allGaps.push({ gap: "No Google Analytics — completely blind to how many people visit the site and what they do", priority: isMarketingUser ? 85 : 30 });
+      }
+
+      // No lead capture / email signup form
+      if (enrichedData.hasLeadCaptureForm === false) {
+        allGaps.push({ gap: "No email signup or lead capture — visitors leave and never come back, zero way to nurture them", priority: isMarketingUser ? 88 : 25 });
+      }
+
+      // No email marketing platform
+      if (enrichedData.hasEmailMarketing === false) {
+        allGaps.push({ gap: "No email marketing setup — not collecting or nurturing leads through automated follow-ups", priority: isMarketingUser ? 70 : 15 });
+      }
+
+      // No Open Graph tags (social sharing looks broken)
+      if (enrichedData.hasOpenGraph === false) {
+        allGaps.push({ gap: "No Open Graph tags — when shared on social media, the link shows no image or description (looks broken)", priority: isMarketingUser || isSocialUser ? 65 : 15 });
+      }
+
+      // No retargeting pixels (beyond Facebook)
+      if (enrichedData.hasRetargeting === false && enrichedData.hasFacebookPixel === false) {
+        allGaps.push({ gap: "Zero retargeting setup — 97% of visitors leave without converting and never see another ad from this business", priority: isMarketingUser ? 75 : 20 });
+      }
+
+      // No schema markup
+      if (enrichedData.hasSchemaMarkup === false) {
+        allGaps.push({ gap: "No structured data markup — missing rich snippets in Google (stars, hours, FAQ) that boost click-through rates", priority: isMarketingUser ? 50 : 20 });
+      }
+
+      // No clear CTA above the fold
+      if (enrichedData.hasCTA === false) {
+        allGaps.push({ gap: "No clear call-to-action above the fold — visitors don't know what action to take", priority: isMarketingUser ? 60 : 30 });
       }
 
       // Low Google rating / few reviews
@@ -712,7 +782,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       const digitalGaps = gaps.length > 0 ? gaps.join("\n") : "";
 
       // Initial email — auto-generate audit token if enrichment exists
-      const auditUrl = await ensureAuditToken(lead);
+      const auditUrl = await ensureAuditToken(lead, userServiceType);
       const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues, digitalGaps, noWebsite: hasNoWebsite, brokenWebsite: hasBrokenWebsite, auditUrl }, userServiceType);
       try {
         const completion = await openai.chat.completions.create({
@@ -735,7 +805,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
               body: appendOptOut(emailData.body),
               status: "pending",
               sequence_step: 1,
-              scheduled_at: new Date().toISOString(),
+              scheduled_at: null,
               tone_variant: tone,
             });
 

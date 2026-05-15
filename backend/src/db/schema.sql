@@ -56,12 +56,12 @@ create unique index if not exists idx_leads_user_company_phone
 -- Table: campaigns
 -- =============================================
 
--- Campaign status: draft, running, completed
+-- Campaign status: draft, running, completed, failed
 create table if not exists campaigns (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
-  status text not null default 'draft' check (status in ('draft', 'running', 'completed')),
+  status text not null default 'draft' check (status in ('draft', 'running', 'completed', 'failed')),
   total_leads integer default 0,
   queued_leads integer default 0,
   enable_followups boolean default false,

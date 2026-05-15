@@ -20,28 +20,19 @@ export interface PageSpeedResult {
 
 const API_KEY = process.env.PAGESPEED_API_KEY || "";
 const API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
-const TIMEOUT = 30000; // 30s — Google needs time to render the page
+const TIMEOUT = 45000; // 45s — Google needs time for slow sites
 
 /**
- * Fetch Lighthouse performance metrics from Google PageSpeed Insights API
- * Returns null for a strategy if the API call fails (graceful fallback)
+ * Single attempt to fetch Lighthouse metrics for a URL + strategy
  */
 async function fetchScore(url: string, strategy: "mobile" | "desktop"): Promise<PageSpeedMetrics | null> {
-  if (!API_KEY) return null;
-
   try {
-    const params: Record<string, string | string[]> = {
-      url,
-      strategy,
-      key: API_KEY,
-    };
-    // Request all 4 Lighthouse categories in a single API call
-    const categories = ["performance", "accessibility", "best-practices", "seo"];
-
     const response = await axios.get(API_URL, {
       params: {
-        ...params,
-        category: categories,
+        url,
+        strategy,
+        key: API_KEY,
+        category: ["performance", "accessibility", "best-practices", "seo"],
       },
       timeout: TIMEOUT,
       paramsSerializer: (p) => {
@@ -80,34 +71,28 @@ async function fetchScore(url: string, strategy: "mobile" | "desktop"): Promise<
   } catch (error) {
     logger.warn(
       { url, strategy, error: error instanceof Error ? error.message : error },
-      "PageSpeed API call failed — using fallback"
+      "PageSpeed API call failed"
     );
     return null;
   }
 }
 
 /**
- * Get both mobile and desktop Lighthouse scores for a URL
- * Runs both in parallel for speed. Returns null metrics on failure (graceful).
- * If PAGESPEED_API_KEY is not set, returns null entirely (feature disabled).
+ * Get both mobile and desktop Lighthouse scores for a URL.
+ * Runs SEQUENTIALLY (desktop first, then mobile) to avoid Google rate-limiting.
+ * Returns null entirely if API key is missing or URL is invalid.
  */
 export async function getPageSpeedScores(url: string): Promise<PageSpeedResult | null> {
-  if (!API_KEY) {
-    return null;
-  }
+  if (!API_KEY) return null;
 
-  // Ensure URL is valid and has protocol
   if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
     return null;
   }
 
-  // Run mobile and desktop in parallel
-  const [mobile, desktop] = await Promise.all([
-    fetchScore(url, "mobile"),
-    fetchScore(url, "desktop"),
-  ]);
+  // Sequential: desktop first (faster, more reliable), then mobile
+  const desktop = await fetchScore(url, "desktop");
+  const mobile = await fetchScore(url, "mobile");
 
-  // If both failed, return null (API might be down)
   if (!mobile && !desktop) return null;
 
   return { mobile, desktop };

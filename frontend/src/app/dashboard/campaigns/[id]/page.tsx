@@ -188,6 +188,7 @@ interface Lead {
 
 interface Email {
   id: string;
+  lead_id: string;
   to_email: string;
   subject: string;
   body: string;
@@ -371,12 +372,14 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
   const ed = lead.enriched_data;
   const [auditUrl, setAuditUrl] = useState<string | null>(ed?.audit_token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/audit/${ed.audit_token}` : null);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditProgress, setAuditProgress] = useState(0);
+  const [auditStep, setAuditStep] = useState("");
   const scoreColor =
     lead.score && lead.score >= 70
-      ? "text-emerald-700 bg-emerald-50 ring-emerald-200"
+      ? "text-emerald-700 bg-emerald-50 ring-emerald-300"
       : lead.score && lead.score >= 40
-      ? "text-amber-700 bg-amber-50 ring-amber-200"
-      : "text-gray-600 bg-gray-50 ring-gray-200";
+      ? "text-amber-700 bg-amber-50 ring-amber-300"
+      : "text-red-600 bg-red-50 ring-red-200";
 
   const scoreLabel =
     lead.score && lead.score >= 70
@@ -436,100 +439,142 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl flex items-center justify-between">
-          <div className="min-w-0">
-            <h3 className="text-lg font-bold text-gray-900 capitalize truncate">{lead.company}</h3>
-            {lead.name && <p className="text-sm text-gray-500 capitalize">{lead.name}</p>}
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-5">
-          {/* Score */}
-          <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-lg font-bold ring-1 ${scoreColor}`}>
-              {lead.score ?? "—"}
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-gray-700">{scoreLabel}</p>
-              <p className="text-xs text-gray-400">Lead quality score (0–100)</p>
-            </div>
-          </div>
-
-          {/* Audit Report Button */}
-          {ed && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-blue-900">Website Audit Report</p>
-                  <p className="text-xs text-blue-600 mt-0.5">
-                    {auditUrl ? "Share this link in your outreach email" : "Generate a visual report to share with this lead"}
-                  </p>
-                </div>
-                {auditUrl ? (
-                  <button
-                    onClick={() => window.open(auditUrl, "_blank")}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
-                  >
-                    Preview
-                  </button>
-                ) : (
-                  <button
-                    disabled={auditLoading}
-                    onClick={async () => {
-                      setAuditLoading(true);
-                      try {
-                        const data = await apiPost<{ url: string }>("/audit/generate", { leadId: lead.id });
-                        setAuditUrl(data.url);
-                      } catch { /* silently fail */ }
-                      setAuditLoading(false);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
-                  >
-                    {auditLoading ? "Generating..." : "Generate Report"}
-                  </button>
+        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold ring-2 ${scoreColor}`}>
+                {lead.score ?? "—"}
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-gray-900 capitalize truncate">{lead.company || lead.name}</h3>
+                {lead.name && lead.name.toLowerCase() !== (lead.company || "").toLowerCase() && (
+                  <p className="text-xs text-gray-400 capitalize truncate">{lead.name}</p>
                 )}
               </div>
             </div>
-          )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
 
-          {/* Contact Info */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Contact Info</p>
-            {lead.email && (
-              <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                <span className="text-gray-700 break-all">{lead.email}</span>
-              </div>
-            )}
-            {lead.phone && (
-              <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                <span className="text-gray-700">{lead.phone}</span>
-              </div>
-            )}
-            {lead.website && (
-              <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-violet-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{lead.website}</a>
+        <div className="px-6 py-5 space-y-5">
+          {/* Top Row: Contact + Audit side by side */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Contact Info */}
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Contact</p>
+              {lead.email && (
+                <div className="flex items-center gap-2 text-sm">
+                  <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  <span className="text-gray-700 break-all text-xs">{lead.email}</span>
+                </div>
+              )}
+              {lead.phone && (
+                <div className="flex items-center gap-2 text-sm">
+                  <svg className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                  <span className="text-gray-700 text-xs">{lead.phone}</span>
+                </div>
+              )}
+              {lead.website && (
+                <div className="flex items-center gap-2 text-sm">
+                  <svg className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                  <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all text-xs">{lead.website.replace(/^https?:\/\//, "")}</a>
+                </div>
+              )}
+              {ed?.industry && (
+                <div className="pt-1">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600 capitalize">{ed.industry}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Audit Report */}
+            {ed && (
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 flex flex-col justify-center">
+                {auditLoading ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-blue-900">{auditStep}</p>
+                      <p className="text-xs text-blue-600 font-semibold">{Math.round(auditProgress)}%</p>
+                    </div>
+                    <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${auditProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-blue-400 mt-2">Powered by Google PageSpeed Insights</p>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-blue-900 mb-1">Website Audit Report</p>
+                    <p className="text-[11px] text-blue-500 mb-3">
+                      {auditUrl ? "Report ready — share with lead" : "Generate a visual report"}
+                    </p>
+                    {auditUrl ? (
+                      <button
+                        onClick={() => window.open(auditUrl, "_blank")}
+                        className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      >
+                        Preview Report
+                      </button>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          setAuditLoading(true);
+                          setAuditProgress(0);
+                          setAuditStep("Generating token...");
+                          const steps = [
+                            { at: 5, text: "Connecting to website..." },
+                            { at: 15, text: "Running desktop analysis..." },
+                            { at: 40, text: "Running mobile analysis..." },
+                            { at: 65, text: "Checking scores..." },
+                            { at: 80, text: "Finalizing report..." },
+                          ];
+                          let progress = 0;
+                          const timer = setInterval(() => {
+                            progress += progress < 70 ? 1.5 : progress < 90 ? 0.6 : 0.2;
+                            if (progress > 95) progress = 95;
+                            setAuditProgress(progress);
+                            const currentStep = [...steps].reverse().find(s => progress >= s.at);
+                            if (currentStep) setAuditStep(currentStep.text);
+                          }, 500);
+                          try {
+                            const data = await apiPostLong<{ url: string }>("/audit/generate", { leadId: lead.id });
+                            clearInterval(timer);
+                            setAuditProgress(100);
+                            setAuditStep("Report ready!");
+                            setAuditUrl(data.url);
+                          } catch {
+                            clearInterval(timer);
+                            setAuditStep("Failed — try again");
+                          }
+                          setTimeout(() => setAuditLoading(false), 500);
+                        }}
+                        className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      >
+                        Generate Report
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Enrichment Summary */}
+          {/* Summary */}
           {ed?.summary && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Summary</p>
-              <p className="text-sm text-gray-600 leading-relaxed">{ed.summary}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Summary</p>
+              <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">{ed.summary}</p>
             </div>
           )}
 
@@ -580,62 +625,62 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className={`rounded-xl p-3 ${ed.hasOnlineBooking ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`rounded-xl p-3 ${ed.hasOnlineBooking ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? "text-green-600" : "text-gray-500"}`}>
                     Online Booking
                   </p>
-                  <p className={`text-sm font-bold ${ed.hasOnlineBooking ? "text-emerald-700" : "text-red-700"}`}>
-                    {ed.hasOnlineBooking ? "Yes" : "No"}
+                  <p className={`text-sm font-bold ${ed.hasOnlineBooking ? "text-green-700" : "text-gray-600"}`}>
+                    {ed.hasOnlineBooking ? "✓ Yes" : "✗ No"}
                   </p>
                 </div>
-                <div className={`rounded-xl p-3 ${ed.hasContactForm ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`rounded-xl p-3 ${ed.hasContactForm ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? "text-green-600" : "text-gray-500"}`}>
                     Contact Form
                   </p>
-                  <p className={`text-sm font-bold ${ed.hasContactForm ? "text-emerald-700" : "text-red-700"}`}>
-                    {ed.hasContactForm ? "Yes" : "No"}
+                  <p className={`text-sm font-bold ${ed.hasContactForm ? "text-green-700" : "text-gray-600"}`}>
+                    {ed.hasContactForm ? "✓ Yes" : "✗ No"}
                   </p>
                 </div>
-                <div className={`rounded-xl p-3 ${ed.hasSSL !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasSSL !== false ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`rounded-xl p-3 ${ed.hasSSL !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasSSL !== false ? "text-green-600" : "text-gray-500"}`}>
                     SSL (HTTPS)
                   </p>
-                  <p className={`text-sm font-bold ${ed.hasSSL !== false ? "text-emerald-700" : "text-red-700"}`}>
-                    {ed.hasSSL !== false ? "Secure" : "Not Secure"}
+                  <p className={`text-sm font-bold ${ed.hasSSL !== false ? "text-green-700" : "text-gray-600"}`}>
+                    {ed.hasSSL !== false ? "✓ Secure" : "✗ Not Secure"}
                   </p>
                 </div>
-                <div className={`rounded-xl p-3 ${ed.isMobileFriendly !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.isMobileFriendly !== false ? "text-emerald-600" : "text-red-600"}`}>
+                <div className={`rounded-xl p-3 ${ed.isMobileFriendly !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.isMobileFriendly !== false ? "text-green-600" : "text-gray-500"}`}>
                     Mobile-Friendly
                   </p>
-                  <p className={`text-sm font-bold ${ed.isMobileFriendly !== false ? "text-emerald-700" : "text-red-700"}`}>
-                    {ed.isMobileFriendly !== false ? "Yes" : "No"}
+                  <p className={`text-sm font-bold ${ed.isMobileFriendly !== false ? "text-green-700" : "text-gray-600"}`}>
+                    {ed.isMobileFriendly !== false ? "✓ Yes" : "✗ No"}
                   </p>
                 </div>
-                <div className={`rounded-xl p-3 ${ed.hasMetaDescription !== false ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-amber-50 ring-1 ring-amber-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasMetaDescription !== false ? "text-emerald-600" : "text-amber-600"}`}>
+                <div className={`rounded-xl p-3 ${ed.hasMetaDescription !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-amber-50/70 ring-1 ring-amber-200/60"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasMetaDescription !== false ? "text-green-600" : "text-amber-600"}`}>
                     SEO Meta
                   </p>
-                  <p className={`text-sm font-bold ${ed.hasMetaDescription !== false ? "text-emerald-700" : "text-amber-700"}`}>
-                    {ed.hasMetaDescription !== false ? "Present" : "Missing"}
+                  <p className={`text-sm font-bold ${ed.hasMetaDescription !== false ? "text-green-700" : "text-amber-700"}`}>
+                    {ed.hasMetaDescription !== false ? "✓ Present" : "⚠ Missing"}
                   </p>
                 </div>
                 {ed.pageLoadTimeMs !== undefined && (
-                  <div className={`rounded-xl p-3 ${ed.pageLoadTimeMs <= 3000 ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-red-50 ring-1 ring-red-200"}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.pageLoadTimeMs <= 3000 ? "text-emerald-600" : "text-red-600"}`}>
+                  <div className={`rounded-xl p-3 ${ed.pageLoadTimeMs <= 3000 ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.pageLoadTimeMs <= 3000 ? "text-green-600" : "text-gray-500"}`}>
                       Page Speed
                     </p>
-                    <p className={`text-sm font-bold ${ed.pageLoadTimeMs <= 3000 ? "text-emerald-700" : "text-red-700"}`}>
+                    <p className={`text-sm font-bold ${ed.pageLoadTimeMs <= 3000 ? "text-green-700" : "text-gray-600"}`}>
                       {(ed.pageLoadTimeMs / 1000).toFixed(1)}s {ed.pageSizeKB ? `(${ed.pageSizeKB}KB)` : ""}
                     </p>
                   </div>
                 )}
                 {ed.copyrightYear && (
-                  <div className={`rounded-xl p-3 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-amber-50 ring-1 ring-amber-200"}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-emerald-600" : "text-amber-600"}`}>
+                  <div className={`rounded-xl p-3 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-amber-50/70 ring-1 ring-amber-200/60"}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-green-600" : "text-amber-600"}`}>
                       Copyright Year
                     </p>
-                    <p className={`text-sm font-bold ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-emerald-700" : "text-amber-700"}`}>
+                    <p className={`text-sm font-bold ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-green-700" : "text-amber-700"}`}>
                       © {ed.copyrightYear}
                     </p>
                   </div>
@@ -644,13 +689,13 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
             </div>
           )}
 
-          {/* Technologies */}
+          {/* Technologies + Social in row */}
           {ed?.technologies && ed.technologies.length > 0 && (
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Technologies</p>
               <div className="flex flex-wrap gap-1.5">
                 {ed.technologies.map((tech, i) => (
-                  <span key={i} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200">{tech}</span>
+                  <span key={i} className="px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200">{tech}</span>
                 ))}
               </div>
             </div>
@@ -660,22 +705,13 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
           {ed?.socialLinks && ed.socialLinks.length > 0 && (
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Social Media</p>
-              <div className="space-y-1.5">
+              <div className="flex flex-wrap gap-2">
                 {ed.socialLinks.map((link, i) => (
-                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline break-all">
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                    {link}
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors break-all">
+                    {link.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
                   </a>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Industry */}
-          {ed?.industry && (
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Industry</p>
-              <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 ring-1 ring-blue-200 capitalize">{ed.industry}</span>
             </div>
           )}
 
@@ -717,6 +753,178 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
   );
 }
 
+// ===== Call Script Preview Modal =====
+function CallScriptModal({ script, onClose }: { script: { lead_id: string; company: string; phone?: string; opening: string; script: string }; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+              <h3 className="text-base font-bold text-gray-900">Call Script</h3>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-semibold text-gray-900 capitalize">{script.company}</span>
+                {script.phone && (
+                  <a href={`tel:${script.phone}`} className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-orange-700 bg-orange-50 rounded-lg ring-1 ring-orange-200 hover:bg-orange-100 transition-colors">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                    {script.phone}
+                  </a>
+                )}
+              </div>
+              {script.opening && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1.5">Opening</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{script.opening}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1.5">Full Script</p>
+                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{script.script}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== Email Preview Modal =====
+function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; onClose: () => void; onMarkReply: (id: string) => void }) {
+  const stepColors = [
+    "from-blue-500 to-indigo-500",
+    "from-violet-500 to-purple-500",
+    "from-orange-500 to-amber-500",
+  ];
+
+  // Convert URLs in text to clickable links
+  function renderBody(text: string) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) =>
+      urlRegex.test(part) ? (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              <h3 className="text-base font-bold text-gray-900">Email Sequence ({emails.length})</h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {emails.map((email) => {
+            const stepIdx = Math.min((email.sequence_step || 1) - 1, 2);
+            return (
+              <div key={email.id} className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className={`h-1 bg-gradient-to-r ${stepColors[stepIdx]}`} />
+                <div className="p-5">
+                  {/* Meta row */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold text-white bg-gradient-to-r ${stepColors[stepIdx]}`}>
+                        {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
+                      </span>
+                      {email.tone_variant && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium uppercase">{email.tone_variant}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {email.replied ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Replied
+                        </span>
+                      ) : email.status === "sent" ? (
+                        <button
+                          onClick={() => onMarkReply(email.id)}
+                          className="px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        >
+                          Mark Replied
+                        </button>
+                      ) : null}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                        email.status === "sent" ? "bg-emerald-50 text-emerald-700" :
+                        email.status === "failed" ? "bg-red-50 text-red-600" :
+                        "bg-amber-50 text-amber-700"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          email.status === "sent" ? "bg-emerald-500" :
+                          email.status === "failed" ? "bg-red-500" :
+                          "bg-amber-500"
+                        }`} />
+                        {email.status === "sent" ? "Sent" : email.status === "failed" ? "Failed" : "Pending"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Email header */}
+                  <div className="mb-4 pb-3 border-b border-gray-100">
+                    <p className="text-xs text-gray-400 mb-1">To: <span className="text-gray-600">{email.to_email}</span></p>
+                    <h4 className="text-base font-semibold text-gray-900">{email.subject}</h4>
+                  </div>
+
+                  {/* Email body */}
+                  <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                    {renderBody(email.body)}
+                  </div>
+
+                  {/* Footer meta */}
+                  {(email.sent_at || email.scheduled_at || email.error_log || (!email.sent_at && email.status === "pending")) && (
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap text-[11px] text-gray-400">
+                      {email.gmail_email && <span>From: {email.gmail_email}</span>}
+                      {email.sent_at && <span>Sent {new Date(email.sent_at).toLocaleString()}</span>}
+                      {!email.sent_at && !email.scheduled_at && email.status === "pending" && <span className="text-amber-600">Sends during next business hours</span>}
+                      {!email.sent_at && email.scheduled_at && <span className="text-amber-600">Scheduled: {new Date(email.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (during business hours)</span>}
+                      {email.replied_at && <span className="text-emerald-600">Replied {new Date(email.replied_at).toLocaleString()}</span>}
+                      {email.error_log && email.status === "failed" && <span className="text-red-500">Error: {email.error_log}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -738,6 +946,8 @@ export default function CampaignDetailPage() {
   const [leadSearch, setLeadSearch] = useState("");
   const [leadPage, setLeadPage] = useState(1);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
+  const [emailPreviewLeadId, setEmailPreviewLeadId] = useState<string | null>(null);
+  const [callScriptPreviewLeadId, setCallScriptPreviewLeadId] = useState<string | null>(null);
   const [auditViews, setAuditViews] = useState<Record<string, { count: number; lastViewed: string; device: string }>>({});
   const LEADS_PER_PAGE = 10;
 
@@ -801,7 +1011,11 @@ export default function CampaignDetailPage() {
     generateProgress.start();
     try {
       const endpoint = enableFollowups ? "/generate/advanced" : "/generate";
-      const leadIdsToUse = selectedLeadIds.size > 0 ? Array.from(selectedLeadIds) : undefined;
+      // Only send enriched leads that don't already have emails
+      const enrichedReadyIds = leads
+        .filter(l => selectedLeadIds.has(l.id) && l.enriched_data?.summary && l.contact_method !== "call" && !emails.some(e => e.lead_id === l.id))
+        .map(l => l.id);
+      const leadIdsToUse = enrichedReadyIds.length > 0 ? enrichedReadyIds : undefined;
       const body = enableFollowups
         ? { campaignId, enableFollowups: true, leadIds: leadIdsToUse }
         : { campaignId, leadIds: leadIdsToUse };
@@ -973,6 +1187,7 @@ export default function CampaignDetailPage() {
 
   const hasEmails = emails.length > 0;
   const hasPendingEmails = emails.some((e) => e.status === "pending");
+  const allLeadsHaveEmails = leads.filter(l => l.contact_method !== "call").every(l => emails.some(e => e.lead_id === l.id));
   const contactedLeadCount = leads.filter(l => l.contacted).length;
   const queuedLeadCount = leads.filter(l => l.source_type === "csv_queued").length;
   const activeLeadCount = leads.length - queuedLeadCount;
@@ -985,6 +1200,18 @@ export default function CampaignDetailPage() {
     <div>
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
       {detailLead && <LeadDetailModal lead={detailLead} onClose={() => setDetailLead(null)} />}
+      {callScriptPreviewLeadId && (() => {
+        const script = callScripts.find(s => s.lead_id === callScriptPreviewLeadId);
+        return script ? (
+          <CallScriptModal script={script} onClose={() => setCallScriptPreviewLeadId(null)} />
+        ) : null;
+      })()}
+      {emailPreviewLeadId && (() => {
+        const leadEmails = emails.filter(e => e.lead_id === emailPreviewLeadId).sort((a, b) => (a.sequence_step || 1) - (b.sequence_step || 1));
+        return leadEmails.length > 0 ? (
+          <EmailPreviewModal emails={leadEmails} onClose={() => setEmailPreviewLeadId(null)} onMarkReply={handleMarkReply} />
+        ) : null;
+      })()}
 
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
@@ -1014,45 +1241,63 @@ export default function CampaignDetailPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              {campaign.status === "draft" && !hasEmails && leads.length > 0 && (selectedLeadIds.size > 0 || leads.some(l => !l.enriched_data?.summary)) && (
-                <button
-                  onClick={handleEnrich}
-                  disabled={enriching || enrichLimitReached}
-                  className="px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={enrichLimitReached ? enrichLimitMsg : ""}
-                >
-                  {enriching ? "Enriching..." : enrichLimitReached ? "Limit Reached" : selectedLeadIds.size > 0 ? `Enrich ${selectedLeadIds.size} Selected` : "Enrich Leads"}
-                </button>
-              )}
-              {campaign.status === "draft" && !hasEmails && leads.some(l => l.enriched_data?.summary) && (
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating || generateLimitReached}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={generateLimitReached ? generateLimitMsg : ""}
-                >
-                  {generating ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : selectedLeadIds.size > 0 ? `Generate for ${selectedLeadIds.size} Selected` : "Generate Emails"}
-                </button>
-              )}
-              {campaign.status === "draft" && leads.some(l => l.contact_method === "call") && leads.some(l => l.enriched_data?.summary) && (
-                <button
-                  onClick={handleGenerateCallScripts}
-                  disabled={generatingScripts || generateLimitReached}
-                  className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={generateLimitReached ? generateLimitMsg : ""}
-                >
-                  {generatingScripts ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : "Generate Call Scripts"}
-                </button>
-              )}
-              {campaign.status === "draft" && hasPendingEmails && (
-                <button
-                  onClick={handleSend}
-                  disabled={sending}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {sending ? "Sending..." : selectedLeadIds.size > 0 ? `Send to ${selectedLeadIds.size} Selected` : "Start Campaign"}
-                </button>
-              )}
+              {(() => {
+                const isActive = campaign.status === "draft" || campaign.status === "running" || campaign.status === "failed";
+                const selectedLeads = leads.filter(l => selectedLeadIds.has(l.id));
+                const selectedUnenriched = selectedLeads.filter(l => !l.enriched_data?.summary);
+                const selectedEnriched = selectedLeads.filter(l => l.enriched_data?.summary);
+                const selectedEnrichedWithoutEmails = selectedLeads.filter(l => l.enriched_data?.summary && l.contact_method !== "call" && !emails.some(e => e.lead_id === l.id));
+                const selectedCallLeads = selectedLeads.filter(l => l.contact_method === "call" && l.enriched_data?.summary);
+                const selectedPendingEmails = emails.filter(e => e.status === "pending" && selectedLeadIds.has(e.lead_id));
+
+                return (
+                  <>
+                    {/* Enrich — show when selected leads have un-enriched ones */}
+                    {isActive && selectedLeadIds.size > 0 && selectedUnenriched.length > 0 && (
+                      <button
+                        onClick={handleEnrich}
+                        disabled={enriching || enrichLimitReached}
+                        className="px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={enrichLimitReached ? enrichLimitMsg : ""}
+                      >
+                        {enriching ? "Enriching..." : enrichLimitReached ? "Limit Reached" : `Enrich ${selectedUnenriched.length} Selected`}
+                      </button>
+                    )}
+                    {/* Generate Emails — show when selected enriched leads don't have emails yet */}
+                    {isActive && selectedEnrichedWithoutEmails.length > 0 && (
+                      <button
+                        onClick={handleGenerate}
+                        disabled={generating || generateLimitReached}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={generateLimitReached ? generateLimitMsg : ""}
+                      >
+                        {generating ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : `Generate for ${selectedEnrichedWithoutEmails.length} Selected`}
+                      </button>
+                    )}
+                    {/* Generate Call Scripts — show when selected enriched leads are call-only */}
+                    {isActive && selectedEnriched.length > 0 && selectedCallLeads.length > 0 && (
+                      <button
+                        onClick={handleGenerateCallScripts}
+                        disabled={generatingScripts || generateLimitReached}
+                        className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={generateLimitReached ? generateLimitMsg : ""}
+                      >
+                        {generatingScripts ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : "Generate Call Scripts"}
+                      </button>
+                    )}
+                    {/* Send — show when selected leads have pending emails ready to send */}
+                    {isActive && selectedPendingEmails.length > 0 && (
+                      <button
+                        onClick={handleSend}
+                        disabled={sending}
+                        className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sending ? "Sending..." : `Send to ${new Set(selectedPendingEmails.map(e => e.lead_id)).size} Selected`}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -1315,6 +1560,7 @@ export default function CampaignDetailPage() {
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Score</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Outreach</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
                     </tr>
                   </thead>
@@ -1382,30 +1628,77 @@ export default function CampaignDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-sm">
-                            {lead.contacted ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  Contacted
+                            <div className="flex flex-col items-start gap-1">
+                              {emails.some(e => e.lead_id === lead.id && e.replied) ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    Replied
+                                  </span>
+                                  {(() => { const r = emails.find(e => e.lead_id === lead.id && e.replied_at); return r?.replied_at ? <p className="text-[10px] text-emerald-500 mt-0.5">{new Date(r.replied_at).toLocaleDateString()}</p> : null; })()}
+                                </div>
+                              ) : lead.contacted ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    Contacted
+                                  </span>
+                                  {lead.contacted_at && (
+                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                      {new Date(lead.contacted_at).toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-500">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                  Uncontacted
                                 </span>
-                                {lead.contacted_at && (
-                                  <p className="text-[10px] text-gray-400 mt-0.5">
-                                    {new Date(lead.contacted_at).toLocaleDateString()}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-500">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                                Uncontacted
-                              </span>
-                            )}
-                            {auditViews[lead.id] && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200 mt-1 ml-0">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                {auditViews[lead.id].count > 1 ? `${auditViews[lead.id].count} views` : formatTimeAgo(auditViews[lead.id].lastViewed)}
-                              </span>
-                            )}
+                              )}
+                              {auditViews[lead.id] && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200 ml-1">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                  {auditViews[lead.id].count > 1 ? `${auditViews[lead.id].count} views` : formatTimeAgo(auditViews[lead.id].lastViewed)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {(() => {
+                              const isCallLead2 = lead.contact_method === "call";
+                              if (isCallLead2) {
+                                const script = callScripts.find(s => s.lead_id === lead.id);
+                                if (!script) return <span className="text-gray-300 text-xs">—</span>;
+                                return (
+                                  <button
+                                    onClick={() => setCallScriptPreviewLeadId(lead.id)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg ring-1 transition-colors bg-orange-50 text-orange-700 ring-orange-200 hover:bg-orange-100"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                    Script
+                                  </button>
+                                );
+                              }
+                              const leadEmails = emails.filter(e => e.lead_id === lead.id);
+                              if (leadEmails.length === 0) return <span className="text-gray-300 text-xs">—</span>;
+                              const hasReply = leadEmails.some(e => e.replied);
+                              const latest = leadEmails.sort((a, b) => (b.sequence_step || 1) - (a.sequence_step || 1))[0];
+                              return (
+                                <button
+                                  onClick={() => setEmailPreviewLeadId(lead.id)}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg ring-1 transition-colors ${
+                                    hasReply ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100" :
+                                    latest.status === "sent" ? "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100" :
+                                    latest.status === "failed" ? "bg-red-50 text-red-600 ring-red-200 hover:bg-red-100" :
+                                    "bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100"
+                                  }`}
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                  {hasReply ? "Replied" : latest.status === "sent" ? "Sent" : latest.status === "failed" ? "Failed" : "Pending"}
+                                  {leadEmails.length > 1 && <span className="text-[9px] opacity-70">+{leadEmails.length - 1}</span>}
+                                </button>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-3.5">
                             <button
@@ -1434,123 +1727,6 @@ export default function CampaignDetailPage() {
           })()}
         </div>
 
-      {/* Emails Section */}
-      {hasEmails && (
-        <div className="mt-10">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-100">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-            </div>
-            <h2 className="text-lg font-bold text-gray-900">Generated Emails <span className="text-gray-400 font-medium">({emails.length})</span></h2>
-          </div>
-          <div className="space-y-4">
-            {emails.map((email) => {
-              const stepColors = [
-                "from-blue-500 to-indigo-500",
-                "from-violet-500 to-purple-500",
-                "from-orange-500 to-amber-500",
-              ];
-              const stepIdx = Math.min((email.sequence_step || 1) - 1, 2);
-              return (
-                <div key={email.id} className="group bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all overflow-hidden">
-                  <div className={`h-1 bg-gradient-to-r ${stepColors[stepIdx]}`} />
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r ${stepColors[stepIdx]}`}>
-                          {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
-                        </span>
-                        <span className="text-sm text-gray-500">To: <span className="font-medium text-gray-700">{email.to_email}</span></span>
-                        {email.tone_variant && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium uppercase tracking-wider">{email.tone_variant}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {email.replied ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Replied
-                          </span>
-                        ) : email.status === "sent" ? (
-                          <button
-                            onClick={() => handleMarkReply(email.id)}
-                            className="px-3 py-1 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            Mark as Replied
-                          </button>
-                        ) : null}
-                        {statusBadge(email.status)}
-                      </div>
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">{email.subject}</h3>
-                    <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{email.body}</p>
-                    <div className="mt-3 flex items-center gap-4 flex-wrap">
-                      {email.gmail_email && (
-                        <p className="text-xs text-gray-400">From: {email.gmail_email}</p>
-                      )}
-                      {email.sent_at && (
-                        <p className="text-xs text-gray-400">Sent {new Date(email.sent_at).toLocaleString()}</p>
-                      )}
-                      {!email.sent_at && email.scheduled_at && (
-                        <p className="text-xs text-amber-600 font-medium">Scheduled: {new Date(email.scheduled_at).toLocaleString()}</p>
-                      )}
-                      {email.replied_at && (
-                        <p className="text-xs text-emerald-600 font-medium">Replied {new Date(email.replied_at).toLocaleString()}</p>
-                      )}
-                      {email.error_log && email.status === "failed" && (
-                        <p className="text-xs text-red-500">Error: {email.error_log}</p>
-                      )}
-                      {email.retry_count && email.retry_count > 0 && email.status !== "sent" && (
-                        <p className="text-xs text-orange-500">Retries: {email.retry_count}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Call Scripts */}
-      {callScripts.length > 0 && (
-        <div className="mt-10">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-100">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-            </div>
-            <h2 className="text-lg font-bold text-gray-900">Call Scripts <span className="text-gray-400 font-medium">({callScripts.length})</span></h2>
-          </div>
-          <div className="space-y-4">
-            {callScripts.map((script) => (
-              <div key={script.lead_id} className="bg-white rounded-2xl border border-gray-200 hover:border-orange-200 hover:shadow-md transition-all overflow-hidden">
-                <div className="h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
-                <div className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="font-semibold text-gray-900 capitalize">{script.company}</span>
-                    {script.phone && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-orange-700 bg-orange-50 rounded-lg ring-1 ring-orange-200">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                        {script.phone}
-                      </span>
-                    )}
-                  </div>
-                  {script.opening && (
-                    <div className="mb-4">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Opening</p>
-                      <p className="text-sm text-gray-700 leading-relaxed">{script.opening}</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Full Script</p>
-                    <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{script.script}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

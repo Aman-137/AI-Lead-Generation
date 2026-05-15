@@ -229,8 +229,10 @@ export default function SettingsPage() {
     // Load service type from stats
     apiGet<{ serviceType?: string }>("/stats").then((data) => {
       if (data.serviceType) {
-        setServiceType(data.serviceType);
-        setSavedServiceType(data.serviceType);
+        // Migrate deprecated social_media to digital_marketing
+        const mapped = data.serviceType === "social_media" ? "digital_marketing" : data.serviceType;
+        setServiceType(mapped);
+        setSavedServiceType(mapped);
       }
     }).catch(() => {});
   }, [fetchAccounts]);
@@ -366,6 +368,20 @@ export default function SettingsPage() {
       alert(msg);
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const reconnectGmail = async (accountId: string) => {
+    try {
+      setRemoving(accountId);
+      await apiDelete(`/gmail/accounts/${accountId}`);
+      const data = await apiGet<{ url: string }>("/gmail/auth-url");
+      window.location.href = data.url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to reconnect. Try removing and adding again.";
+      toast.addToast(msg, "error");
+      setRemoving(null);
+      await fetchAccounts();
     }
   };
 
@@ -783,15 +799,26 @@ export default function SettingsPage() {
                           </span>
                         </div>
                       </div>
-                      {!account.is_primary && (
-                        <button
-                          onClick={() => removeGmailInbox(account.id)}
-                          disabled={removing === account.id}
-                          className="text-xs text-gray-400 hover:text-red-500 font-medium disabled:opacity-50 transition-colors"
-                        >
-                          {removing === account.id ? "..." : "Remove"}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {!account.is_primary && (
+                          <button
+                            onClick={() => removeGmailInbox(account.id)}
+                            disabled={removing === account.id}
+                            className="text-xs text-gray-400 hover:text-red-500 font-medium disabled:opacity-50 transition-colors"
+                          >
+                            {removing === account.id ? "..." : "Remove"}
+                          </button>
+                        )}
+                        {account.is_primary && (
+                          <button
+                            onClick={() => reconnectGmail(account.id)}
+                            disabled={removing === account.id}
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium disabled:opacity-50 transition-colors"
+                          >
+                            {removing === account.id ? "Reconnecting..." : "Reconnect"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1049,7 +1076,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-gray-900">Your Service</h2>
-                  <p className="text-xs text-gray-500">Controls AI email pitch style</p>
+                  <p className="text-xs text-gray-500">Controls audit report & email style</p>
                 </div>
               </div>
               <button
@@ -1078,12 +1105,11 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {([
-                { value: "web_dev", label: "Web Design & Dev", icon: "🌐" },
-                { value: "seo", label: "SEO", icon: "🔍" },
-                { value: "digital_marketing", label: "Digital Marketing", icon: "📈" },
-                { value: "social_media", label: "Social Media", icon: "📱" },
+                { value: "web_dev", label: "Web Design & Dev", icon: "🌐", desc: "Speed, mobile, UX" },
+                { value: "digital_marketing", label: "Digital Marketing / SMMA", icon: "📈", desc: "Ads, tracking, social" },
+                { value: "seo", label: "SEO", icon: "🔍", desc: "Rankings, visibility" },
               ] as const).map((opt) => {
                 const isSelected = serviceType === opt.value;
                 const isSaved = savedServiceType === opt.value;
@@ -1105,6 +1131,7 @@ export default function SettingsPage() {
                     )}
                     <span className="text-2xl">{opt.icon}</span>
                     <span className={`text-xs font-semibold ${isSelected ? "text-violet-900" : "text-gray-700"}`}>{opt.label}</span>
+                    <span className={`text-[10px] ${isSelected ? "text-violet-600" : "text-gray-400"}`}>{opt.desc}</span>
                   </button>
                 );
               })}
