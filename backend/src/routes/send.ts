@@ -9,7 +9,7 @@ const router = Router();
 
 // ===== Business Hours Sending =====
 // Optimal cold email send times (research-backed):
-// Morning peak: 8:00-11:00 AM | Afternoon peak: 1:00-5:00 PM
+// Morning peak: 8:00 AM-12:00 PM | Afternoon peak: 1:00-5:00 PM
 // All 7 days, timezone-aware with DST handling
 const TIMEZONE_OFFSETS: Record<string, number[]> = {
   // US Timezones
@@ -74,28 +74,27 @@ function getLocalHour(date: Date, timezone: string): { hour: number; dayOfWeek: 
 }
 
 // Check if current time is within sending hours
-// Initial emails (isFollowUp=false): weekdays only (Mon-Fri) during business hours
+// Initial emails (isFollowUp=false): Mon-Sat during business hours
 // Follow-ups (isFollowUp=true): all 7 days during business hours
 export function isWithinSendWindow(timezone: string, isFollowUp = false): { canSend: boolean; nextWindowMs: number } {
   const now = new Date();
   const { hour, dayOfWeek } = getLocalHour(now, timezone);
 
-  // Weekend check for initial emails only (0=Sunday, 6=Saturday)
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  if (isWeekend && !isFollowUp) {
+  // Sunday check for initial emails only (0=Sunday)
+  const isSunday = dayOfWeek === 0;
+  if (isSunday && !isFollowUp) {
     // Calculate next Monday 8am
     const offsets = TIMEZONE_OFFSETS[timezone] || TIMEZONE_OFFSETS.US_EAST;
     const region = TIMEZONE_REGIONS[timezone] || "US";
     const offset = isDSTForRegion(now, region) ? offsets[1] : offsets[0];
     const next = new Date(now);
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : 2; // Sunday→1 day, Saturday→2 days
-    next.setUTCDate(next.getUTCDate() + daysUntilMonday);
+    next.setUTCDate(next.getUTCDate() + 1); // Sunday→Monday
     next.setUTCHours(8 - offset, 0, 0, 0);
     return { canSend: false, nextWindowMs: Math.max(0, next.getTime() - now.getTime()) };
   }
 
-  // Morning window: 8:00-11:00 AM | Afternoon window: 1:00-5:00 PM
-  const inMorning = hour >= 8 && hour < 11;
+  // Morning window: 8:00 AM-12:00 PM | Afternoon window: 1:00-5:00 PM
+  const inMorning = hour >= 8 && hour < 12;
   const inAfternoon = hour >= 13 && hour < 17;
 
   if (inMorning || inAfternoon) {
@@ -111,19 +110,18 @@ export function isWithinSendWindow(timezone: string, isFollowUp = false): { canS
   if (hour < 8) {
     // Before morning window → wait until 8am today
     next.setUTCHours(8 - offset, 0, 0, 0);
-  } else if (hour >= 11 && hour < 13) {
+  } else if (hour >= 12 && hour < 13) {
     // Between windows → wait until 1pm today
     next.setUTCHours(13 - offset, 0, 0, 0);
   } else {
     // After 5pm → next day 8am
     next.setUTCDate(next.getUTCDate() + 1);
     next.setUTCHours(8 - offset, 0, 0, 0);
-    // If next day is Saturday (and not follow-up), skip to Monday
+    // If next day is Sunday (and not follow-up), skip to Monday
     const nextDay = new Date(next);
     const { dayOfWeek: nextDayOfWeek } = getLocalHour(nextDay, timezone);
-    if (!isFollowUp && (nextDayOfWeek === 6 || nextDayOfWeek === 0)) {
-      const skip = nextDayOfWeek === 6 ? 2 : 1;
-      next.setUTCDate(next.getUTCDate() + skip);
+    if (!isFollowUp && nextDayOfWeek === 0) {
+      next.setUTCDate(next.getUTCDate() + 1);
     }
   }
 
@@ -344,7 +342,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       const waitHrs = Math.floor(waitMins / 60);
       const remainMins = waitMins % 60;
       const waitStr = waitHrs > 0 ? `${waitHrs}h ${remainMins}m` : `${waitMins}m`;
-      message = `Campaign queued! Outside ${tzLabel} sending hours. Emails will auto-send during the next window (Mon-Fri 8-11 AM & 1-5 PM ${tzLabel}) in ~${waitStr}.`;
+      message = `Campaign queued! Outside ${tzLabel} sending hours. Emails will auto-send during the next window (Mon-Sat 8 AM-12 PM & 1-5 PM ${tzLabel}) in ~${waitStr}.`;
     } else {
       message = `Campaign launched! ${totalQueued} emails queued for sending. They'll be sent automatically with proper delays to protect your inbox reputation.`;
     }

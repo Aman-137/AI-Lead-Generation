@@ -260,6 +260,42 @@ async function processEmailQueue() {
               }
             }
 
+            // Gate: previous step must exist and be "sent" before we send this follow-up
+            if (followUp.lead_id) {
+              const prevStep = followUp.sequence_step - 1;
+              const { data: prevEmail } = await supabase
+                .from("emails")
+                .select("status, sent_at")
+                .eq("campaign_id", campaign.id)
+                .eq("lead_id", followUp.lead_id)
+                .eq("sequence_step", prevStep)
+                .single();
+
+              if (!prevEmail || prevEmail.status !== "sent") {
+                // Previous step failed or still pending — cancel this follow-up
+                const reason = !prevEmail
+                  ? "Cancelled: previous step not found"
+                  : `Cancelled: step ${prevStep} status is ${prevEmail.status}`;
+                await supabase
+                  .from("emails")
+                  .update({ status: "cancelled", error_log: reason })
+                  .eq("id", followUp.id);
+                logger.info({ emailId: followUp.id, reason }, "Cancelled follow-up — previous step not sent");
+                continue;
+              }
+
+              // Gate: previous step must have been sent at least 2 days ago
+              if (prevEmail.sent_at) {
+                const sentAt = new Date(prevEmail.sent_at);
+                const hoursSincePrev = (Date.now() - sentAt.getTime()) / (1000 * 60 * 60);
+                if (hoursSincePrev < 48) {
+                  // Not enough time since previous step — skip for now, don't cancel
+                  logger.debug({ emailId: followUp.id, hoursSincePrev: Math.round(hoursSincePrev) }, "Skipping follow-up — too soon after previous step");
+                  continue;
+                }
+              }
+            }
+
             try {
               await sendSingleEmail(followUp, campaign);
             } catch (err) {

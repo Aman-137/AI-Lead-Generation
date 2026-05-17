@@ -33,15 +33,7 @@ export default function PrivacyPolicyPage() {
         >
           {/* Logo header — attached to glass box */}
           <div className="flex items-center justify-center gap-3 py-5 border-b border-white/[0.08]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(139,92,246,0.06) 50%, rgba(255,255,255,0.04) 100%)" }}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-              <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white" style={{ fontFamily: "var(--font-oughter), sans-serif", letterSpacing: "0.08em" }}>Inertia Leads</h2>
-              <p className="text-[9px] text-purple-300/40 font-semibold tracking-widest uppercase">AI Outreach Platform</p>
-            </div>
+            <img src="/images/logo.png" alt="Inertia Leads" className="h-12" />
           </div>
 
           <div className="px-8 md:px-12 py-10">

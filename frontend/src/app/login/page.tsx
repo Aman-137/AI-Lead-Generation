@@ -187,8 +187,7 @@ export default function AuthPage() {
                 <div className="rounded-2xl border border-white/[0.08] p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
           {/* Mobile logo - only shows on small screens */}
           <div className="lg:hidden text-center mb-6">
-            <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "var(--font-oughter), sans-serif" }}>Inertia Leads</h1>
-            <p className="text-sm text-white/40">AI-Powered Lead Generation</p>
+            <img src="/images/logo.png" alt="Inertia Leads" className="h-14 mx-auto" />
           </div>
 
           {/* Tab switcher */}
@@ -383,18 +382,10 @@ export default function AuthPage() {
 function BrandingSide() {
   return (
     <>
-      <div className="inline-flex items-center gap-3 mb-8">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "var(--font-oughter), sans-serif" }}>Inertia Leads</h1>
-          <p className="text-[10px] text-purple-300/50 font-semibold tracking-widest uppercase">AI Outreach Platform</p>
-        </div>
+      <div className="flex justify-center mb-8">
+        <img src="/images/logo.png" alt="Inertia Leads" className="h-16" />
       </div>
-      <p className="text-lg text-white/60 mb-12 max-w-md">
+      <p className="text-lg text-white/60 mb-12 max-w-md text-center mx-auto">
         AI-Powered Lead Generation & Cold Email Outreach
       </p>
 

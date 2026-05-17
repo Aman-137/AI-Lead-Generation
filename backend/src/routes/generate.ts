@@ -171,11 +171,11 @@ CRITICAL RULES:
 - The closing question must be SO specific to their business that they feel compelled to answer or at least think about it.
 
 SUBJECT LINE RULES:
-- Lowercase, 3-6 words
+- Sentence case (capitalize the first letter), 3-6 words
 - Must sound like a friend texting about something they noticed — NOT like a marketing email subject
-- Include their company name or city when natural
+- Include their PROPER company name (exactly as provided, with correct capitalization) when natural
 - Create curiosity without being clickbaity
-- Examples of GOOD subjects: "noticed something on ${company.toLowerCase().split(" ")[0]}'s site", "${city ? city.toLowerCase() : industry.toLowerCase()} question for you", "quick ${company.toLowerCase().split(" ")[0]} question"
+- Examples of GOOD subjects: "Noticed something on ${company}'s site", "${city || industry} question for you", "Quick ${company} question"
 - Examples of BAD subjects: "Boost Your Business!", "Your Website Needs Help", "Partnership Opportunity"
 
 ${toneInstructions[tone]}

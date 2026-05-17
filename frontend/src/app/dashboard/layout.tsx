@@ -109,17 +109,9 @@ export default async function DashboardLayout({
 
         <div className="relative flex flex-col h-full">
           {/* Brand */}
-          <div className="px-5 py-6">
+          <div className="px-5 py-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-white whitespace-nowrap" style={{ fontFamily: "var(--font-oughter), sans-serif", letterSpacing: "0.08em" }}>Inertia Leads</h1>
-                <p className="text-[10px] text-purple-300/40 font-semibold tracking-widest uppercase">AI Outreach</p>
-              </div>
+              <img src="/images/logo.png" alt="Inertia Leads" className="h-14" />
             </div>
           </div>
 

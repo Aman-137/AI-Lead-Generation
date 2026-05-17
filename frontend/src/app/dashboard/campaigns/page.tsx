@@ -21,6 +21,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "auto_find" | "csv">("all");
   const [page, setPage] = useState(1);
@@ -42,7 +43,13 @@ export default function CampaignsPage() {
   }, [fetchCampaigns]);
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This will also delete all leads and emails in this campaign.`)) return;
+    setDeleteConfirm({ id, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeleteConfirm(null);
     setDeleting(id);
     try {
       await apiDelete(`/campaigns/${id}`);
@@ -95,6 +102,37 @@ export default function CampaignsPage() {
 
   return (
     <div>
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
+              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 text-center mb-1">Delete Campaign</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              Are you sure you want to delete <span className="font-semibold text-gray-700">&quot;{deleteConfirm.name}&quot;</span>? This will permanently remove all leads and emails in this campaign.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
         <div className="absolute inset-0">

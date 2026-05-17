@@ -419,6 +419,15 @@ export default function AuditReportPage() {
         impact: goodRating ? "" : "88% of consumers check reviews before choosing a local business. Low ratings mean your ad spend is wasted — people click but don't convert.",
         fix: goodRating ? "" : "A systematic review generation strategy can improve your rating and volume within 60-90 days.",
       });
+    } else {
+      checks.push({
+        label: "No Google Business Profile Detected — Invisible to Local Searchers",
+        pass: false,
+        icon: "⭐",
+        detail: "We couldn't find a Google Business Profile for your business. When potential customers search for your services nearby, they see your competitors' listings with reviews, photos, and contact info — but not yours.",
+        impact: "88% of consumers who do a local search on their phone visit or call a business within 24 hours. Without a Google Business Profile, you're missing out on these high-intent customers entirely.",
+        fix: "Set up a Google Business Profile with complete business information, high-quality photos, and service descriptions. Then build a review generation system to establish social proof.",
+      });
     }
 
     if (s.hasSchemaMarkup !== null) {
@@ -553,6 +562,15 @@ export default function AuditReportPage() {
           : `Your rating is ${s.googleRating} stars${s.googleReviewCount ? ` with ${s.googleReviewCount} reviews` : ""}. Google uses review quality and quantity as a direct local ranking factor. Businesses with more, better reviews rank higher in the local pack (map results).`,
         impact: goodRating ? "" : "Reviews are one of Google's top 3 local ranking factors. Low review count or rating directly pushes you below competitors in Google Maps and local search.",
         fix: goodRating ? "" : "A review generation system targeting happy customers can significantly improve both rating and volume within 60-90 days.",
+      });
+    } else {
+      checks.push({
+        label: "No Google Business Profile Detected — Missing from Local Pack",
+        pass: false,
+        icon: "⭐",
+        detail: "We couldn't find a Google Business Profile for your business. This means you're not appearing in Google Maps or the local 3-pack when people search for your services in your area.",
+        impact: "The Google local pack (map results) gets 42% of all clicks for local searches. Without a Google Business Profile, you're invisible to nearly half of potential customers searching for your service.",
+        fix: "Create and optimize a Google Business Profile with accurate business info, photos, services, and hours. Then implement a review generation strategy to build credibility.",
       });
     }
 
@@ -700,28 +718,24 @@ export default function AuditReportPage() {
           <div className="absolute top-1/2 right-1/3 w-48 h-48 rounded-full bg-violet-500/10 blur-3xl" />
         </div>
 
-        <div className="relative max-w-xl mx-auto px-5 pt-10 pb-8">
+        <div className="relative max-w-xl mx-auto px-5 pt-10 pb-8 text-center">
           {/* Brand */}
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <span className="text-xs font-semibold text-white/40 uppercase tracking-widest">
-              {serviceType === "digital_marketing" || serviceType === "social_media"
-                ? "Digital Marketing Audit"
-                : serviceType === "seo"
-                ? "SEO & Visibility Audit"
-                : "Website Audit Report"}
-            </span>
+          <div className="flex justify-center mb-2">
+            <img src="/images/logo.png" alt="Inertia Leads" className="h-14" />
           </div>
+          <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-6">
+            {serviceType === "digital_marketing" || serviceType === "social_media"
+              ? "Digital Marketing Audit"
+              : serviceType === "seo"
+              ? "SEO & Visibility Audit"
+              : "Website Audit Report"}
+          </p>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white capitalize tracking-tight leading-tight">
             {data.company}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-3">
             {data.website && (
               <a href={data.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-blue-300 hover:bg-white/15 transition-colors" title={data.website}>
                 <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
@@ -1193,16 +1207,8 @@ export default function AuditReportPage() {
           </div>
         </div>
 
-        {/* Footer with brand */}
+        {/* Footer */}
         <div className="text-center py-8">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <span className="text-xs font-semibold text-gray-400">Inertia Leads</span>
-          </div>
           <p className="text-[10px] text-gray-300">
             Automated website audit &bull; {new Date().getFullYear()}
           </p>

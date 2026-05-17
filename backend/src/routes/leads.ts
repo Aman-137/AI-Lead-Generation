@@ -44,13 +44,13 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
       return;
     }
 
-    // Validate required CSV columns: name, email, company
-    const requiredColumns = ["name", "email", "company"];
+    // Validate required CSV columns: email, company
+    const requiredColumns = ["email", "company"];
     const headers = Object.keys(leads[0]);
     const missingColumns = requiredColumns.filter((col) => !headers.includes(col));
     if (missingColumns.length > 0) {
       res.status(400).json({
-        error: `Missing required CSV columns: ${missingColumns.join(", ")}. Expected: name, email, company (optional: website, industry)`,
+        error: `Missing required CSV columns: ${missingColumns.join(", ")}. Expected: email, company (optional: name, website, industry)`,
       });
       return;
     }
@@ -536,7 +536,7 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
           const { discoverWebsite } = await import("../services/leadFinder");
           const { data: leadsToScrape } = await supabase
             .from("leads")
-            .select("id, website, email, phone, company, industry, campaign_id")
+            .select("id, website, email, phone, company, industry, campaign_id, enriched_data")
             .in("id", leadIdsToScrape);
 
           if (!leadsToScrape) return;
@@ -593,6 +593,10 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
                     ...enrichmentSummary,
                     // Industry priority: lead.industry (from niche search / CSV) > scraper detection
                     industry: lead.industry || websiteData.industry || "Unknown",
+                    // Preserve Google rating/reviews from lead finder (not available from scraper)
+                    ...(lead.enriched_data?.googleRating !== undefined ? { googleRating: lead.enriched_data.googleRating } : {}),
+                    ...(lead.enriched_data?.googleReviewCount !== undefined ? { googleReviewCount: lead.enriched_data.googleReviewCount } : {}),
+                    ...(lead.enriched_data?.address ? { address: lead.enriched_data.address } : {}),
                   },
                   score,
                 };
@@ -761,6 +765,10 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
               ...enrichmentSummary,
               // Industry priority: lead.industry (from niche search / CSV) > scraper detection
               industry: lead.industry || websiteData?.industry || "Unknown",
+              // Preserve Google rating/reviews from lead finder (not available from scraper)
+              ...(lead.enriched_data?.googleRating !== undefined ? { googleRating: lead.enriched_data.googleRating } : {}),
+              ...(lead.enriched_data?.googleReviewCount !== undefined ? { googleReviewCount: lead.enriched_data.googleReviewCount } : {}),
+              ...(lead.enriched_data?.address ? { address: lead.enriched_data.address } : {}),
             },
             score,
           };

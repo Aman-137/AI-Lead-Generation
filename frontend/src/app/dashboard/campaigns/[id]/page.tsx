@@ -216,15 +216,15 @@ interface Campaign {
 
 // Timezone options for email sending
 const TIMEZONE_OPTIONS = [
-  { value: "US_EAST", label: "US East (New York)", hours: "8-11 AM & 1-5 PM EST" },
-  { value: "US_CENTRAL", label: "US Central (Chicago)", hours: "8-11 AM & 1-5 PM CST" },
-  { value: "US_MOUNTAIN", label: "US Mountain (Denver)", hours: "8-11 AM & 1-5 PM MST" },
-  { value: "US_WEST", label: "US West (Los Angeles)", hours: "8-11 AM & 1-5 PM PST" },
-  { value: "US_ALASKA", label: "US Alaska (Anchorage)", hours: "8-11 AM & 1-5 PM AKST" },
-  { value: "US_HAWAII", label: "US Hawaii (Honolulu)", hours: "8-11 AM & 1-5 PM HST" },
-  { value: "UK", label: "UK (London)", hours: "8-11 AM & 1-5 PM GMT" },
-  { value: "EU_CENTRAL", label: "Europe Central (Berlin/Paris)", hours: "8-11 AM & 1-5 PM CET" },
-  { value: "EU_EAST", label: "Europe East (Athens/Helsinki)", hours: "8-11 AM & 1-5 PM EET" },
+  { value: "US_EAST", label: "US East (New York)", hours: "8 AM-12 PM & 1-5 PM EST" },
+  { value: "US_CENTRAL", label: "US Central (Chicago)", hours: "8 AM-12 PM & 1-5 PM CST" },
+  { value: "US_MOUNTAIN", label: "US Mountain (Denver)", hours: "8 AM-12 PM & 1-5 PM MST" },
+  { value: "US_WEST", label: "US West (Los Angeles)", hours: "8 AM-12 PM & 1-5 PM PST" },
+  { value: "US_ALASKA", label: "US Alaska (Anchorage)", hours: "8 AM-12 PM & 1-5 PM AKST" },
+  { value: "US_HAWAII", label: "US Hawaii (Honolulu)", hours: "8 AM-12 PM & 1-5 PM HST" },
+  { value: "UK", label: "UK (London)", hours: "8 AM-12 PM & 1-5 PM GMT" },
+  { value: "EU_CENTRAL", label: "Europe Central (Berlin/Paris)", hours: "8 AM-12 PM & 1-5 PM CET" },
+  { value: "EU_EAST", label: "Europe East (Athens/Helsinki)", hours: "8 AM-12 PM & 1-5 PM EET" },
 ];
 
 // ===== Progress Tracker =====
@@ -936,7 +936,7 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
-  const [enableFollowups, setEnableFollowups] = useState(false);
+  const [enableFollowups, setEnableFollowups] = useState(true);
   const [sendTimezone, setSendTimezone] = useState("US_EAST");
   const [savingSettings, setSavingSettings] = useState(false);
   const [enriching, setEnriching] = useState(false);
@@ -978,7 +978,7 @@ export default function CampaignDetailPage() {
       setCampaign(data.campaign);
       setLeads(data.leads);
       setEmails(data.emails);
-      setEnableFollowups(data.campaign.enable_followups || false);
+      setEnableFollowups(data.campaign.enable_followups !== false);
       setSendTimezone(data.campaign.send_timezone || "US_EAST");
 
       // Load call scripts from enriched_data
@@ -1235,7 +1235,7 @@ export default function CampaignDetailPage() {
                 </span>
               </div>
               <p className="text-sm text-gray-400">
-                {campaign.total_leads} leads · Created {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                {leads.length} leads · Created {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </p>
             </div>
 
@@ -1417,7 +1417,7 @@ export default function CampaignDetailPage() {
             <span className="text-sm text-gray-700 font-medium">Follow-up sequences</span>
           </label>
 
-          {(enableFollowups !== (campaign?.enable_followups || false) ||
+          {(enableFollowups !== (campaign?.enable_followups !== false) ||
             sendTimezone !== (campaign?.send_timezone || "US_EAST")) && (
             <button
               onClick={handleSaveSettings}
@@ -1429,7 +1429,7 @@ export default function CampaignDetailPage() {
           )}
         </div>
         <div className="mt-3 text-xs text-gray-400 pl-11">
-          Emails send during peak open times · Morning: 8–11 AM · Afternoon: 1–5 PM ({TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label})
+          Emails send during peak open times · Morning: 8 AM–12 PM · Afternoon: 1–5 PM ({TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label})
         </div>
       </div>
 
@@ -1554,9 +1554,8 @@ export default function CampaignDetailPage() {
                           className="w-4 h-4 rounded cursor-pointer accent-blue-600"
                         />
                       </th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Score</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -1592,7 +1591,7 @@ export default function CampaignDetailPage() {
                               className="w-4 h-4 rounded cursor-pointer accent-blue-600"
                             />
                           </td>
-                          <td className="px-4 py-3.5 text-sm font-medium text-gray-900 capitalize">{lead.name}</td>
+                          <td className="px-4 py-3.5 text-sm font-medium text-gray-900 capitalize">{lead.company}</td>
                           <td className="px-4 py-3.5 text-sm">
                             {isCallLead ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200">
@@ -1606,7 +1605,6 @@ export default function CampaignDetailPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3.5 text-sm text-gray-600">{lead.company}</td>
                           <td className="px-4 py-3.5 text-xs">
                             <span className={`px-2.5 py-1 rounded-lg font-semibold ring-1 ${
                               lead.source_type === "csv"

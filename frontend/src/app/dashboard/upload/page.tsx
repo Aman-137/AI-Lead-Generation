@@ -335,7 +335,6 @@ export default function UploadPage() {
               <p className="text-xs text-gray-500 mb-3">Required columns in your CSV file:</p>
               <div className="space-y-2">
                 {[
-                  { col: "name", desc: "Contact or business name" },
                   { col: "email", desc: "Email address" },
                   { col: "company", desc: "Company name" },
                   { col: "website", desc: "Website URL" },
@@ -349,7 +348,7 @@ export default function UploadPage() {
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Optional columns</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {["phone", "title", "location", "industry"].map((col) => (
+                  {["name", "phone", "title", "location", "industry"].map((col) => (
                     <span key={col} className="px-2 py-0.5 text-xs font-mono text-gray-600 bg-white rounded-md ring-1 ring-gray-200">{col}</span>
                   ))}
                 </div>

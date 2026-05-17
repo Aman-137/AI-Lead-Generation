@@ -186,9 +186,10 @@ export default function SettingsPage() {
   const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Service type state
-  const [serviceType, setServiceType] = useState("web_dev");
-  const [savedServiceType, setSavedServiceType] = useState("web_dev");
+  const [serviceType, setServiceType] = useState("");
+  const [savedServiceType, setSavedServiceType] = useState("");
   const [serviceTypeSaving, setServiceTypeSaving] = useState(false);
+  const [serviceTypeLoading, setServiceTypeLoading] = useState(true);
   const toast = useToast();
 
   const totalInboxes = gmailAccounts.length + smtpAccounts.length;
@@ -233,8 +234,16 @@ export default function SettingsPage() {
         const mapped = data.serviceType === "social_media" ? "digital_marketing" : data.serviceType;
         setServiceType(mapped);
         setSavedServiceType(mapped);
+      } else {
+        setServiceType("web_dev");
+        setSavedServiceType("web_dev");
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setServiceType("web_dev");
+      setSavedServiceType("web_dev");
+    }).finally(() => {
+      setServiceTypeLoading(false);
+    });
   }, [fetchAccounts]);
 
   const saveProfile = async () => {
@@ -1105,6 +1114,17 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="p-6">
+            {serviceTypeLoading ? (
+              <div className="grid grid-cols-3 gap-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl bg-white border-2 border-gray-200 animate-pulse">
+                    <div className="w-8 h-8 rounded-full bg-gray-200" />
+                    <div className="w-16 h-3 rounded bg-gray-200" />
+                    <div className="w-12 h-2 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-3">
               {([
                 { value: "web_dev", label: "Web Design & Dev", icon: "🌐", desc: "Speed, mobile, UX" },
@@ -1136,6 +1156,7 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+            )}
           </div>
         </div>
       </div>

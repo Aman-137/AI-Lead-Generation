@@ -19,33 +19,27 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    // Compute real lead counts from leads table (total_leads column can be stale
-    // if background scraper deleted useless leads with a race condition)
+    // Compute real lead counts via database aggregation (single query, no row limits)
     if (campaigns && campaigns.length > 0) {
       const campaignIds = campaigns.map((c: any) => c.id);
-      const { data: leadCounts } = await supabase
-        .from("leads")
-        .select("campaign_id, source_type")
-        .in("campaign_id", campaignIds)
-        .eq("user_id", req.userId);
+      const { data: counts } = await supabase.rpc("get_campaign_lead_counts", {
+        p_user_id: req.userId,
+        p_campaign_ids: campaignIds,
+      });
 
-      if (leadCounts) {
-        const countMap: Record<string, { total: number; queued: number; sources: Set<string> }> = {};
-        for (const lc of leadCounts) {
-          if (!countMap[lc.campaign_id]) countMap[lc.campaign_id] = { total: 0, queued: 0, sources: new Set() };
-          countMap[lc.campaign_id].total++;
-          countMap[lc.campaign_id].sources.add(lc.source_type);
-          if (lc.source_type === "csv_queued") countMap[lc.campaign_id].queued++;
+      if (counts) {
+        const countMap: Record<string, { total: number; queued: number; has_auto_find: boolean; has_csv: boolean }> = {};
+        for (const row of counts) {
+          countMap[row.campaign_id] = row;
         }
         for (const c of campaigns) {
-          const counts = countMap[c.id] || { total: 0, queued: 0, sources: new Set() };
-          c.total_leads = counts.total;
-          c.queued_leads = counts.queued;
-          // Derive campaign source: auto_find, csv, or mixed
-          const srcs = counts.sources;
-          if (srcs.size === 0) c.source = "csv"; // empty campaign from upload
-          else if (srcs.has("auto_find") && (srcs.has("csv") || srcs.has("csv_queued"))) c.source = "mixed";
-          else if (srcs.has("auto_find")) c.source = "auto_find";
+          const cnt = countMap[c.id] || { total: 0, queued: 0, has_auto_find: false, has_csv: false };
+          c.total_leads = cnt.total;
+          c.queued_leads = cnt.queued;
+          // Derive campaign source
+          if (!cnt.has_auto_find && !cnt.has_csv) c.source = "csv";
+          else if (cnt.has_auto_find && cnt.has_csv) c.source = "mixed";
+          else if (cnt.has_auto_find) c.source = "auto_find";
           else c.source = "csv";
         }
       }
@@ -97,6 +91,9 @@ router.get("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
       gmail_email: e.gmail_accounts?.email || null,
       gmail_accounts: undefined,
     }));
+
+    // Use actual leads count instead of potentially stale total_leads column
+    campaign.total_leads = (leads || []).length;
 
     res.json({ campaign, leads: leads || [], emails: enrichedEmails });
   } catch {

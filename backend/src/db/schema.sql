@@ -53,6 +53,26 @@ create unique index if not exists idx_leads_user_company_phone
     and phone is not null and phone != '';
 
 -- =============================================
+-- Function: get_campaign_lead_counts
+-- Returns aggregated lead counts per campaign in a single query
+-- =============================================
+create or replace function get_campaign_lead_counts(p_user_id uuid, p_campaign_ids uuid[])
+returns table(campaign_id uuid, total bigint, queued bigint, has_auto_find boolean, has_csv boolean)
+language sql stable
+as $$
+  select
+    l.campaign_id,
+    count(*) as total,
+    count(*) filter (where l.source_type = 'csv_queued') as queued,
+    bool_or(l.source_type = 'auto_find') as has_auto_find,
+    bool_or(l.source_type in ('csv', 'csv_queued')) as has_csv
+  from leads l
+  where l.user_id = p_user_id
+    and l.campaign_id = any(p_campaign_ids)
+  group by l.campaign_id;
+$$;
+
+-- =============================================
 -- Table: campaigns
 -- =============================================
 
@@ -64,7 +84,7 @@ create table if not exists campaigns (
   status text not null default 'draft' check (status in ('draft', 'running', 'completed', 'failed')),
   total_leads integer default 0,
   queued_leads integer default 0,
-  enable_followups boolean default false,
+  enable_followups boolean default true,
   send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_MOUNTAIN', 'US_WEST', 'US_ALASKA', 'US_HAWAII', 'UK', 'EU_CENTRAL', 'EU_EAST')),
   created_at timestamp with time zone default now()
 );
