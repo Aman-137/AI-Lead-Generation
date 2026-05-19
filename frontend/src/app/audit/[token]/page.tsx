@@ -721,7 +721,7 @@ export default function AuditReportPage() {
         <div className="relative max-w-xl mx-auto px-5 pt-10 pb-8 text-center">
           {/* Brand */}
           <div className="flex justify-center mb-2">
-            <img src="/images/logo.png" alt="Inertia Leads" className="h-14" />
+            <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14" />
           </div>
           <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-6">
             {serviceType === "digital_marketing" || serviceType === "social_media"

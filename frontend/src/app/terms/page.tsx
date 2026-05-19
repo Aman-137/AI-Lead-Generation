@@ -33,7 +33,7 @@ export default function TermsOfServicePage() {
         >
           {/* Logo header — attached to glass box */}
           <div className="flex items-center justify-center gap-3 py-5 border-b border-white/[0.08]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(139,92,246,0.06) 50%, rgba(255,255,255,0.04) 100%)" }}>
-            <img src="/images/logo.png" alt="Inertia Leads" className="h-12" />
+            <img src="/images/logo-3.png" alt="Inertia Leads" className="h-12" />
           </div>
 
           <div className="px-8 md:px-12 py-10">

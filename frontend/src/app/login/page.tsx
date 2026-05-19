@@ -187,7 +187,7 @@ export default function AuthPage() {
                 <div className="rounded-2xl border border-white/[0.08] p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
           {/* Mobile logo - only shows on small screens */}
           <div className="lg:hidden text-center mb-6">
-            <img src="/images/logo.png" alt="Inertia Leads" className="h-14 mx-auto" />
+            <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14 mx-auto" />
           </div>
 
           {/* Tab switcher */}
@@ -383,7 +383,7 @@ function BrandingSide() {
   return (
     <>
       <div className="flex justify-center mb-8">
-        <img src="/images/logo.png" alt="Inertia Leads" className="h-16" />
+        <img src="/images/logo-3.png" alt="Inertia Leads" className="h-16" />
       </div>
       <p className="text-lg text-white/60 mb-12 max-w-md text-center mx-auto">
         AI-Powered Lead Generation & Cold Email Outreach

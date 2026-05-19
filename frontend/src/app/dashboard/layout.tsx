@@ -111,7 +111,7 @@ export default async function DashboardLayout({
           {/* Brand */}
           <div className="px-5 py-2">
             <div className="flex items-center gap-3">
-              <img src="/images/logo.png" alt="Inertia Leads" className="h-14" />
+              <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14" />
             </div>
           </div>
 
