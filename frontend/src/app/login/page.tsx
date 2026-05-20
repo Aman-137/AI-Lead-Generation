@@ -99,14 +99,14 @@ export default function AuthPage() {
   // Verification email sent screen
   if (emailSent) {
     return (
-      <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #1e0a3c 0%, #15103a 30%, #0f1f3d 60%, #0a1a35 100%)" }}>
+      <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
         <div className="absolute inset-0 opacity-[0.06]">
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="loginDots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#loginDots)" /></svg>
         </div>
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-fuchsia-500/[0.12] blur-3xl" />
-        <div className="absolute top-1/3 right-[10%] w-72 h-72 rounded-full bg-violet-500/[0.10] blur-3xl" />
-        <div className="absolute -bottom-20 left-1/4 w-80 h-80 rounded-full bg-cyan-500/[0.08] blur-3xl" />
-        <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full bg-amber-500/[0.05] blur-3xl" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.12)" }} />
+        <div className="absolute top-1/3 right-[10%] w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.10)" }} />
+        <div className="absolute -bottom-20 left-1/4 w-80 h-80 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.08)" }} />
+        <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.06)" }} />
 
         <div className="relative z-10 min-h-screen flex items-center justify-center px-6">
           <div className="flex flex-col lg:flex-row items-center gap-24 max-w-5xl w-full">
@@ -145,24 +145,172 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #1e0a3c 0%, #15103a 30%, #0f1f3d 60%, #0a1a35 100%)" }}>
+    <div className="h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
       <div className="absolute inset-0 opacity-[0.06]">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="loginDots2" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#loginDots2)" /></svg>
       </div>
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-fuchsia-500/[0.12] blur-3xl" />
-      <div className="absolute top-1/3 right-[10%] w-72 h-72 rounded-full bg-violet-500/[0.10] blur-3xl" />
-      <div className="absolute -bottom-20 left-1/4 w-80 h-80 rounded-full bg-cyan-500/[0.08] blur-3xl" />
-      <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full bg-amber-500/[0.05] blur-3xl" />
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.12)" }} />
+      <div className="absolute top-1/3 right-[10%] w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.10)" }} />
+      <div className="absolute -bottom-20 left-1/4 w-80 h-80 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.08)" }} />
+      <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.06)" }} />
+
+      {/* Floating 3D geometric elements on page background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1]" style={{ perspective: "1200px" }}>
+        
+        {/* 3D Cube - top left */}
+        <div className="absolute top-[38%] left-[2%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "float3d1 12s ease-in-out infinite" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-15deg) rotateY(25deg)" }}>
+            {/* Front face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(32px)", backdropFilter: "blur(2px)" }} />
+            {/* Back face */}
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-32px)" }} />
+            {/* Left face */}
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(32px)" }} />
+            {/* Right face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(32px)" }} />
+            {/* Top face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(32px)" }} />
+            {/* Bottom face */}
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(32px)" }} />
+          </div>
+        </div>
+
+        {/* 3D Sphere - top right (glass ball with highlight) */}
+        <div className="absolute top-[12%] right-[5%] w-12 h-12" style={{ animation: "float3d2 8s ease-in-out infinite" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.2), rgba(105,98,196,0.3) 40%, rgba(42,33,88,0.4) 70%, rgba(13,10,37,0.5))", boxShadow: "0 8px 24px rgba(0,0,0,0.3), inset 0 -4px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.1), 0 0 16px rgba(105,98,196,0.2)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        </div>
+
+        {/* 3D Cube - bottom right (larger) */}
+        <div className="absolute bottom-[14%] right-[4%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "float3d4 15s ease-in-out infinite" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-15deg) rotateY(-20deg)" }}>
+            {/* Front face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(32px)", backdropFilter: "blur(2px)" }} />
+            {/* Back face */}
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-32px)" }} />
+            {/* Left face */}
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(32px)" }} />
+            {/* Right face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(32px)" }} />
+            {/* Top face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(32px)" }} />
+            {/* Bottom face */}
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(32px)" }} />
+          </div>
+        </div>
+
+        {/* 3D Small sphere - bottom left */}
+        <div className="absolute bottom-[22%] left-[5%] w-9 h-9" style={{ animation: "float3d5 9s ease-in-out infinite 1s" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 35% 30%, rgba(255,255,255,0.15), rgba(105,98,196,0.35) 45%, rgba(26,21,64,0.5))", boxShadow: "0 4px 12px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        </div>
+
+        {/* 3D Sphere - right middle */}
+        <div className="absolute top-[50%] right-[4%] w-8 h-8" style={{ animation: "float3d2 10s ease-in-out infinite 2s" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.18), rgba(105,98,196,0.3) 45%, rgba(26,21,64,0.5))", boxShadow: "0 6px 16px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 12px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        </div>
+
+        {/* 3D Small cube - top center-left area */}
+        <div className="absolute top-[6%] left-[14%] w-10 h-10" style={{ transformStyle: "preserve-3d", animation: "float3d3 13s ease-in-out infinite 3s" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-20deg) rotateY(35deg)" }}>
+            {/* Front face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(20px)", backdropFilter: "blur(2px)" }} />
+            {/* Back face */}
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-20px)" }} />
+            {/* Left face */}
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(20px)" }} />
+            {/* Right face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(20px)" }} />
+            {/* Top face */}
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(20px)" }} />
+            {/* Bottom face */}
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(20px)" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* CSS keyframes for 3D floating animations */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes float3d1 {
+          0%, 100% { transform: rotateX(20deg) rotateY(0deg) translateY(0px); }
+          25% { transform: rotateX(30deg) rotateY(90deg) translateY(-10px); }
+          50% { transform: rotateX(10deg) rotateY(180deg) translateY(5px); }
+          75% { transform: rotateX(25deg) rotateY(270deg) translateY(-8px); }
+        }
+        @keyframes float3d2 {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          33% { transform: translateY(-12px) scale(1.05); }
+          66% { transform: translateY(6px) scale(0.95); }
+        }
+        @keyframes float3d3 {
+          0%, 100% { transform: rotateX(15deg) rotateZ(0deg) translateY(0px); }
+          50% { transform: rotateX(-10deg) rotateZ(180deg) translateY(-15px); }
+        }
+        @keyframes float3d4 {
+          0%, 100% { transform: rotateX(-15deg) rotateY(0deg) translateY(0px); }
+          25% { transform: rotateX(10deg) rotateY(-90deg) translateY(-8px); }
+          50% { transform: rotateX(20deg) rotateY(-180deg) translateY(4px); }
+          75% { transform: rotateX(-5deg) rotateY(-270deg) translateY(-12px); }
+        }
+        @keyframes float3d5 {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(-10px) scale(1.1); }
+        }
+        @keyframes float3d7 {
+          0%, 100% { transform: rotateZ(45deg) rotateX(0deg) translateY(0px); }
+          33% { transform: rotateZ(45deg) rotateX(30deg) translateY(-10px); }
+          66% { transform: rotateZ(45deg) rotateX(-20deg) translateY(5px); }
+        }
+        @keyframes btnPulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.02); }
+        }
+        @keyframes btnLiquidBg {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes btnGlowPulse {
+          0%, 100% { opacity: 0.5; transform: scaleX(0.85); }
+          50% { opacity: 0.9; transform: scaleX(1); }
+        }
+        @keyframes btnSparkle1 {
+          0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+          50% { opacity: 1; transform: scale(1) rotate(180deg); }
+        }
+        @keyframes btnSparkle2 {
+          0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+          40% { opacity: 1; transform: scale(1.2) rotate(120deg); }
+          80% { opacity: 0; transform: scale(0) rotate(240deg); }
+        }
+        @keyframes btnSparkle3 {
+          0%, 100% { opacity: 0; transform: scale(0); }
+          30% { opacity: 0.8; transform: scale(0.8); }
+          60% { opacity: 1; transform: scale(1.1); }
+          90% { opacity: 0; transform: scale(0); }
+        }
+        @keyframes btnWaveSweep {
+          0% { transform: translateX(-120%) rotate(-3deg); }
+          100% { transform: translateX(120%) rotate(3deg); }
+        }
+        @keyframes btnLift {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        @keyframes btnTextGlow {
+          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.3), 0 0 8px rgba(139,132,224,0.2); }
+          50% { text-shadow: 0 0 8px rgba(255,255,255,0.6), 0 0 20px rgba(139,132,224,0.5), 0 0 40px rgba(105,98,196,0.3); }
+        }
+      ` }} />
 
       <div className="relative z-10 h-full flex items-center justify-center px-6">
         {/* Glass container wrapping both sides — fixed height */}
         <div
-          className="relative w-full max-w-5xl h-[680px] rounded-3xl border border-white/[0.10] overflow-hidden"
+          className="relative w-full max-w-5xl h-[680px] rounded-3xl overflow-hidden"
           style={{
-            background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 50%, rgba(255,255,255,0.05) 100%)",
+            background: "rgba(26,21,64,0.95)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.02), 0 0 0 1px rgba(255,255,255,0.04)",
+            border: "1px solid rgba(105,98,196,0.18)",
+            boxShadow: "0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(105,98,196,0.12), 0 0 0 1px rgba(105,98,196,0.06)",
           }}
         >
           {/* Top edge highlight for 3D effect */}
@@ -356,8 +504,37 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-xl shadow-lg shadow-violet-500/30 text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-3 px-4 rounded-xl text-sm font-bold text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed relative group overflow-hidden transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+              style={{ background: "linear-gradient(135deg, #8b84e0, #6962c4)", boxShadow: "0 4px 16px rgba(105,98,196,0.4)", animation: "btnLift 3s ease-in-out infinite paused" }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 8px 32px rgba(105,98,196,0.6), 0 0 60px rgba(139,132,224,0.3)"; e.currentTarget.style.animationPlayState = "running"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(105,98,196,0.4)"; e.currentTarget.style.animationPlayState = "paused"; }}
             >
+              {/* Liquid flowing gradient that activates on hover */}
+              <span className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: "linear-gradient(270deg, #a78bfa, #8b84e0, #6962c4, #3d3580, #8b84e0, #a78bfa)", backgroundSize: "300% 300%", animation: "btnLiquidBg 3s linear infinite" }} />
+              
+              {/* Dual wave sweeps */}
+              <span className="absolute inset-0 rounded-xl overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                <span className="absolute -inset-1 bg-gradient-to-r from-transparent via-white/20 to-transparent w-[40%] h-[120%]" style={{ animation: "btnWaveSweep 2.2s ease-in-out infinite" }} />
+              </span>
+              <span className="absolute inset-0 rounded-xl overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ animationDelay: "0.8s" }}>
+                <span className="absolute -inset-1 bg-gradient-to-r from-transparent via-white/10 to-transparent w-[30%] h-[120%]" style={{ animation: "btnWaveSweep 2.2s ease-in-out infinite", animationDelay: "1s" }} />
+              </span>
+
+              {/* Sparkle particles - wrapped so animation doesn't override opacity */}
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                <span className="absolute top-[20%] left-[15%] w-1.5 h-1.5 bg-white rounded-full" style={{ animation: "btnSparkle1 1.8s ease-in-out infinite", animationDelay: "0.2s" }} />
+                <span className="absolute top-[60%] left-[75%] w-1 h-1 bg-white rounded-full" style={{ animation: "btnSparkle2 2.2s ease-in-out infinite", animationDelay: "0.6s" }} />
+                <span className="absolute top-[30%] left-[55%] w-1 h-1 bg-purple-200 rounded-full" style={{ animation: "btnSparkle3 2s ease-in-out infinite", animationDelay: "1s" }} />
+                <span className="absolute top-[70%] left-[30%] w-1 h-1 bg-white rounded-full" style={{ animation: "btnSparkle1 2.5s ease-in-out infinite", animationDelay: "1.4s" }} />
+                <span className="absolute top-[40%] left-[88%] w-1.5 h-1.5 bg-purple-100 rounded-full" style={{ animation: "btnSparkle2 1.6s ease-in-out infinite", animationDelay: "0.4s" }} />
+                <span className="absolute top-[80%] left-[50%] w-0.5 h-0.5 bg-white rounded-full" style={{ animation: "btnSparkle3 2.8s ease-in-out infinite", animationDelay: "0.9s" }} />
+              </span>
+
+              {/* Soft pulsing underglow (no box, just blur) */}
+              <span className="absolute -bottom-4 left-[15%] right-[15%] h-8 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, rgba(139,132,224,0.8), rgba(105,98,196,0.4), transparent)", filter: "blur(12px)", animation: "btnGlowPulse 2s ease-in-out infinite" }} />
+
+              {/* Text with neon glow on hover */}
+              <span className="relative z-10 flex justify-center transition-all duration-300 group-hover:tracking-wider group-hover:[text-shadow:0_0_8px_rgba(255,255,255,0.6),0_0_20px_rgba(139,132,224,0.5),0_0_40px_rgba(105,98,196,0.3)]">
               {loading
                 ? mode === "login"
                   ? "Signing in..."
@@ -365,6 +542,7 @@ export default function AuthPage() {
                 : mode === "login"
                 ? "Sign in"
                 : "Sign up"}
+              </span>
             </button>
           </form>
                 </div>
@@ -391,8 +569,8 @@ function BrandingSide() {
 
       <div className="space-y-5">
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -405,8 +583,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl bg-fuchsia-500/15 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-fuchsia-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
@@ -419,8 +597,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
@@ -433,8 +611,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
             </svg>
           </div>
@@ -448,11 +626,11 @@ function BrandingSide() {
       </div>
 
       <div className="mt-12 flex items-center gap-3 text-xs">
-        <Link href="/privacy" className="text-white/25 hover:text-white/50 transition-colors">
+        <Link href="/privacy" className="text-white/50 hover:text-white/70 transition-colors">
           Privacy Policy
         </Link>
-        <span className="text-white/15">·</span>
-        <Link href="/terms" className="text-white/25 hover:text-white/50 transition-colors">
+        <span className="text-white/30">·</span>
+        <Link href="/terms" className="text-white/50 hover:text-white/70 transition-colors">
           Terms of Service
         </Link>
       </div>

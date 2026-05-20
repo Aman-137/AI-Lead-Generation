@@ -2,15 +2,10 @@ import Link from "next/link";
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #1e0a3c 0%, #15103a 30%, #0f1f3d 60%, #0a1a35 100%)" }}>
-      {/* Background effects — same as login/signup */}
-      <div className="absolute inset-0 opacity-[0.06]">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="privacyDots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#privacyDots)" /></svg>
-      </div>
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-fuchsia-500/[0.12] blur-3xl" />
-      <div className="absolute top-1/3 right-[10%] w-72 h-72 rounded-full bg-violet-500/[0.10] blur-3xl" />
-      <div className="absolute -bottom-20 left-1/4 w-80 h-80 rounded-full bg-cyan-500/[0.08] blur-3xl" />
-      <div className="absolute bottom-1/3 right-[30%] w-64 h-64 rounded-full bg-amber-500/[0.05] blur-3xl" />
+    <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
+      {/* Background glow blobs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.12) 0%, transparent 70%)" }} />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full" style={{ background: "radial-gradient(circle, rgba(61,53,128,0.10) 0%, transparent 70%)" }} />
 
       <div className="relative z-10 min-h-screen py-12 px-6">
         {/* Back to login link */}
@@ -23,16 +18,17 @@ export default function PrivacyPolicyPage() {
 
         {/* Glass container */}
         <div
-          className="max-w-3xl mx-auto rounded-3xl border border-white/[0.10] overflow-hidden"
+          className="max-w-3xl mx-auto rounded-3xl overflow-hidden"
           style={{
-            background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 50%, rgba(255,255,255,0.05) 100%)",
+            background: "rgba(26,21,64,0.95)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.02), 0 0 0 1px rgba(255,255,255,0.04)",
+            border: "1px solid rgba(105,98,196,0.18)",
+            boxShadow: "0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(105,98,196,0.12), 0 0 0 1px rgba(105,98,196,0.06)",
           }}
         >
           {/* Logo header — attached to glass box */}
-          <div className="flex items-center justify-center gap-3 py-5 border-b border-white/[0.08]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(139,92,246,0.06) 50%, rgba(255,255,255,0.04) 100%)" }}>
+          <div className="flex items-center justify-center gap-3 py-5 border-b border-white/[0.08]" style={{ background: "linear-gradient(135deg, rgba(42,33,88,0.6) 0%, rgba(26,21,64,0.8) 100%)" }}>
             <img src="/images/logo-3.png" alt="Inertia Leads" className="h-12" />
           </div>
 

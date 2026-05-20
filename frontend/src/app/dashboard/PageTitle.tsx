@@ -20,6 +20,6 @@ export default function PageTitle() {
     (pathname.startsWith("/dashboard/campaigns/") ? "Campaign Details" : "Dashboard");
 
   return (
-    <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+    <h2 className="text-base font-semibold" style={{ color: "#1a1540" }}>{title}</h2>
   );
 }

@@ -88,34 +88,24 @@ export default async function DashboardLayout({
       </header>
 
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-64 z-50 overflow-hidden" style={{ background: "linear-gradient(180deg, #1e0a3c 0%, #15103a 25%, #0f1f3d 50%, #0a1a35 75%, #081428 100%)" }}>
-        {/* Background pattern — dot grid */}
-        <div className="absolute inset-0 opacity-[0.07]">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="sidebarDots" width="16" height="16" patternUnits="userSpaceOnUse">
-                <circle cx="8" cy="8" r="0.8" fill="white" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#sidebarDots)" />
-          </svg>
-        </div>
-        {/* Ambient glows */}
-        <div className="absolute -top-10 -left-10 w-64 h-64 rounded-full bg-fuchsia-500/[0.12] blur-3xl pointer-events-none" />
-        <div className="absolute top-[30%] -right-10 w-52 h-52 rounded-full bg-violet-500/[0.10] blur-3xl pointer-events-none" />
-        <div className="absolute top-[55%] -left-16 w-48 h-48 rounded-full bg-indigo-500/[0.07] blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[15%] -right-12 w-44 h-44 rounded-full bg-cyan-500/[0.06] blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-10 left-1/3 w-40 h-40 rounded-full bg-amber-500/[0.05] blur-3xl pointer-events-none" />
+      <aside className="fixed inset-y-0 left-0 w-64 z-50 overflow-hidden" style={{ background: "linear-gradient(180deg, #0d0a25 0%, #1a1540 40%, #0d0a25 100%)" }}>
+        {/* Subtle right edge border */}
+        <div className="absolute top-0 right-0 bottom-0 w-px" style={{ background: "linear-gradient(180deg, transparent 0%, rgba(105,98,196,0.3) 30%, rgba(105,98,196,0.15) 70%, transparent 100%)" }} />
+        
+        {/* Ambient glow blobs */}
+        <div className="absolute -top-20 -left-20 w-60 h-60 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.15) 0%, transparent 70%)" }} />
+        <div className="absolute top-[40%] -right-16 w-48 h-48 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(61,53,128,0.12) 0%, transparent 70%)" }} />
+        <div className="absolute -bottom-16 left-[20%] w-52 h-52 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.08) 0%, transparent 70%)" }} />
 
         <div className="relative flex flex-col h-full">
           {/* Brand */}
-          <div className="px-5 py-2">
+          <div className="px-5 py-4">
             <div className="flex items-center gap-3">
               <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14" />
             </div>
           </div>
 
-          <div className="mx-5 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="mx-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(105,98,196,0.3), transparent)" }} />
 
           <SidebarNav />
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 interface FAQ {
   question: string;
@@ -126,14 +126,7 @@ export default function HelpPage() {
     setOpenIndex(openIndex === index ? null : index);
   };
 
-  const categoryStyles: Record<string, { bg: string; border: string; icon: string; iconBg: string; activeBg: string; activeBorder: string; tag: string }> = {
-    "Getting Started": { bg: "bg-emerald-50", border: "border-emerald-200", icon: "text-emerald-600", iconBg: "bg-emerald-100", activeBg: "bg-emerald-50", activeBorder: "border-emerald-300", tag: "bg-emerald-100 text-emerald-700" },
-    "Lead Finding": { bg: "bg-blue-50", border: "border-blue-200", icon: "text-blue-600", iconBg: "bg-blue-100", activeBg: "bg-blue-50", activeBorder: "border-blue-300", tag: "bg-blue-100 text-blue-700" },
-    "Email & Campaigns": { bg: "bg-violet-50", border: "border-violet-200", icon: "text-violet-600", iconBg: "bg-violet-100", activeBg: "bg-violet-50", activeBorder: "border-violet-300", tag: "bg-violet-100 text-violet-700" },
-    "Account & Billing": { bg: "bg-amber-50", border: "border-amber-200", icon: "text-amber-600", iconBg: "bg-amber-100", activeBg: "bg-amber-50", activeBorder: "border-amber-300", tag: "bg-amber-100 text-amber-700" },
-  };
-
-  const categoryIcons: Record<string, JSX.Element> = {
+  const categoryIcons: Record<string, ReactNode> = {
     "Getting Started": <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />,
     "Lead Finding": <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />,
     "Email & Campaigns": <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />,
@@ -142,79 +135,37 @@ export default function HelpPage() {
 
   return (
     <div>
-      {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-12 mb-8">
+      {/* Hero Section with email contact */}
+      <div className="relative overflow-hidden rounded-2xl p-8 md:p-12 mb-8" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
         <div className="absolute inset-0">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-emerald-500/5 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.15) 0%, transparent 70%)" }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full" style={{ background: "radial-gradient(circle, rgba(61,53,128,0.12) 0%, transparent 70%)" }} />
         </div>
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-4">
-            <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              How can we help you?
+            </h1>
+            <p className="mt-3 text-base" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Browse by category below or reach out to us directly.
+            </p>
+          </div>
+          <a
+            href="mailto:info@inertialeads.com"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all shadow-sm flex-shrink-0 hover:opacity-90"
+            style={{ background: "rgba(105,98,196,0.2)", color: "#c4b5fd", border: "1px solid rgba(105,98,196,0.4)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <span className="text-xs font-medium text-gray-300">Help & Support</span>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white">
-            How can we help you?
-          </h1>
-          <p className="mt-3 text-gray-400 text-base">
-            Search our knowledge base or browse by category below.
-          </p>
-
-          {/* Search */}
-          <div className="mt-6 relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setOpenIndex(null);
-              }}
-              placeholder="Search for answers..."
-              className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white/10 backdrop-blur border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
-            />
-          </div>
+            info@inertialeads.com
+          </a>
         </div>
       </div>
 
-      {/* Contact Banner */}
-      <div className="mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-lg shadow-blue-500/10">
-        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <div className="flex-1">
-          <h3 className="text-base font-semibold text-white">
-            Can&apos;t find what you need?
-          </h3>
-          <p className="text-sm text-blue-100 mt-0.5">
-            Our support team typically responds within 24 hours.
-          </p>
-        </div>
-        <a
-          href="mailto:info@inertialeads.com"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-blue-700 text-sm font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-          info@inertialeads.com
-        </a>
-      </div>
-
-      {/* Category Filter Pills */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      {/* Category Filter Pills + Search */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         {["All", ...categories].map((cat) => {
-          const isAll = cat === "All";
-          const style = isAll ? null : categoryStyles[cat];
           return (
             <button
               key={cat}
@@ -224,123 +175,215 @@ export default function HelpPage() {
               }}
               className={`px-4 py-2 text-sm font-medium rounded-full transition-all ${
                 activeCategory === cat
-                  ? isAll
-                    ? "bg-gray-900 text-white shadow-sm"
-                    : `${style!.activeBg} ${style!.icon} border-2 ${style!.activeBorder} shadow-sm`
+                  ? "text-white shadow-sm"
                   : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:text-gray-900"
               }`}
+              style={activeCategory === cat ? { background: "rgba(105,98,196,0.9)", boxShadow: "0 2px 8px rgba(105,98,196,0.3)" } : undefined}
             >
               {cat}
             </button>
           );
         })}
+        {/* Search bar on the right */}
+        <div className="ml-auto relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setOpenIndex(null);
+            }}
+            placeholder="Search..."
+            className="pl-9 pr-4 py-2 w-80 rounded-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] transition-all shadow-sm"
+          />
+        </div>
       </div>
 
       {/* Section Label */}
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg font-bold text-gray-900">
+        <h2 className="text-lg font-bold" style={{ color: "#1a1540" }}>
           {activeCategory === "All" ? "All Questions" : activeCategory}
         </h2>
-        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{ background: "rgba(105,98,196,0.12)", color: "#6962c4" }}>
           {filteredFaqs.length}
         </span>
       </div>
 
       {/* FAQ List */}
-      <div className="space-y-3">
-        {filteredFaqs.length === 0 ? (
-          <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <p className="text-gray-600 font-medium">
-              No results for &quot;{searchQuery}&quot;
-            </p>
-            <p className="text-gray-400 text-sm mt-2">
-              Try a different search term or{" "}
-              <a href="mailto:info@inertialeads.com" className="text-blue-600 hover:underline font-medium">
-                contact support
-              </a>
-            </p>
+      {filteredFaqs.length === 0 ? (
+        <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
-        ) : (
-          filteredFaqs.map((faq, index) => {
-            const isOpen = openIndex === index;
-            const style = categoryStyles[faq.category] || categoryStyles["Getting Started"];
-            return (
-              <div
-                key={index}
-                className={`rounded-xl border-2 transition-all duration-200 ${
-                  isOpen
-                    ? `${style.activeBg} ${style.activeBorder} shadow-md`
-                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                }`}
-              >
-                <button
-                  onClick={() => toggle(index)}
-                  className="w-full flex items-center justify-between p-5 text-left"
+          <p className="text-gray-600 font-medium">
+            No results for &quot;{searchQuery}&quot;
+          </p>
+          <p className="text-gray-400 text-sm mt-2">
+            Try a different search term or{" "}
+            <a href="mailto:info@inertialeads.com" className="text-blue-600 hover:underline font-medium">
+              contact support
+            </a>
+          </p>
+        </div>
+      ) : (
+        <div className="flex gap-3 items-start">
+          {/* Left Column */}
+          <div className="flex-1 space-y-3">
+            {filteredFaqs.filter((_, i) => i % 2 === 0).map((faq, i) => {
+              const realIndex = i * 2;
+              const isOpen = openIndex === realIndex;
+              return (
+                <div
+                  key={realIndex}
+                  className={`rounded-xl border-2 transition-all duration-200 ${
+                    isOpen
+                      ? "shadow-md"
+                      : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                  }`}
+                  style={isOpen ? { background: "rgba(105,98,196,0.06)", borderColor: "#6962c4" } : undefined}
                 >
-                  <div className="flex items-center gap-3.5 pr-4">
-                    <span
-                      className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                        isOpen ? `${style.iconBg} ${style.icon}` : "bg-gray-100 text-gray-400"
-                      }`}
+                  <button
+                    onClick={() => toggle(realIndex)}
+                    className="w-full flex items-center justify-between p-4 text-left"
+                  >
+                    <div className="flex items-center gap-3.5 pr-4">
+                      <span
+                        className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "#f3f4f6", color: "#9ca3af" }}
+                      >
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          {categoryIcons[faq.category]}
+                        </svg>
+                      </span>
+                      <span className={`text-sm font-semibold ${isOpen ? "text-gray-900" : "text-gray-800"}`}>
+                        {faq.question}
+                      </span>
+                    </div>
+                    <div
+                      className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                      style={isOpen ? { background: "rgba(105,98,196,0.15)" } : { background: "#f3f4f6" }}
                     >
-                      <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        {categoryIcons[faq.category]}
+                      <svg
+                        className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                        style={isOpen ? { color: "#6962c4" } : { color: "#9ca3af" }}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                       </svg>
-                    </span>
-                    <span className={`text-sm font-semibold ${isOpen ? "text-gray-900" : "text-gray-800"}`}>
-                      {faq.question}
-                    </span>
+                    </div>
+                  </button>
+                  <div
+                    className="grid transition-all duration-300 ease-in-out"
+                    style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", opacity: isOpen ? 1 : 0 }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="px-5 pb-5 pl-[4.25rem]">
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          {faq.answer}
+                        </p>
+                        <span className="inline-block mt-3 px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{ background: "rgba(105,98,196,0.12)", color: "#6962c4" }}>
+                          {faq.category}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                    isOpen ? `${style.iconBg}` : "bg-gray-100"
-                  }`}>
-                    <svg
-                      className={`w-4 h-4 transition-transform duration-200 ${
-                        isOpen ? `rotate-180 ${style.icon}` : "text-gray-400"
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                </div>
+              );
+            })}
+          </div>
+          {/* Right Column */}
+          <div className="flex-1 space-y-3">
+            {filteredFaqs.filter((_, i) => i % 2 === 1).map((faq, i) => {
+              const realIndex = i * 2 + 1;
+              const isOpen = openIndex === realIndex;
+              return (
+                <div
+                  key={realIndex}
+                  className={`rounded-xl border-2 transition-all duration-200 ${
+                    isOpen
+                      ? "shadow-md"
+                      : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                  }`}
+                  style={isOpen ? { background: "rgba(105,98,196,0.06)", borderColor: "#6962c4" } : undefined}
+                >
+                  <button
+                    onClick={() => toggle(realIndex)}
+                    className="w-full flex items-center justify-between p-4 text-left"
+                  >
+                    <div className="flex items-center gap-3.5 pr-4">
+                      <span
+                        className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "#f3f4f6", color: "#9ca3af" }}
+                      >
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          {categoryIcons[faq.category]}
+                        </svg>
+                      </span>
+                      <span className={`text-sm font-semibold ${isOpen ? "text-gray-900" : "text-gray-800"}`}>
+                        {faq.question}
+                      </span>
+                    </div>
+                    <div
+                      className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                      style={isOpen ? { background: "rgba(105,98,196,0.15)" } : { background: "#f3f4f6" }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                    </svg>
+                      <svg
+                        className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                        style={isOpen ? { color: "#6962c4" } : { color: "#9ca3af" }}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                  <div
+                    className="grid transition-all duration-300 ease-in-out"
+                    style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", opacity: isOpen ? 1 : 0 }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="px-5 pb-5 pl-[4.25rem]">
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          {faq.answer}
+                        </p>
+                        <span className="inline-block mt-3 px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{ background: "rgba(105,98,196,0.12)", color: "#6962c4" }}>
+                          {faq.category}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </button>
-                {isOpen && (
-                  <div className="px-5 pb-5 pl-[4.25rem]">
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      {faq.answer}
-                    </p>
-                    <span className={`inline-block mt-3 px-2.5 py-0.5 text-xs font-semibold rounded-full ${style.tag}`}>
-                      {faq.category}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Bottom CTA */}
-      <div className="mt-10 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 p-8 text-center">
-        <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-7 h-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="mt-10 rounded-2xl border-2 p-8 text-center" style={{ background: "linear-gradient(135deg, rgba(13,10,37,0.03) 0%, rgba(105,98,196,0.08) 100%)", borderColor: "rgba(105,98,196,0.2)" }}>
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(105,98,196,0.12)" }}>
+          <svg className="w-7 h-7" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
-        <h3 className="text-lg font-bold text-gray-900">Still have questions?</h3>
+        <h3 className="text-lg font-bold" style={{ color: "#1a1540" }}>Still have questions?</h3>
         <p className="text-sm text-gray-500 mt-1 mb-4">
           We&apos;re always happy to help you out.
         </p>
         <a
           href="mailto:info@inertialeads.com"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/20"
+          className="inline-flex items-center gap-2 px-6 py-3 text-white text-sm font-semibold rounded-xl transition-all hover:opacity-90"
+          style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)", boxShadow: "0 4px 14px rgba(105,98,196,0.3)" }}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
