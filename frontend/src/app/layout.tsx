@@ -30,9 +30,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" style={{ background: "#0d0a25", colorScheme: "dark" }} suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#0d0a25" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${oughter.variable} antialiased`}
+        style={{ background: "#0d0a25" }}
       >
         {children}
       </body>

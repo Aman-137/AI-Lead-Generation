@@ -352,7 +352,7 @@ export default function SettingsPage() {
           setLoading(false);
         }
       })();
-      window.history.replaceState({}, "", "/dashboard/settings");
+      window.history.replaceState({}, "", "/settings");
     }
   }, [fetchAccounts]);
 
@@ -482,84 +482,163 @@ export default function SettingsPage() {
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
 
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
+      <div className="relative overflow-hidden rounded-2xl p-8 md:p-10 mb-8" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
         <div className="absolute inset-0">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="absolute top-1/2 right-1/4 w-64 h-64 rounded-full bg-emerald-500/5 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.15) 0%, transparent 70%)" }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full" style={{ background: "radial-gradient(circle, rgba(61,53,128,0.12) 0%, transparent 70%)" }} />
         </div>
-        <div className="relative z-10 flex items-center gap-6">
-          {/* Avatar */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="relative w-20 h-20 rounded-2xl cursor-pointer group flex-shrink-0"
-          >
-            <div className="w-20 h-20 rounded-2xl ring-2 ring-white/20 ring-offset-2 ring-offset-gray-900 overflow-hidden">
-              {profileAvatarUrl ? (
-                <img src={profileAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white flex items-center justify-center text-2xl font-bold">
-                  {(profileName?.[0] || "U").toUpperCase()}
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          {/* Left: Avatar + Info */}
+          <div className="flex items-center gap-6">
+            {/* Avatar */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="relative w-20 h-20 rounded-2xl cursor-pointer group flex-shrink-0"
+            >
+              <div className="w-20 h-20 rounded-2xl overflow-hidden" style={{ boxShadow: "0 0 0 2px rgba(105,98,196,0.4), 0 0 0 4px #0d0a25" }}>
+                {profileAvatarUrl ? (
+                  <img src={profileAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-white" style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}>
+                    {(profileName?.[0] || "U").toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              {avatarUploading && (
+                <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 </div>
               )}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
             </div>
-            <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3" style={{ background: "rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.3)" }}>
+                <svg className="w-3.5 h-3.5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>Account Settings</span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">{profileName || "Your Profile"}</h1>
+              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>Manage your profile, security, and email integrations</p>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "rgba(105,98,196,0.2)", color: "#c4b5fd", boxShadow: "inset 0 0 0 1px rgba(105,98,196,0.4)" }}>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                  {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  {totalInboxes}/{maxInboxes} inboxes
+                </span>
+              </div>
             </div>
-            {avatarUploading && (
-              <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          </div>
+
+          {/* Right: Service Type Selector */}
+          <div className="flex-shrink-0 rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <div className="flex items-center justify-between mb-4 gap-6">
+              <div>
+                <span className="text-sm font-bold text-white">Your Service</span>
+                <p className="text-[10px] text-white/50 mt-0.5">Controls audit & email style</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (serviceType === savedServiceType) return;
+                  setServiceTypeSaving(true);
+                  try {
+                    await apiPut("/stats/service-type", { serviceType });
+                    setSavedServiceType(serviceType);
+                    const supabase = createClient();
+                    await supabase.auth.updateUser({ data: { service_type_set: true } });
+                    toast.addToast("Service type updated", "success");
+                  } catch {
+                    setServiceType(savedServiceType);
+                    toast.addToast("Failed to update service type", "error");
+                  } finally {
+                    setServiceTypeSaving(false);
+                  }
+                }}
+                disabled={serviceTypeSaving || serviceType === savedServiceType}
+                className="px-4 py-1.5 text-[11px] font-bold rounded-lg transition-all disabled:scale-95 disabled:opacity-0"
+                style={{ background: "#c4b5fd", color: "#1a1540", boxShadow: "0 2px 12px rgba(196,181,253,0.3)" }}
+              >
+                {serviceTypeSaving ? "..." : "Save"}
+              </button>
+            </div>
+            {serviceTypeLoading ? (
+              <div className="flex gap-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="w-[115px] h-[78px] rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.05)" }} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                {([
+                  { value: "web_dev", label: "Web Dev", iconPath: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" },
+                  { value: "digital_marketing", label: "Marketing", iconPath: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" },
+                  { value: "seo", label: "SEO", iconPath: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" },
+                ] as const).map((opt) => {
+                  const isSelected = serviceType === opt.value;
+                  const isSaved = savedServiceType === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setServiceType(opt.value)}
+                      disabled={serviceTypeSaving}
+                      className="relative flex flex-col items-center justify-center gap-2 w-[115px] py-4 rounded-xl text-center transition-all"
+                      style={{
+                        background: isSelected ? "rgba(196,181,253,0.12)" : "rgba(255,255,255,0.03)",
+                        border: isSelected ? "2px solid #c4b5fd" : "2px solid rgba(255,255,255,0.1)",
+                        boxShadow: isSelected ? "0 4px 20px rgba(196,181,253,0.2), inset 0 1px 0 rgba(255,255,255,0.1)" : "inset 0 1px 0 rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      {isSelected && isSaved && (
+                        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-md" style={{ background: "#c4b5fd" }}>
+                          <svg className="w-3 h-3" style={{ color: "#1a1540" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                      )}
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: isSelected ? "rgba(196,181,253,0.25)" : "rgba(255,255,255,0.1)" }}>
+                        <svg className="w-5 h-5" style={{ color: isSelected ? "#e9e0ff" : "rgba(255,255,255,0.75)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isSelected ? 2.5 : 1.8} d={opt.iconPath} />
+                        </svg>
+                      </div>
+                      <span className={`text-[11px] font-bold ${isSelected ? "text-white" : "text-white/70"}`}>{opt.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-          </div>
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-3">
-              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="text-xs font-medium text-gray-300">Account Settings</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">{profileName || "Your Profile"}</h1>
-            <p className="text-gray-400 text-sm mt-1">Manage your profile, security, and email integrations</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-300 ring-1 ring-blue-500/30">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-gray-400 ring-1 ring-white/10">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                {totalInboxes}/{maxInboxes} inboxes
-              </span>
-            </div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Card */}
-        <div className="bg-blue-50 rounded-2xl shadow-sm border-2 border-blue-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-blue-100 to-indigo-100 border-b border-blue-200">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+          <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shadow-blue-300">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                   <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900">Personal Information</h2>
-                  <p className="text-xs text-gray-500">Update your name and bio</p>
+                  <h2 className="text-sm font-bold text-white">Personal Information</h2>
+                  <p className="text-xs text-white/60">Update your name and bio</p>
                 </div>
               </div>
               {!profileEditing && profileName && (
                 <button
                   onClick={() => { setProfileEditing(true); setProfileMsg(null); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-white/80 rounded-lg hover:bg-white ring-1 ring-blue-200 hover:ring-blue-300 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg hover:opacity-80 transition-all"
+                  style={{ color: "#ffffff", background: "rgba(255,255,255,0.15)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.3)" }}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -579,7 +658,7 @@ export default function SettingsPage() {
                     value={profileName}
                     onChange={(e) => { setProfileName(e.target.value); setProfileMsg(null); }}
                     placeholder="Enter your full name"
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all"
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all"
                   />
                 </div>
                 <div>
@@ -589,14 +668,15 @@ export default function SettingsPage() {
                     onChange={(e) => { setProfileBio(e.target.value); setProfileMsg(null); }}
                     placeholder="Tell us a little about yourself..."
                     rows={3}
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-all resize-none"
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all resize-none"
                   />
                 </div>
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     onClick={saveProfile}
                     disabled={profileSaving || !profileName.trim()}
-                    className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-200 transition-all"
+                    className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all hover:opacity-90"
+                    style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)", boxShadow: "0 2px 8px rgba(105,98,196,0.3)" }}
                   >
                     {profileSaving ? "Saving..." : "Save Profile"}
                   </button>
@@ -635,11 +715,11 @@ export default function SettingsPage() {
                           <p className="text-sm text-gray-500 mt-1 leading-relaxed">{profileBio}</p>
                         )}
                       </div>
-                      <div className="border-t border-blue-100 pt-3 grid grid-cols-1 gap-2.5">
+                      <div className="border-t pt-3 grid grid-cols-1 gap-2.5" style={{ borderColor: "rgba(105,98,196,0.12)" }}>
                         {profileEmail && (
                           <div className="flex items-center gap-2.5 text-sm">
-                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.1)" }}>
+                              <svg className="w-4 h-4" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                               </svg>
                             </div>
@@ -648,8 +728,8 @@ export default function SettingsPage() {
                         )}
                         {memberSince && (
                           <div className="flex items-center gap-2.5 text-sm">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.1)" }}>
+                              <svg className="w-4 h-4" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                             </div>
@@ -665,7 +745,7 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Right: vertical progress bar with checklist on left */}
-                    <div className="flex items-stretch gap-3 pl-4 border-l border-blue-100">
+                    <div className="flex items-stretch gap-3 pl-4 border-l" style={{ borderColor: "rgba(105,98,196,0.12)" }}>
                       <div className="flex flex-col justify-center gap-3">
                         {checks.map(c => (
                           <div key={c.label} className="flex items-center gap-1.5" title={c.label}>
@@ -679,11 +759,11 @@ export default function SettingsPage() {
                         ))}
                       </div>
                       <div className="flex flex-col items-center gap-1.5">
-                        <span className={`text-sm font-bold ${pct === 100 ? "text-emerald-600" : "text-blue-600"}`}>{pct}%</span>
+                        <span className="text-sm font-bold" style={{ color: pct === 100 ? "#10b981" : "#6962c4" }}>{pct}%</span>
                         <div className="relative w-3 flex-1 min-h-[100px] rounded-full bg-gray-200 overflow-hidden">
                           <div
-                            className={`absolute bottom-0 w-full rounded-full transition-all duration-700 ${pct === 100 ? "bg-gradient-to-t from-emerald-500 via-teal-400 to-green-300" : "bg-gradient-to-t from-blue-600 via-violet-500 to-amber-400"}`}
-                            style={{ height: `${pct}%` }}
+                            className="absolute bottom-0 w-full rounded-full transition-all duration-700"
+                            style={{ height: `${pct}%`, background: pct === 100 ? "linear-gradient(to top, #10b981, #34d399)" : "linear-gradient(to top, #3d3580, #6962c4, #a78bfa)" }}
                           />
                         </div>
                       </div>
@@ -696,17 +776,17 @@ export default function SettingsPage() {
         </div>
 
         {/* Change Password Card */}
-        <div className="bg-amber-50 rounded-2xl shadow-sm border-2 border-amber-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-amber-100 to-orange-100 border-b border-amber-200">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+          <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm shadow-amber-300">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                 <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-sm font-bold text-gray-900">Security</h2>
-                <p className="text-xs text-gray-500">Update your password</p>
+                <h2 className="text-sm font-bold text-white">Security</h2>
+                <p className="text-xs text-white/60">Update your password</p>
               </div>
             </div>
           </div>
@@ -718,7 +798,7 @@ export default function SettingsPage() {
                 value={newPassword}
                 onChange={(e) => { setNewPassword(e.target.value); setPasswordMsg(null); }}
                 placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-400 focus:bg-white transition-all"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all"
               />
             </div>
             <div>
@@ -728,14 +808,15 @@ export default function SettingsPage() {
                 value={confirmPassword}
                 onChange={(e) => { setConfirmPassword(e.target.value); setPasswordMsg(null); }}
                 placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-400 focus:bg-white transition-all"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all"
               />
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={changePassword}
                 disabled={passwordSaving || !newPassword || !confirmPassword}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-amber-200 transition-all"
+                className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)", boxShadow: "0 2px 8px rgba(105,98,196,0.3)" }}
               >
                 {passwordSaving ? "Changing..." : "Change Password"}
               </button>
@@ -749,24 +830,25 @@ export default function SettingsPage() {
         </div>
 
         {/* Gmail Card */}
-        <div className="bg-red-50 rounded-2xl shadow-sm border-2 border-red-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-red-100 to-pink-100 border-b border-red-200">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+          <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-sm shadow-red-300">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                   <svg className="w-4.5 h-4.5 text-white" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20 18h-2V9.25L12 13 6 9.25V18H4V6h1.2l6.8 4.25L18.8 6H20m0-2H4c-1.11 0-2 .89-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2z" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900">Gmail</h2>
-                  <p className="text-xs text-gray-500">{gmailAccounts.length} connected</p>
+                  <h2 className="text-sm font-bold text-white">Gmail</h2>
+                  <p className="text-xs text-white/60">{gmailAccounts.length} connected</p>
                 </div>
               </div>
               {totalInboxes < maxInboxes && (
                 <button
                   onClick={addGmailInbox}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all shadow-sm"
+                  className="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-sm"
+                  style={{ color: "#ffffff", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}
                 >
                   + Connect
                 </button>
@@ -778,7 +860,7 @@ export default function SettingsPage() {
               <SettingsAccountSkeleton />
             ) : gmailAccounts.length === 0 ? (
               <div className="text-center py-6">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "rgba(105,98,196,0.08)" }}>
                   <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
@@ -793,14 +875,14 @@ export default function SettingsPage() {
                   return (
                     <div key={account.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex-shrink-0 w-9 h-9 bg-gradient-to-br from-red-400 to-red-500 rounded-lg flex items-center justify-center">
+                        <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}>
                           <span className="text-white text-xs font-bold">{account.email[0].toUpperCase()}</span>
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-900 truncate">{account.email}</span>
                             {account.is_primary && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">PRIMARY</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#3d3580", color: "#ffffff" }}>PRIMARY</span>
                             )}
                           </div>
                           <span className={`text-xs ${warmup.color === "green" ? "text-emerald-600" : "text-amber-600"}`}>
@@ -822,9 +904,10 @@ export default function SettingsPage() {
                           <button
                             onClick={() => reconnectGmail(account.id)}
                             disabled={removing === account.id}
-                            className="text-xs text-blue-500 hover:text-blue-700 font-medium disabled:opacity-50 transition-colors"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50 transition-all hover:opacity-80"
+                            style={{ color: "#3d3580", background: "rgba(105,98,196,0.1)", border: "1px solid rgba(105,98,196,0.25)" }}
                           >
-                            {removing === account.id ? "Reconnecting..." : "Reconnect"}
+                            {removing === account.id ? "Reconnecting..." : "↻ Reconnect"}
                           </button>
                         )}
                       </div>
@@ -837,24 +920,25 @@ export default function SettingsPage() {
         </div>
 
         {/* SMTP Card */}
-        <div className="bg-violet-50 rounded-2xl shadow-sm border-2 border-violet-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-indigo-100 to-violet-100 border-b border-violet-200">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+          <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm shadow-violet-300">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                   <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900">SMTP / Other</h2>
-                  <p className="text-xs text-gray-500">{smtpAccounts.length} connected</p>
+                  <h2 className="text-sm font-bold text-white">SMTP / Other</h2>
+                  <p className="text-xs text-white/60">{smtpAccounts.length} connected</p>
                 </div>
               </div>
               {!showSmtpForm && totalInboxes < maxInboxes && (
                 <button
                   onClick={() => { setShowSmtpForm(true); setSmtpProvider(""); setSmtpError(""); setSmtpSuccess(""); }}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm"
+                  className="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-sm"
+                  style={{ color: "#ffffff", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}
                 >
                   + Connect
                 </button>
@@ -874,11 +958,14 @@ export default function SettingsPage() {
                         <button
                           key={key}
                           onClick={() => selectProvider(key)}
-                          className={`p-3 text-left text-sm font-medium rounded-xl border-2 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm ${
+                          className={`p-3 text-left text-sm font-medium rounded-xl border-2 transition-all hover:shadow-sm ${
                             key === "custom"
                               ? "col-span-2 border-dashed border-gray-200 bg-gray-50 text-gray-600"
                               : "border-gray-100 bg-white text-gray-800"
                           }`}
+                          style={{ ...(key !== "custom" ? {} : {})} }
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(105,98,196,0.4)"; e.currentTarget.style.background = "rgba(105,98,196,0.04)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; }}
                         >
                           {preset.label}
                         </button>
@@ -894,12 +981,12 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: "rgba(105,98,196,0.12)", color: "#3d3580" }}>
                         {SMTP_PRESETS[smtpProvider].label}
                       </span>
                       <button
                         onClick={() => { setSmtpProvider(""); setSmtpForm({ ...smtpForm, host: "", port: "587", useTls: true }); }}
-                        className="text-xs text-indigo-500 hover:text-indigo-700"
+                        className="text-xs font-medium transition-colors" style={{ color: "#6962c4" }}
                       >
                         Change
                       </button>
@@ -915,7 +1002,7 @@ export default function SettingsPage() {
                           value={smtpForm.email}
                           onChange={(e) => setSmtpForm({ ...smtpForm, email: e.target.value, username: e.target.value })}
                           placeholder="you@example.com"
-                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                         />
                       </div>
                       <div className="col-span-2">
@@ -927,7 +1014,7 @@ export default function SettingsPage() {
                           value={smtpForm.password}
                           onChange={(e) => setSmtpForm({ ...smtpForm, password: e.target.value })}
                           placeholder="••••••••"
-                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                         />
                       </div>
                       <div className="col-span-2">
@@ -937,7 +1024,7 @@ export default function SettingsPage() {
                           value={smtpForm.displayName}
                           onChange={(e) => setSmtpForm({ ...smtpForm, displayName: e.target.value })}
                           placeholder="John Smith (optional)"
-                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                         />
                       </div>
                       {smtpProvider === "custom" && (
@@ -949,7 +1036,7 @@ export default function SettingsPage() {
                               value={smtpForm.host}
                               onChange={(e) => setSmtpForm({ ...smtpForm, host: e.target.value })}
                               placeholder="smtp.yourdomain.com"
-                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                             />
                           </div>
                           <div>
@@ -959,7 +1046,7 @@ export default function SettingsPage() {
                               value={smtpForm.port}
                               onChange={(e) => setSmtpForm({ ...smtpForm, port: e.target.value })}
                               placeholder="587"
-                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                             />
                           </div>
                           <div>
@@ -969,7 +1056,7 @@ export default function SettingsPage() {
                               value={smtpForm.username}
                               onChange={(e) => setSmtpForm({ ...smtpForm, username: e.target.value })}
                               placeholder="you@yourdomain.com"
-                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+                              className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 focus:bg-white transition-all"
                             />
                           </div>
                           <div className="flex items-end">
@@ -978,7 +1065,7 @@ export default function SettingsPage() {
                                 type="checkbox"
                                 checked={smtpForm.useTls}
                                 onChange={(e) => setSmtpForm({ ...smtpForm, useTls: e.target.checked })}
-                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                               />
                               <span className="text-xs text-gray-600">Use TLS/SSL</span>
                             </label>
@@ -996,14 +1083,16 @@ export default function SettingsPage() {
                       <button
                         onClick={testSmtpConnection}
                         disabled={smtpTesting || !smtpForm.email || !smtpForm.host || !smtpForm.password}
-                        className="px-4 py-2 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                        className="px-4 py-2 text-xs font-medium rounded-xl transition-colors disabled:opacity-50"
+                        style={{ color: "#3d3580", background: "rgba(105,98,196,0.08)", border: "1px solid rgba(105,98,196,0.25)" }}
                       >
                         {smtpTesting ? "Testing..." : "Test Connection"}
                       </button>
                       <button
                         onClick={saveSmtpAccount}
                         disabled={smtpSaving || !smtpForm.email || !smtpForm.host || !smtpForm.password}
-                        className="px-4 py-2 text-xs font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all disabled:opacity-50 shadow-sm shadow-indigo-200"
+                        className="px-4 py-2 text-xs font-medium text-white rounded-xl transition-all disabled:opacity-50 shadow-sm"
+                        style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
                       >
                         {smtpSaving ? "Saving..." : "Save Account"}
                       </button>
@@ -1019,7 +1108,7 @@ export default function SettingsPage() {
               </div>
             ) : smtpAccounts.length === 0 ? (
               <div className="text-center py-6">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "rgba(105,98,196,0.08)" }}>
                   <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
@@ -1034,14 +1123,14 @@ export default function SettingsPage() {
                   return (
                     <div key={account.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex-shrink-0 w-9 h-9 bg-gradient-to-br from-indigo-400 to-violet-500 rounded-lg flex items-center justify-center">
+                        <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}>
                           <span className="text-white text-xs font-bold">{account.email[0].toUpperCase()}</span>
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-900 truncate">{account.email}</span>
                             {account.is_primary && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">PRIMARY</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#3d3580", color: "#ffffff" }}>PRIMARY</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -1073,92 +1162,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Service Type Card */}
-        <div className="bg-violet-50 rounded-2xl shadow-sm border-2 border-violet-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-violet-100 to-purple-100 border-b border-violet-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm shadow-violet-300">
-                  <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900">Your Service</h2>
-                  <p className="text-xs text-gray-500">Controls audit report & email style</p>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  if (serviceType === savedServiceType) return;
-                  setServiceTypeSaving(true);
-                  try {
-                    await apiPut("/stats/service-type", { serviceType });
-                    setSavedServiceType(serviceType);
-                    // Mark service type as explicitly set (for onboarding detection)
-                    const supabase = createClient();
-                    await supabase.auth.updateUser({ data: { service_type_set: true } });
-                    toast.addToast("Service type updated", "success");
-                  } catch {
-                    setServiceType(savedServiceType);
-                    toast.addToast("Failed to update service type", "error");
-                  } finally {
-                    setServiceTypeSaving(false);
-                  }
-                }}
-                disabled={serviceTypeSaving || serviceType === savedServiceType}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
-              >
-                {serviceTypeSaving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-          <div className="p-6">
-            {serviceTypeLoading ? (
-              <div className="grid grid-cols-3 gap-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl bg-white border-2 border-gray-200 animate-pulse">
-                    <div className="w-8 h-8 rounded-full bg-gray-200" />
-                    <div className="w-16 h-3 rounded bg-gray-200" />
-                    <div className="w-12 h-2 rounded bg-gray-100" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {([
-                { value: "web_dev", label: "Web Design & Dev", icon: "🌐", desc: "Speed, mobile, UX" },
-                { value: "digital_marketing", label: "Digital Marketing / SMMA", icon: "📈", desc: "Ads, tracking, social" },
-                { value: "seo", label: "SEO", icon: "🔍", desc: "Rankings, visibility" },
-              ] as const).map((opt) => {
-                const isSelected = serviceType === opt.value;
-                const isSaved = savedServiceType === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setServiceType(opt.value)}
-                    disabled={serviceTypeSaving}
-                    className={`relative flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl text-center transition-all ${
-                      isSelected
-                        ? "bg-violet-100 border-2 border-violet-500 shadow-sm shadow-violet-200"
-                        : "bg-white border-2 border-gray-200 hover:border-violet-300 hover:bg-violet-50"
-                    }`}
-                  >
-                    {isSelected && isSaved && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                      </div>
-                    )}
-                    <span className="text-2xl">{opt.icon}</span>
-                    <span className={`text-xs font-semibold ${isSelected ? "text-violet-900" : "text-gray-700"}`}>{opt.label}</span>
-                    <span className={`text-[10px] ${isSelected ? "text-violet-600" : "text-gray-400"}`}>{opt.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

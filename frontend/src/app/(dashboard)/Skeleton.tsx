@@ -1,14 +1,14 @@
 "use client";
 
 function Pulse({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-gray-200 ${className}`} />;
+  return <div className={`animate-pulse rounded-lg ${className}`} style={{ background: "rgba(47,39,108,0.1)" }} />;
 }
 
 export function DashboardSkeleton() {
   return (
     <div>
       {/* Hero */}
-      <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 p-8 mb-6">
+      <div className="rounded-2xl p-8 mb-6" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)" }}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-3">
             <Pulse className="h-4 w-32 !bg-white/10" />
@@ -28,17 +28,12 @@ export function DashboardSkeleton() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-        {[
-          { bg: "bg-blue-50", border: "border-blue-200", pulse: "!bg-blue-200" },
-          { bg: "bg-emerald-50", border: "border-emerald-200", pulse: "!bg-emerald-200" },
-          { bg: "bg-violet-50", border: "border-violet-200", pulse: "!bg-violet-200" },
-          { bg: "bg-amber-50", border: "border-amber-200", pulse: "!bg-amber-200" },
-        ].map((c, i) => (
-          <div key={i} className={`${c.bg} rounded-2xl border-2 ${c.border} p-6`}>
+        {[1, 2, 3, 4].map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(47,39,108,0.2)" }}>
             <div className="space-y-3">
-              <Pulse className={`h-4 w-28 ${c.pulse}`} />
-              <Pulse className={`h-10 w-16 ${c.pulse}`} />
-              <Pulse className={`h-3 w-24 ${c.pulse}`} />
+              <Pulse className="h-4 w-28" />
+              <Pulse className="h-10 w-16" />
+              <Pulse className="h-3 w-24" />
             </div>
           </div>
         ))}
@@ -46,19 +41,15 @@ export function DashboardSkeleton() {
 
       {/* Gauge Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-        {[
-          { bg: "bg-blue-50", border: "border-blue-200", pulse: "!bg-blue-200" },
-          { bg: "bg-emerald-50", border: "border-emerald-200", pulse: "!bg-emerald-200" },
-          { bg: "bg-violet-50", border: "border-violet-200", pulse: "!bg-violet-200" },
-        ].map((c, i) => (
-          <div key={i} className={`${c.bg} rounded-2xl border-2 ${c.border} p-6`}>
-            <Pulse className={`h-4 w-32 mb-4 ${c.pulse}`} />
+        {[1, 2, 3].map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(47,39,108,0.2)" }}>
+            <Pulse className="h-4 w-32 mb-4" />
             <div className="flex items-center gap-5">
-              <Pulse className={`w-[90px] h-[90px] !rounded-full ${c.pulse}`} />
+              <Pulse className="w-[90px] h-[90px] !rounded-full" />
               <div className="space-y-2">
-                <Pulse className={`h-7 w-24 ${c.pulse}`} />
-                <Pulse className={`h-3 w-28 ${c.pulse}`} />
-                <Pulse className={`h-3 w-20 ${c.pulse}`} />
+                <Pulse className="h-7 w-24" />
+                <Pulse className="h-3 w-28" />
+                <Pulse className="h-3 w-20" />
               </div>
             </div>
           </div>
@@ -67,15 +58,10 @@ export function DashboardSkeleton() {
 
       {/* Bottom Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        {[
-          { bg: "bg-sky-50", border: "border-sky-200", pulse: "!bg-sky-200" },
-          { bg: "bg-teal-50", border: "border-teal-200", pulse: "!bg-teal-200" },
-          { bg: "bg-pink-50", border: "border-pink-200", pulse: "!bg-pink-200" },
-          { bg: "bg-rose-50", border: "border-rose-200", pulse: "!bg-rose-200" },
-        ].map((c, i) => (
-          <div key={i} className={`${c.bg} rounded-2xl border-2 ${c.border} p-5`}>
-            <Pulse className={`h-4 w-20 mb-3 ${c.pulse}`} />
-            <Pulse className={`h-8 w-14 ${c.pulse}`} />
+        {[1, 2, 3, 4].map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl p-5" style={{ border: "1px solid rgba(47,39,108,0.2)" }}>
+            <Pulse className="h-4 w-20 mb-3" />
+            <Pulse className="h-8 w-14" />
           </div>
         ))}
       </div>
@@ -87,9 +73,9 @@ export function CampaignCardsSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="space-y-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div key={i} className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.2)" }}>
           <div className="flex items-stretch">
-            <div className="w-1.5 bg-gradient-to-b from-gray-200 to-gray-300 flex-shrink-0" />
+            <div className="w-1.5 flex-shrink-0" style={{ background: "linear-gradient(180deg, #2f276c, #6962c4)" }} />
             <div className="flex items-center gap-5 px-6 py-5 flex-1">
               <Pulse className="w-12 h-12 !rounded-xl" />
               <div className="flex-1 space-y-2.5">
@@ -148,7 +134,7 @@ export function SettingsAccountSkeleton() {
   return (
     <div className="space-y-3 py-2">
       {[1, 2].map(i => (
-        <div key={i} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+        <div key={i} className="flex items-center justify-between p-4 rounded-xl" style={{ border: "1px solid rgba(47,39,108,0.1)", background: "rgba(47,39,108,0.03)" }}>
           <div className="flex items-center gap-3">
             <Pulse className="w-9 h-9 !rounded-full" />
             <div className="space-y-1.5">

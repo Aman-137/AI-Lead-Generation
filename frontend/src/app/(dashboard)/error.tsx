@@ -31,7 +31,7 @@ export default function DashboardError({
             Try Again
           </button>
           <Link
-            href="/dashboard"
+            href="/"
             className="px-5 py-2.5 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
           >
             Go to Dashboard

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -17,7 +17,14 @@ export default function AuthPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+
+  const getSupabase = () => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient();
+    }
+    return supabaseRef.current;
+  };
 
   const resetForm = () => {
     setError("");
@@ -38,7 +45,7 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await getSupabase().auth.signInWithPassword({
       email,
       password,
     });
@@ -49,7 +56,7 @@ export default function AuthPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push("/");
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -68,7 +75,7 @@ export default function AuthPage() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { error } = await getSupabase().auth.signUp({
       email,
       password,
       options: {
@@ -87,10 +94,10 @@ export default function AuthPage() {
   };
 
   const handleGoogleAuth = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await getSupabase().auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${window.location.origin}/`,
       },
     });
     if (error) setError(error.message);
@@ -158,148 +165,74 @@ export default function AuthPage() {
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1]" style={{ perspective: "1200px" }}>
         
         {/* 3D Cube - top left */}
-        <div className="absolute top-[38%] left-[2%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "float3d1 12s ease-in-out infinite" }}>
-          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-15deg) rotateY(25deg)" }}>
+        <div className="absolute top-[38%] left-[2%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "slowRotate1 30s linear infinite" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
             {/* Front face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(32px)", backdropFilter: "blur(2px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.4), rgba(61,53,128,0.2))", border: "1.5px solid rgba(105,98,196,0.5)", transform: "translateZ(32px)", boxShadow: "inset 0 0 12px rgba(105,98,196,0.25), 0 0 8px rgba(105,98,196,0.15)" }} />
             {/* Back face */}
-            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.3)", border: "1px solid rgba(105,98,196,0.25)", transform: "translateZ(-32px)" }} />
             {/* Left face */}
-            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.25)", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateY(-90deg) translateZ(32px)" }} />
             {/* Right face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.3), rgba(42,33,88,0.15))", border: "1px solid rgba(105,98,196,0.35)", transform: "rotateY(90deg) translateZ(32px)" }} />
             {/* Top face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(105,98,196,0.22))", border: "1px solid rgba(105,98,196,0.4)", transform: "rotateX(90deg) translateZ(32px)" }} />
             {/* Bottom face */}
-            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.4)", border: "1px solid rgba(105,98,196,0.15)", transform: "rotateX(-90deg) translateZ(32px)" }} />
           </div>
         </div>
 
-        {/* 3D Sphere - top right (glass ball with highlight) */}
-        <div className="absolute top-[12%] right-[5%] w-12 h-12" style={{ animation: "float3d2 8s ease-in-out infinite" }}>
-          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.2), rgba(105,98,196,0.3) 40%, rgba(42,33,88,0.4) 70%, rgba(13,10,37,0.5))", boxShadow: "0 8px 24px rgba(0,0,0,0.3), inset 0 -4px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.1), 0 0 16px rgba(105,98,196,0.2)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        {/* 3D Sphere - top right */}
+        <div className="absolute top-[12%] right-[5%] w-12 h-12" style={{ animation: "gentleFloat 8s ease-in-out infinite" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.2), rgba(105,98,196,0.3) 40%, rgba(42,33,88,0.4) 70%, rgba(13,10,37,0.5))", boxShadow: "0 8px 24px rgba(0,0,0,0.3), inset 0 -4px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.1), 0 0 16px rgba(105,98,196,0.2)", border: "1px solid rgba(105,98,196,0.25)" }} />
         </div>
 
-        {/* 3D Cube - bottom right (larger) */}
-        <div className="absolute bottom-[14%] right-[4%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "float3d4 15s ease-in-out infinite" }}>
-          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-15deg) rotateY(-20deg)" }}>
+        {/* 3D Cube - bottom right */}
+        <div className="absolute bottom-[14%] right-[4%] w-16 h-16" style={{ transformStyle: "preserve-3d", animation: "slowRotate2 35s linear infinite" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
             {/* Front face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(32px)", backdropFilter: "blur(2px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.4), rgba(61,53,128,0.2))", border: "1.5px solid rgba(105,98,196,0.5)", transform: "translateZ(32px)", boxShadow: "inset 0 0 12px rgba(105,98,196,0.25), 0 0 8px rgba(105,98,196,0.15)" }} />
             {/* Back face */}
-            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.3)", border: "1px solid rgba(105,98,196,0.25)", transform: "translateZ(-32px)" }} />
             {/* Left face */}
-            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.25)", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateY(-90deg) translateZ(32px)" }} />
             {/* Right face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.3), rgba(42,33,88,0.15))", border: "1px solid rgba(105,98,196,0.35)", transform: "rotateY(90deg) translateZ(32px)" }} />
             {/* Top face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(105,98,196,0.22))", border: "1px solid rgba(105,98,196,0.4)", transform: "rotateX(90deg) translateZ(32px)" }} />
             {/* Bottom face */}
-            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(32px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.4)", border: "1px solid rgba(105,98,196,0.15)", transform: "rotateX(-90deg) translateZ(32px)" }} />
           </div>
         </div>
 
-        {/* 3D Small sphere - bottom left */}
-        <div className="absolute bottom-[22%] left-[5%] w-9 h-9" style={{ animation: "float3d5 9s ease-in-out infinite 1s" }}>
-          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 35% 30%, rgba(255,255,255,0.15), rgba(105,98,196,0.35) 45%, rgba(26,21,64,0.5))", boxShadow: "0 4px 12px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        {/* Small sphere - bottom left */}
+        <div className="absolute bottom-[22%] left-[5%] w-9 h-9" style={{ animation: "gentleFloat 9s ease-in-out infinite 1s" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 35% 30%, rgba(255,255,255,0.15), rgba(105,98,196,0.35) 45%, rgba(26,21,64,0.5))", boxShadow: "0 4px 12px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.25)" }} />
         </div>
 
-        {/* 3D Sphere - right middle */}
-        <div className="absolute top-[50%] right-[4%] w-8 h-8" style={{ animation: "float3d2 10s ease-in-out infinite 2s" }}>
-          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.18), rgba(105,98,196,0.3) 45%, rgba(26,21,64,0.5))", boxShadow: "0 6px 16px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 12px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.2)" }} />
+        {/* Sphere - right middle */}
+        <div className="absolute top-[50%] right-[4%] w-8 h-8" style={{ animation: "gentleFloat 10s ease-in-out infinite 2s" }}>
+          <div className="w-full h-full rounded-full" style={{ background: "radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.18), rgba(105,98,196,0.3) 45%, rgba(26,21,64,0.5))", boxShadow: "0 6px 16px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 12px rgba(105,98,196,0.15)", border: "1px solid rgba(105,98,196,0.25)" }} />
         </div>
 
-        {/* 3D Small cube - top center-left area */}
-        <div className="absolute top-[6%] left-[14%] w-10 h-10" style={{ transformStyle: "preserve-3d", animation: "float3d3 13s ease-in-out infinite 3s" }}>
-          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(-20deg) rotateY(35deg)" }}>
+        {/* 3D Small cube - top center-left */}
+        <div className="absolute top-[6%] left-[14%] w-10 h-10" style={{ transformStyle: "preserve-3d", animation: "slowRotate3 25s linear infinite" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
             {/* Front face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.25), rgba(61,53,128,0.08))", border: "1.5px solid rgba(105,98,196,0.35)", transform: "translateZ(20px)", backdropFilter: "blur(2px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.4), rgba(61,53,128,0.2))", border: "1.5px solid rgba(105,98,196,0.5)", transform: "translateZ(20px)", boxShadow: "inset 0 0 8px rgba(105,98,196,0.25), 0 0 6px rgba(105,98,196,0.15)" }} />
             {/* Back face */}
-            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.15)", border: "1px solid rgba(105,98,196,0.15)", transform: "translateZ(-20px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(42,33,88,0.3)", border: "1px solid rgba(105,98,196,0.25)", transform: "translateZ(-20px)" }} />
             {/* Left face */}
-            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.15)", border: "1px solid rgba(105,98,196,0.2)", transform: "rotateY(-90deg) translateZ(20px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(61,53,128,0.25)", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateY(-90deg) translateZ(20px)" }} />
             {/* Right face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.2), rgba(42,33,88,0.08))", border: "1px solid rgba(105,98,196,0.25)", transform: "rotateY(90deg) translateZ(20px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(105,98,196,0.3), rgba(42,33,88,0.15))", border: "1px solid rgba(105,98,196,0.35)", transform: "rotateY(90deg) translateZ(20px)" }} />
             {/* Top face */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(105,98,196,0.12))", border: "1px solid rgba(105,98,196,0.3)", transform: "rotateX(90deg) translateZ(20px)" }} />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(105,98,196,0.22))", border: "1px solid rgba(105,98,196,0.4)", transform: "rotateX(90deg) translateZ(20px)" }} />
             {/* Bottom face */}
-            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.25)", border: "1px solid rgba(105,98,196,0.1)", transform: "rotateX(-90deg) translateZ(20px)" }} />
+            <div className="absolute inset-0" style={{ background: "rgba(13,10,37,0.4)", border: "1px solid rgba(105,98,196,0.15)", transform: "rotateX(-90deg) translateZ(20px)" }} />
           </div>
         </div>
       </div>
-
-      {/* CSS keyframes for 3D floating animations */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes float3d1 {
-          0%, 100% { transform: rotateX(20deg) rotateY(0deg) translateY(0px); }
-          25% { transform: rotateX(30deg) rotateY(90deg) translateY(-10px); }
-          50% { transform: rotateX(10deg) rotateY(180deg) translateY(5px); }
-          75% { transform: rotateX(25deg) rotateY(270deg) translateY(-8px); }
-        }
-        @keyframes float3d2 {
-          0%, 100% { transform: translateY(0px) scale(1); }
-          33% { transform: translateY(-12px) scale(1.05); }
-          66% { transform: translateY(6px) scale(0.95); }
-        }
-        @keyframes float3d3 {
-          0%, 100% { transform: rotateX(15deg) rotateZ(0deg) translateY(0px); }
-          50% { transform: rotateX(-10deg) rotateZ(180deg) translateY(-15px); }
-        }
-        @keyframes float3d4 {
-          0%, 100% { transform: rotateX(-15deg) rotateY(0deg) translateY(0px); }
-          25% { transform: rotateX(10deg) rotateY(-90deg) translateY(-8px); }
-          50% { transform: rotateX(20deg) rotateY(-180deg) translateY(4px); }
-          75% { transform: rotateX(-5deg) rotateY(-270deg) translateY(-12px); }
-        }
-        @keyframes float3d5 {
-          0%, 100% { transform: translateY(0px) scale(1); }
-          50% { transform: translateY(-10px) scale(1.1); }
-        }
-        @keyframes float3d7 {
-          0%, 100% { transform: rotateZ(45deg) rotateX(0deg) translateY(0px); }
-          33% { transform: rotateZ(45deg) rotateX(30deg) translateY(-10px); }
-          66% { transform: rotateZ(45deg) rotateX(-20deg) translateY(5px); }
-        }
-        @keyframes btnPulse {
-          0%, 100% { opacity: 0.6; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.02); }
-        }
-        @keyframes btnLiquidBg {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        @keyframes btnGlowPulse {
-          0%, 100% { opacity: 0.5; transform: scaleX(0.85); }
-          50% { opacity: 0.9; transform: scaleX(1); }
-        }
-        @keyframes btnSparkle1 {
-          0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-          50% { opacity: 1; transform: scale(1) rotate(180deg); }
-        }
-        @keyframes btnSparkle2 {
-          0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-          40% { opacity: 1; transform: scale(1.2) rotate(120deg); }
-          80% { opacity: 0; transform: scale(0) rotate(240deg); }
-        }
-        @keyframes btnSparkle3 {
-          0%, 100% { opacity: 0; transform: scale(0); }
-          30% { opacity: 0.8; transform: scale(0.8); }
-          60% { opacity: 1; transform: scale(1.1); }
-          90% { opacity: 0; transform: scale(0); }
-        }
-        @keyframes btnWaveSweep {
-          0% { transform: translateX(-120%) rotate(-3deg); }
-          100% { transform: translateX(120%) rotate(3deg); }
-        }
-        @keyframes btnLift {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-2px); }
-        }
-        @keyframes btnTextGlow {
-          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.3), 0 0 8px rgba(139,132,224,0.2); }
-          50% { text-shadow: 0 0 8px rgba(255,255,255,0.6), 0 0 20px rgba(139,132,224,0.5), 0 0 40px rgba(105,98,196,0.3); }
-        }
-      ` }} />
 
       <div className="relative z-10 h-full flex items-center justify-center px-6">
         {/* Glass container wrapping both sides — fixed height */}
@@ -378,13 +311,10 @@ export default function AuthPage() {
           </button>
 
           {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/[0.10]"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-3 text-white/30 bg-transparent">or</span>
-            </div>
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 border-t border-white/[0.10]"></div>
+            <span className="text-sm text-white/30">or</span>
+            <div className="flex-1 border-t border-white/[0.10]"></div>
           </div>
 
           {/* Form */}

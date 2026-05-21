@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import type { AuthChangeEvent } from "@supabase/supabase-js";
 import Link from "next/link";
 
 export default function ResetPasswordPage() {
@@ -28,7 +29,7 @@ export default function ResetPasswordPage() {
     };
 
     // Listen for auth state changes (Supabase processes the recovery token)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
       if (event === "PASSWORD_RECOVERY") {
         setReady(true);
       }
@@ -80,7 +81,7 @@ export default function ResetPasswordPage() {
           </p>
           <div className="mt-6">
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/")}
               className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
               Go to Dashboard

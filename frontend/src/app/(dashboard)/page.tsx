@@ -243,7 +243,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Step 1: Profile */}
             <button
-              onClick={() => router.push("/dashboard/settings")}
+              onClick={() => router.push("/settings")}
               className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                 onboarding.hasProfile
                   ? "border-emerald-300 bg-emerald-50"
@@ -266,7 +266,7 @@ export default function DashboardPage() {
 
             {/* Step 2: Email Account */}
             <button
-              onClick={() => router.push("/dashboard/settings")}
+              onClick={() => router.push("/settings")}
               className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                 onboarding.hasEmail
                   ? "border-emerald-300 bg-emerald-50"
@@ -289,7 +289,7 @@ export default function DashboardPage() {
 
             {/* Step 3: Service Type */}
             <button
-              onClick={() => router.push("/dashboard/settings")}
+              onClick={() => router.push("/settings")}
               className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                 onboarding.hasServiceType
                   ? "border-emerald-300 bg-emerald-50"
@@ -312,7 +312,7 @@ export default function DashboardPage() {
 
             {/* Step 4: Find Leads */}
             <button
-              onClick={() => router.push("/dashboard/auto-leads")}
+              onClick={() => router.push("/auto-leads")}
               className={`relative p-4 rounded-xl border-2 text-left transition-all ${
                 onboarding.hasLeads
                   ? "border-emerald-300 bg-emerald-50"

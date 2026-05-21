@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users to login (except for public routes)
-  const publicRoutes = ["/login", "/signup", "/", "/verify-email", "/forgot-password", "/reset-password", "/privacy", "/terms"];
+  const publicRoutes = ["/login", "/signup", "/verify-email", "/forgot-password", "/reset-password", "/privacy", "/terms"];
   const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/audit");
 
   if (!user && !isPublicRoute) {
@@ -59,14 +59,14 @@ export async function updateSession(request: NextRequest) {
   // Redirect verified users away from verify-email page
   if (user && user.email_confirmed_at && request.nextUrl.pathname === "/verify-email") {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
   // Redirect authenticated users away from login/signup to dashboard
-  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup" || request.nextUrl.pathname === "/")) {
+  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

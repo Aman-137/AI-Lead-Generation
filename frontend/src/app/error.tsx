@@ -14,17 +14,17 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "#0d0a25" }}>
       <div className="text-center max-w-md px-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <h2 className="text-2xl font-bold text-white mb-2">
           Something went wrong
         </h2>
-        <p className="text-gray-500 mb-6">
+        <p className="text-white/60 mb-6">
           An unexpected error occurred. Please try again.
         </p>
         <button
           onClick={reset}
-          className="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-5 py-2.5 bg-violet-600 text-white font-medium rounded-lg hover:bg-violet-700 transition-colors"
         >
           Try Again
         </button>

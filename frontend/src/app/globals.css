@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0d0a25;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+html, body {
+  background-color: #0d0a25 !important;
 }
 
 @theme inline {
@@ -10,13 +15,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -28,4 +26,113 @@ body {
 /* Hide scrollbar but keep scrollable */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ===== Login page animations (stable - never removed from DOM) ===== */
+@keyframes float3d1 {
+  0%, 100% { transform: rotateX(20deg) rotateY(0deg) translateY(0px); }
+  25% { transform: rotateX(30deg) rotateY(90deg) translateY(-10px); }
+  50% { transform: rotateX(10deg) rotateY(180deg) translateY(5px); }
+  75% { transform: rotateX(25deg) rotateY(270deg) translateY(-8px); }
+}
+@keyframes float3d2 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  33% { transform: translateY(-12px) scale(1.05); }
+  66% { transform: translateY(6px) scale(0.95); }
+}
+@keyframes float3d3 {
+  0%, 100% { transform: rotateX(15deg) rotateZ(0deg) translateY(0px); }
+  50% { transform: rotateX(-10deg) rotateZ(180deg) translateY(-15px); }
+}
+@keyframes float3d4 {
+  0%, 100% { transform: rotateX(-15deg) rotateY(0deg) translateY(0px); }
+  25% { transform: rotateX(10deg) rotateY(-90deg) translateY(-8px); }
+  50% { transform: rotateX(20deg) rotateY(-180deg) translateY(4px); }
+  75% { transform: rotateX(-5deg) rotateY(-270deg) translateY(-12px); }
+}
+@keyframes float3d5 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-10px) scale(1.1); }
+}
+@keyframes float3d7 {
+  0%, 100% { transform: rotateZ(45deg) rotateX(0deg) translateY(0px); }
+  33% { transform: rotateZ(45deg) rotateX(30deg) translateY(-10px); }
+  66% { transform: rotateZ(45deg) rotateX(-20deg) translateY(5px); }
+}
+@keyframes btnPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+@keyframes btnLiquidBg {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes btnGlowPulse {
+  0%, 100% { opacity: 0.5; transform: scaleX(0.85); }
+  50% { opacity: 0.9; transform: scaleX(1); }
+}
+@keyframes btnSparkle1 {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+@keyframes btnSparkle2 {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  40% { opacity: 1; transform: scale(1.2) rotate(120deg); }
+  80% { opacity: 0; transform: scale(0) rotate(240deg); }
+}
+@keyframes btnSparkle3 {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  30% { opacity: 0.8; transform: scale(0.8); }
+  60% { opacity: 1; transform: scale(1.1); }
+  90% { opacity: 0; transform: scale(0); }
+}
+@keyframes btnWaveSweep {
+  0% { transform: translateX(-120%) rotate(-3deg); }
+  100% { transform: translateX(120%) rotate(3deg); }
+}
+@keyframes btnLift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes btnTextGlow {
+  0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.3), 0 0 8px rgba(139,132,224,0.2); }
+  50% { text-shadow: 0 0 8px rgba(255,255,255,0.6), 0 0 20px rgba(139,132,224,0.5), 0 0 40px rgba(105,98,196,0.3); }
+}
+
+/* Login page floating elements container - isolated compositor layer */
+.login-float-container {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* Gentle slow float for static 3D elements - no rotation, just subtle Y movement */
+@keyframes gentleFloat {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -6px; }
+}
+
+/* Slow rotation in place for cubes */
+@keyframes slowRotate1 {
+  0% { transform: rotateX(-25deg) rotateY(30deg); }
+  100% { transform: rotateX(-25deg) rotateY(390deg); }
+}
+@keyframes slowRotate2 {
+  0% { transform: rotateX(-20deg) rotateY(-25deg); }
+  100% { transform: rotateX(-20deg) rotateY(-385deg); }
+}
+@keyframes slowRotate3 {
+  0% { transform: rotateX(-20deg) rotateY(35deg); }
+  100% { transform: rotateX(-20deg) rotateY(395deg); }
+}
+
+/* Prevent compositor layer reorganization on animated cubes */
+.login-3d-cube {
+  will-change: transform;
+  contain: paint;
+}
+
+.login-3d-sphere {
+  will-change: transform;
+  contain: paint;
 }

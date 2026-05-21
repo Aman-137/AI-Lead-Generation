@@ -290,7 +290,7 @@ export default function AutoLeadsPage() {
 
       // If leads found and campaign created, navigate to campaign
       if (response.campaign_id && response.count > 0) {
-        router.push(`/dashboard/campaigns/${response.campaign_id}`);
+        router.push(`/campaigns/${response.campaign_id}`);
         return;
       }
 
@@ -313,7 +313,7 @@ export default function AutoLeadsPage() {
 
   const handleEnrichLeads = (source: LeadSource) => {
     if (source.campaignId) {
-      router.push(`/dashboard/campaigns/${source.campaignId}`);
+      router.push(`/campaigns/${source.campaignId}`);
     } else {
       toast.addToast("No campaign found for this source. Try finding leads again.", "error");
     }
@@ -340,15 +340,15 @@ export default function AutoLeadsPage() {
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
 
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
+      <div className="relative overflow-hidden rounded-2xl p-8 md:p-10 mb-8" style={{ background: 'linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)' }}>
         <div className="absolute inset-0">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl" />
-          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl" style={{ background: 'rgba(105, 98, 196, 0.12)' }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full blur-3xl" style={{ background: 'rgba(167, 139, 250, 0.10)' }} />
         </div>
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-4">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" style={{ color: '#c4b5fd' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <span className="text-xs font-medium text-gray-300">Auto Lead Finder</span>
@@ -358,14 +358,18 @@ export default function AutoLeadsPage() {
               Enter a niche and location — our AI finds, enriches, and scores leads automatically.
             </p>
           </div>
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-3">
             {["Search", "Enrich", "Score", "Email"].map((s, i) => (
-              <div key={s} className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <span className="text-xs font-bold text-white/70">{i + 1}</span>
+              <div key={s} className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(167, 139, 250, 0.12)', border: '1px solid rgba(196, 181, 253, 0.25)' }}>
+                  <div className="w-6 h-6 rounded-full grid place-items-center" style={{ background: 'linear-gradient(135deg, #6962c4, #a78bfa)', boxShadow: '0 2px 8px rgba(105, 98, 196, 0.4)' }}>
+                    <span className="text-[10px] font-bold text-white" style={{ lineHeight: 1 }}>{i + 1}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-white">{s}</span>
                 </div>
-                <span className="text-xs text-gray-400 font-medium">{s}</span>
-                {i < 3 && <div className="w-6 h-px bg-white/20" />}
+                {i < 3 && (
+                  <span className="text-sm" style={{ color: 'rgba(196, 181, 253, 0.7)' }}>→</span>
+                )}
               </div>
             ))}
           </div>
@@ -378,9 +382,10 @@ export default function AutoLeadsPage() {
           onClick={() => setActiveTab("find")}
           className={`flex items-center gap-2 px-6 py-2.5 font-semibold text-sm rounded-xl transition-all ${
             activeTab === "find"
-              ? "bg-gray-900 text-white shadow-md"
+              ? "text-white shadow-md"
               : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:shadow-sm"
           }`}
+          style={activeTab === "find" ? { background: 'linear-gradient(135deg, #3d3580, #6962c4)' } : undefined}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -391,9 +396,10 @@ export default function AutoLeadsPage() {
           onClick={() => setActiveTab("manage")}
           className={`flex items-center gap-2 px-6 py-2.5 font-semibold text-sm rounded-xl transition-all ${
             activeTab === "manage"
-              ? "bg-gray-900 text-white shadow-md"
+              ? "text-white shadow-md"
               : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:shadow-sm"
           }`}
+          style={activeTab === "manage" ? { background: 'linear-gradient(135deg, #3d3580, #6962c4)' } : undefined}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
@@ -401,8 +407,8 @@ export default function AutoLeadsPage() {
           Manage Sources
           {sources.length > 0 && (
             <span className={`ml-0.5 min-w-5 h-5 px-1 text-[10px] font-bold rounded-full inline-flex items-center justify-center leading-none ${
-              activeTab === "manage" ? "bg-white/20 text-white" : "bg-orange-50 text-orange-600 border border-orange-300"
-            }`}>
+              activeTab === "manage" ? "bg-white/20 text-white" : "text-white"
+            }`} style={activeTab !== "manage" ? { background: 'rgba(105, 98, 196, 0.15)', color: '#6962c4', border: '1px solid rgba(105, 98, 196, 0.4)' } : undefined}>
               {sources.length}
             </span>
           )}
@@ -414,10 +420,10 @@ export default function AutoLeadsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Form — 3 cols */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden ring-1 ring-emerald-100">
-              <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-600">
+            <div className="bg-white rounded-2xl shadow-md overflow-hidden" style={{ border: '1px solid rgba(47, 39, 108, 0.4)' }}>
+              <div className="px-6 py-5" style={{ background: '#2f276c' }}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.2)' }}>
                     <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -425,7 +431,7 @@ export default function AutoLeadsPage() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-white">Find Leads by Niche & Location</h2>
-                    <p className="text-xs text-emerald-100">Our AI searches Google and extracts verified business data</p>
+                    <p className="text-xs" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Our AI searches Google and extracts verified business data</p>
                   </div>
                 </div>
               </div>
@@ -462,7 +468,7 @@ export default function AutoLeadsPage() {
                         value={niche}
                         onChange={(e) => setNiche(e.target.value)}
                         placeholder="e.g., dentists, plumbers, lawyers"
-                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 focus:bg-white transition-all placeholder-gray-400"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
                         disabled={findingLeads}
                       />
                     </div>
@@ -485,7 +491,7 @@ export default function AutoLeadsPage() {
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
                         placeholder="e.g., San Francisco, California, USA"
-                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 focus:bg-white transition-all placeholder-gray-400"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
                         disabled={findingLeads}
                       />
                     </div>
@@ -494,9 +500,13 @@ export default function AutoLeadsPage() {
                   <button
                     type="submit"
                     disabled={findingLeads || findLimitReached}
-                    className="w-full px-5 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-teal-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-sm shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.99]"
+                    className="group relative w-full px-5 py-3.5 text-white font-semibold rounded-xl overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none text-sm shadow-lg transition-all duration-500 ease-out active:scale-[0.99]"
+                    style={{ background: (findingLeads || findLimitReached) ? undefined : 'linear-gradient(135deg, #3d3580, #6962c4)', boxShadow: (findingLeads || findLimitReached) ? undefined : '0 8px 24px rgba(47, 39, 108, 0.4)' }}
                     title={findLimitReached ? findLimitMsg : ""}
                   >
+                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out" />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: 'linear-gradient(135deg, #6962c4 0%, #a78bfa 100%)' }} />
+                    <span className="relative z-10">
                     {findingLeads ? (
                       <span className="flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -512,6 +522,7 @@ export default function AutoLeadsPage() {
                         Find Leads Now
                       </span>
                     )}
+                    </span>
                   </button>
                 </form>
 
@@ -526,7 +537,7 @@ export default function AutoLeadsPage() {
                     <button
                       key={example}
                       onClick={() => quickSetup(example, "California")}
-                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm"
+                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:text-[#3d3580] hover:bg-[#f5f3ff] transition-all shadow-sm"
                     >
                       {example}
                     </button>
@@ -537,7 +548,7 @@ export default function AutoLeadsPage() {
                     <button
                       key={loc}
                       onClick={() => setLocation(loc)}
-                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-all shadow-sm"
+                      className="group px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:text-[#3d3580] hover:bg-[#f5f3ff] transition-all shadow-sm"
                     >
                       📍 {loc}
                     </button>
@@ -550,10 +561,10 @@ export default function AutoLeadsPage() {
           {/* Right Panel — 2 cols */}
           <div className="lg:col-span-2 space-y-6">
             {/* How It Works */}
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-3.5 bg-gradient-to-r from-blue-500/80 to-indigo-500/80">
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(47, 39, 108, 0.4)' }}>
+              <div className="px-5 py-3.5" style={{ background: '#2f276c' }}>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.2)' }}>
                     <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -563,8 +574,8 @@ export default function AutoLeadsPage() {
               </div>
               <div className="p-5 space-y-0">
                 <div className="flex items-start gap-4 pb-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
-                    <span className="text-sm font-bold text-emerald-600">1</span>
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-sm font-bold" style={{ color: '#3d3580' }}>1</span>
                   </div>
                   <div className="pt-1">
                     <p className="text-sm font-semibold text-gray-900">Search</p>
@@ -572,8 +583,8 @@ export default function AutoLeadsPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4 py-4 border-t border-gray-100">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <span className="text-sm font-bold text-blue-600">2</span>
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-sm font-bold" style={{ color: '#3d3580' }}>2</span>
                   </div>
                   <div className="pt-1">
                     <p className="text-sm font-semibold text-gray-900">Enrich</p>
@@ -581,8 +592,8 @@ export default function AutoLeadsPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4 py-4 border-t border-gray-100">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <span className="text-sm font-bold text-violet-600">3</span>
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-sm font-bold" style={{ color: '#3d3580' }}>3</span>
                   </div>
                   <div className="pt-1">
                     <p className="text-sm font-semibold text-gray-900">Score</p>
@@ -590,8 +601,8 @@ export default function AutoLeadsPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4 pt-4 border-t border-gray-100">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <span className="text-sm font-bold text-amber-600">4</span>
+                  <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-sm font-bold" style={{ color: '#3d3580' }}>4</span>
                   </div>
                   <div className="pt-1">
                     <p className="text-sm font-semibold text-gray-900">Outreach</p>
@@ -602,10 +613,10 @@ export default function AutoLeadsPage() {
             </div>
 
             {/* Pro Tips */}
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-3.5 bg-gradient-to-r from-violet-500/80 to-purple-500/80">
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(47, 39, 108, 0.4)' }}>
+              <div className="px-5 py-3.5" style={{ background: '#2f276c' }}>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.2)' }}>
                     <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
@@ -615,24 +626,24 @@ export default function AutoLeadsPage() {
               </div>
               <div className="p-5 space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center mt-0.5">
-                    <span className="text-violet-600 text-xs font-bold">1</span>
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-xs font-bold" style={{ color: '#3d3580' }}>1</span>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed pt-1">
                     Be specific — <strong className="text-gray-900">&quot;pediatric dentists&quot;</strong> works better than <strong className="text-gray-900">&quot;doctors&quot;</strong>
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center mt-0.5">
-                    <span className="text-blue-600 text-xs font-bold">2</span>
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-xs font-bold" style={{ color: '#3d3580' }}>2</span>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed pt-1">
                     Include <strong className="text-gray-900">city + state</strong> for more targeted and accurate results
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center mt-0.5">
-                    <span className="text-emerald-600 text-xs font-bold">3</span>
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                    <span className="text-xs font-bold" style={{ color: '#3d3580' }}>3</span>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed pt-1">
                     Leads scoring <strong className="text-gray-900">70+</strong> are high-quality, ready-to-contact prospects
@@ -646,18 +657,18 @@ export default function AutoLeadsPage() {
 
       {/* Manage Sources Tab */}
       {activeTab === "manage" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(47, 39, 108, 0.4)' }}>
+          <div className="px-6 py-4" style={{ background: '#2f276c' }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-200">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.2)' }}>
                   <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-gray-900">Lead Sources</h2>
-                  <p className="text-xs text-gray-500">{sources.length} total searches</p>
+                  <h2 className="text-base font-bold text-white">Lead Sources</h2>
+                  <p className="text-xs" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>{sources.length} total searches</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -671,7 +682,8 @@ export default function AutoLeadsPage() {
                 )}
                 <button
                   onClick={() => setActiveTab("find")}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-all"
+                  className="px-4 py-2 text-xs font-semibold text-white rounded-lg transition-all"
+                  style={{ background: 'rgba(255, 255, 255, 0.2)' }}
                 >
                   + New Search
                 </button>
@@ -704,7 +716,8 @@ export default function AutoLeadsPage() {
                 <p className="text-xs text-gray-400 mt-1.5">Find your first leads to populate this list</p>
                 <button
                   onClick={() => setActiveTab("find")}
-                  className="mt-5 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-200 transition-all"
+                  className="mt-5 px-6 py-2.5 text-sm font-semibold text-white rounded-xl shadow-lg transition-all"
+                  style={{ background: 'linear-gradient(135deg, #3d3580, #6962c4)', boxShadow: '0 10px 25px -5px rgba(61, 53, 128, 0.3)' }}
                 >
                   Find Your First Leads
                 </button>
@@ -725,8 +738,8 @@ export default function AutoLeadsPage() {
                 >
                   {/* Niche & Location */}
                   <div className="col-span-4 flex items-center gap-3 min-w-0">
-                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
-                      <span className="text-sm font-bold text-emerald-600">{globalIndex + 1}</span>
+                    <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(105, 98, 196, 0.12)' }}>
+                      <span className="text-sm font-bold" style={{ color: '#3d3580' }}>{globalIndex + 1}</span>
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 capitalize truncate">{source.niche}</p>
@@ -772,7 +785,7 @@ export default function AutoLeadsPage() {
                       className={`px-4 py-1.5 text-xs font-semibold rounded-lg ring-1 transition-all ${
                         !source.leadsCount
                           ? "text-gray-400 bg-gray-50 ring-gray-200 cursor-not-allowed opacity-50"
-                          : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-emerald-200 hover:ring-emerald-300 opacity-70 group-hover:opacity-100"
+                          : "text-[#3d3580] bg-[#f5f3ff] hover:bg-[#ede9fe] ring-[rgba(105,98,196,0.3)] hover:ring-[rgba(105,98,196,0.5)] opacity-70 group-hover:opacity-100"
                       }`}
                     >
                       {source.campaignId ? "View →" : "Enrich →"}

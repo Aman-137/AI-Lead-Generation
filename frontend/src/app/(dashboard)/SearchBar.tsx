@@ -54,9 +54,6 @@ export default function SearchBar({ placeholder = "Search...", value, onChange, 
             </svg>
           </button>
         )}
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-md shrink-0">
-          Ctrl K
-        </kbd>
       </div>
     </div>
   );

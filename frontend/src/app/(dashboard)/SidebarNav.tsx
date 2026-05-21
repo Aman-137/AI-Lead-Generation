@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   {
-    href: "/dashboard",
+    href: "/",
     label: "Dashboard",
     exact: true,
     icon: (
@@ -13,28 +13,28 @@ const navItems = [
     ),
   },
   {
-    href: "/dashboard/auto-leads",
+    href: "/auto-leads",
     label: "Auto Lead Finder",
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
     ),
   },
   {
-    href: "/dashboard/campaigns",
+    href: "/campaigns",
     label: "Campaigns",
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     ),
   },
   {
-    href: "/dashboard/upload",
+    href: "/upload",
     label: "Upload Leads",
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
     ),
   },
   {
-    href: "/dashboard/hot-leads",
+    href: "/hot-leads",
     label: "Hot Leads",
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
@@ -101,8 +101,9 @@ export default function SidebarNav() {
           border-color: rgba(105,98,196,0.3) !important;
         }
         .sidebar-nav-item:hover .sidebar-icon-svg {
-          color: #a78bfa !important;
+          color: #ffffff !important;
           filter: drop-shadow(0 0 4px rgba(167,139,250,0.5));
+          stroke-width: 2.5;
         }
         .sidebar-nav-item:hover .sidebar-label {
           color: rgba(255,255,255,0.9) !important;
@@ -130,7 +131,7 @@ export default function SidebarNav() {
                   : { background: "rgba(105,98,196,0.06)", border: "1px solid rgba(105,98,196,0.1)" }
                 }
               >
-                <svg className="sidebar-icon-svg w-[18px] h-[18px] transition-all duration-300" style={active ? { color: "#c4b5fd", filter: "drop-shadow(0 0 6px rgba(167,139,250,0.7))" } : { color: "rgba(255,255,255,0.4)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="sidebar-icon-svg w-[18px] h-[18px] transition-all duration-300" style={active ? { color: "#ffffff", filter: "drop-shadow(0 0 6px rgba(167,139,250,0.7))", strokeWidth: 2.5 } : { color: "rgba(255,255,255,0.4)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   {item.icon}
                 </svg>
               </div>
@@ -147,27 +148,27 @@ export default function SidebarNav() {
       <div className="px-3 pb-5">
         <div className="mx-2 h-px mb-3" style={{ background: "linear-gradient(90deg, transparent, rgba(105,98,196,0.35), transparent)" }} />
         <Link
-          href="/dashboard/help"
+          href="/help"
           className={`sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl ${
-            pathname.startsWith("/dashboard/help")
+            pathname.startsWith("/help")
               ? "sidebar-active-item text-white"
               : ""
           }`}
-          style={pathname.startsWith("/dashboard/help") ? { background: "linear-gradient(135deg, rgba(105,98,196,0.18) 0%, rgba(61,53,128,0.12) 100%)", border: "1px solid rgba(105,98,196,0.2)" } : undefined}
+          style={pathname.startsWith("/help") ? { background: "linear-gradient(135deg, rgba(105,98,196,0.18) 0%, rgba(61,53,128,0.12) 100%)", border: "1px solid rgba(105,98,196,0.2)" } : undefined}
         >
           <div
             className="sidebar-icon-box w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-300"
-            style={pathname.startsWith("/dashboard/help")
+            style={pathname.startsWith("/help")
               ? { background: "linear-gradient(135deg, rgba(105,98,196,0.35), rgba(167,139,250,0.2))", boxShadow: "0 0 20px rgba(105,98,196,0.5), inset 0 1px 0 rgba(255,255,255,0.12)", border: "1px solid rgba(167,139,250,0.25)" }
               : { background: "rgba(105,98,196,0.06)", border: "1px solid rgba(105,98,196,0.1)" }
             }
           >
-            <svg className="sidebar-icon-svg w-[18px] h-[18px] transition-all duration-300" style={pathname.startsWith("/dashboard/help") ? { color: "#c4b5fd", filter: "drop-shadow(0 0 6px rgba(167,139,250,0.7))" } : { color: "rgba(255,255,255,0.4)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="sidebar-icon-svg w-[18px] h-[18px] transition-all duration-300" style={pathname.startsWith("/help") ? { color: "#ffffff", filter: "drop-shadow(0 0 6px rgba(167,139,250,0.7))", strokeWidth: 2.5 } : { color: "rgba(255,255,255,0.4)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <span className={`sidebar-label text-sm font-medium transition-all duration-300 ${pathname.startsWith("/dashboard/help") ? "text-white" : "text-white/60"}`}>Help & Support</span>
-          {pathname.startsWith("/dashboard/help") && (
+          <span className={`sidebar-label text-sm font-medium transition-all duration-300 ${pathname.startsWith("/help") ? "text-white" : "text-white/60"}`}>Help & Support</span>
+          {pathname.startsWith("/help") && (
             <div className="sidebar-active-dot ml-auto w-2 h-2 rounded-full" style={{ background: "linear-gradient(135deg, #c4b5fd, #a78bfa)" }} />
           )}
         </Link>

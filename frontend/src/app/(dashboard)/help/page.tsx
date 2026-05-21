@@ -242,12 +242,12 @@ export default function HelpPage() {
               return (
                 <div
                   key={realIndex}
-                  className={`rounded-xl border-2 transition-all duration-200 ${
+                  className={`rounded-xl border-2 transition-all duration-200 bg-white ${
                     isOpen
                       ? "shadow-md"
-                      : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
                   }`}
-                  style={isOpen ? { background: "rgba(105,98,196,0.06)", borderColor: "#6962c4" } : undefined}
+                  style={isOpen ? { borderColor: "#6962c4" } : undefined}
                 >
                   <button
                     onClick={() => toggle(realIndex)}
@@ -256,13 +256,13 @@ export default function HelpPage() {
                     <div className="flex items-center gap-3.5 pr-4">
                       <span
                         className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "#f3f4f6", color: "#9ca3af" }}
+                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "rgba(105,98,196,0.08)", color: "#6962c4" }}
                       >
                         <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           {categoryIcons[faq.category]}
                         </svg>
                       </span>
-                      <span className={`text-sm font-semibold ${isOpen ? "text-gray-900" : "text-gray-800"}`}>
+                      <span className="text-sm font-semibold text-gray-900">
                         {faq.question}
                       </span>
                     </div>
@@ -308,12 +308,12 @@ export default function HelpPage() {
               return (
                 <div
                   key={realIndex}
-                  className={`rounded-xl border-2 transition-all duration-200 ${
+                  className={`rounded-xl border-2 transition-all duration-200 bg-white ${
                     isOpen
                       ? "shadow-md"
-                      : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
                   }`}
-                  style={isOpen ? { background: "rgba(105,98,196,0.06)", borderColor: "#6962c4" } : undefined}
+                  style={isOpen ? { borderColor: "#6962c4" } : undefined}
                 >
                   <button
                     onClick={() => toggle(realIndex)}
@@ -322,13 +322,13 @@ export default function HelpPage() {
                     <div className="flex items-center gap-3.5 pr-4">
                       <span
                         className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "#f3f4f6", color: "#9ca3af" }}
+                        style={isOpen ? { background: "rgba(105,98,196,0.15)", color: "#6962c4" } : { background: "rgba(105,98,196,0.08)", color: "#6962c4" }}
                       >
                         <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           {categoryIcons[faq.category]}
                         </svg>
                       </span>
-                      <span className={`text-sm font-semibold ${isOpen ? "text-gray-900" : "text-gray-800"}`}>
+                      <span className="text-sm font-semibold text-gray-900">
                         {faq.question}
                       </span>
                     </div>

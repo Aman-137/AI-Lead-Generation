@@ -65,9 +65,10 @@ export default function Pagination({ currentPage, totalItems, perPage = 10, onPa
               onClick={() => onPageChange(page)}
               className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
                 page === currentPage
-                  ? "bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-200"
+                  ? "text-white shadow-md"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               }`}
+              style={page === currentPage ? { background: '#2f276c', boxShadow: '0 4px 12px rgba(47, 39, 108, 0.3)' } : undefined}
             >
               {page}
             </button>

@@ -151,7 +151,7 @@ export default function CampaignsPage() {
             <p className="mt-2 text-gray-400 text-sm">Manage your outreach campaigns, track leads, and send emails.</p>
           </div>
           <Link
-            href="/dashboard/upload"
+            href="/upload"
             className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -222,7 +222,7 @@ export default function CampaignsPage() {
 
       {/* Mobile new campaign button */}
       <Link
-        href="/dashboard/upload"
+        href="/upload"
         className="sm:hidden flex items-center justify-center gap-2 w-full mb-6 px-5 py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -271,13 +271,13 @@ export default function CampaignsPage() {
           <p className="text-xs text-gray-400 mt-1.5">Upload leads or use Auto Lead Finder to create your first campaign</p>
           <div className="flex items-center justify-center gap-3 mt-5">
             <Link
-              href="/dashboard/upload"
+              href="/upload"
               className="px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-200 transition-all hover:from-blue-700 hover:to-indigo-700"
             >
               Upload Leads
             </Link>
             <Link
-              href="/dashboard/auto-leads"
+              href="/auto-leads"
               className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all"
             >
               Auto Find Leads
@@ -304,7 +304,7 @@ export default function CampaignsPage() {
             return (
               <Link
                 key={campaign.id}
-                href={`/dashboard/campaigns/${campaign.id}`}
+                href={`/campaigns/${campaign.id}`}
                 className={`group block bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all overflow-hidden ${colors.bgTint}`}
               >
                 <div className="flex items-stretch">

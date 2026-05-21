@@ -61,7 +61,7 @@ export default function VerifyEmailPage() {
         </div>
 
         <p className="mt-6 text-xs text-gray-400">
-          Already verified? <Link href="/dashboard" className="text-blue-600 hover:underline">Try accessing the dashboard</Link>
+          Already verified? <Link href="/" className="text-blue-600 hover:underline">Try accessing the dashboard</Link>
         </p>
       </div>
     </div>

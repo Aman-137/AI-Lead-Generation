@@ -1177,7 +1177,7 @@ export default function CampaignDetailPage() {
             </svg>
           </div>
           <p className="text-sm font-semibold text-gray-700">Campaign not found</p>
-          <button onClick={() => router.push("/dashboard/campaigns")} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">
+          <button onClick={() => router.push("/campaigns")} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">
             ← Back to campaigns
           </button>
         </div>
@@ -1220,7 +1220,7 @@ export default function CampaignDetailPage() {
           <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl" />
         </div>
         <div className="relative z-10">
-          <button onClick={() => router.push("/dashboard/campaigns")} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-5">
+          <button onClick={() => router.push("/campaigns")} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             Back to campaigns
           </button>

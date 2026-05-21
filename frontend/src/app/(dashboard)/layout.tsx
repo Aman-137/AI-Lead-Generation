@@ -15,41 +15,43 @@ function AvatarDropdown({ displayName, avatarUrl }: { displayName: string; avata
         <img
           src={avatarUrl}
           alt={displayName}
-          className="w-10 h-10 rounded-xl object-cover cursor-pointer ring-2 ring-gray-200 group-hover:ring-violet-400 transition-all shadow-sm"
+          className="w-10 h-10 rounded-xl object-cover cursor-pointer ring-2 ring-transparent group-hover:ring-[#6962c4] transition-all shadow-sm"
         />
       ) : (
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white flex items-center justify-center text-sm font-bold cursor-pointer ring-2 ring-gray-200 group-hover:ring-violet-400 transition-all shadow-sm">
+        <div className="w-10 h-10 rounded-xl text-white flex items-center justify-center text-sm font-bold cursor-pointer ring-2 ring-transparent group-hover:ring-[#6962c4] transition-all shadow-sm" style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}>
           {initial}
         </div>
       )}
 
       {/* Dropdown */}
-      <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl shadow-gray-200/60 border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-violet-50/50 border-b border-gray-100">
-          <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">Manage your account</p>
+      <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden bg-white" style={{ border: "1px solid rgba(61,53,128,0.3)", boxShadow: "0 12px 40px rgba(13,10,37,0.12), 0 0 0 1px rgba(105,98,196,0.08)" }}>
+        <div className="px-4 py-3.5" style={{ background: "rgba(105,98,196,0.04)", borderBottom: "1px solid rgba(105,98,196,0.1)" }}>
+          <p className="text-sm font-bold truncate" style={{ color: "#1a1540" }}>{displayName}</p>
+          <p className="text-[10px] mt-0.5" style={{ color: "#6962c4" }}>Manage your account</p>
         </div>
-        <div className="py-1.5">
+        <div className="py-2 px-2">
           <Link
-            href="/dashboard/settings"
-            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            href="/settings"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-[#6962c4]/10"
+            style={{ color: "#3d3580" }}
           >
-            <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(105,98,196,0.1)" }}>
+              <svg className="w-4 h-4" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
             Settings
           </Link>
-          <div className="mx-3 my-1 h-px bg-gray-100" />
+          <div className="mx-3 my-1.5 h-px" style={{ background: "rgba(105,98,196,0.1)" }} />
           <form action={signOut}>
             <button
               type="submit"
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-red-50"
+              style={{ color: "#dc2626" }}
             >
-              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(220,38,38,0.06)" }}>
+                <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
               </div>
@@ -80,7 +82,7 @@ export default async function DashboardLayout({
   const avatarUrl = user.user_metadata?.avatar_url;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: "linear-gradient(180deg, #f5f3ff 0%, #ede9fe 50%, #f5f3ff 100%)" }}>
       {/* Fixed top header */}
       <header className="fixed top-0 left-64 right-0 h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/80 flex items-center justify-between px-8 z-40">
         <PageTitle />
