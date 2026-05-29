@@ -75,23 +75,27 @@ function ProgressBar({ tracker }: { tracker: ReturnType<typeof useProgressTracke
   const step = tracker.currentStep >= 0 ? tracker.steps[tracker.currentStep] : null;
 
   return (
-    <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      <div className="w-full bg-gray-100 rounded-full h-2 mb-3 overflow-hidden">
-        <div
-          className="h-2 rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-blue-500 to-purple-500"
-          style={{ width: `${tracker.progress}%` }}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 relative flex-shrink-0">
-          <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-        </div>
-        <span className="text-sm text-gray-700 font-medium">
-          {step?.label || "Starting..."}
-        </span>
-        <span className="text-xs text-gray-400 ml-auto">
+    <div className="rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ background: "rgba(15,12,40,0.7)", border: "1px solid rgba(167,139,250,0.35)", boxShadow: "0 0 20px rgba(105,98,196,0.15), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
+      {/* Spinner */}
+      <div className="w-10 h-10 relative flex-shrink-0">
+        <svg className="w-10 h-10 animate-spin" viewBox="0 0 40 40" fill="none">
+          <circle cx="20" cy="20" r="16" stroke="rgba(167,139,250,0.2)" strokeWidth="3" />
+          <path d="M20 4a16 16 0 0116 16" stroke="url(#spinGrad)" strokeWidth="3" strokeLinecap="round" />
+          <defs><linearGradient id="spinGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#6962c4" /><stop offset="100%" stopColor="#c4b5fd" /></linearGradient></defs>
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: "#c4b5fd" }}>
           {Math.round(tracker.progress)}%
         </span>
+      </div>
+      {/* Label + bar */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate mb-1" style={{ color: "#e2e0ff" }}>{step?.label || "Starting..."}</p>
+        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(167,139,250,0.12)" }}>
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${tracker.progress}%`, background: "linear-gradient(90deg, #6962c4, #a78bfa, #c4b5fd)", boxShadow: "0 0 8px rgba(167,139,250,0.5)" }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -105,7 +109,7 @@ const findLeadsSteps: ProgressStep[] = [
 ];
 
 // ===== Toast Notification System =====
-type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "info" | "warning";
 
 interface Toast {
   id: number;
@@ -140,12 +144,14 @@ function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast:
     success: "bg-green-600 text-white",
     error: "bg-red-600 text-white",
     info: "bg-gray-800 text-white",
+    warning: "bg-amber-500 text-white",
   };
 
   const icons: Record<ToastType, string> = {
     success: "✓",
     error: "✕",
     info: "ℹ",
+    warning: "⚠",
   };
 
   return (
@@ -196,6 +202,7 @@ export default function AutoLeadsPage() {
   const router = useRouter();
   const findProgress = useProgressTracker(findLeadsSteps);
   const toast = useToast();
+  const heroRef = useRef<HTMLDivElement>(null);
 
   const filteredSources = useMemo(() => {
     if (!sourceSearch.trim()) return sources;
@@ -253,6 +260,9 @@ export default function AutoLeadsPage() {
 
     setFindingLeads(true);
     findProgress.start();
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
     try {
       const response = await apiPost<{
         message: string;
@@ -298,14 +308,18 @@ export default function AutoLeadsPage() {
       setTimeout(() => setActiveTab("manage"), 500);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to find leads";
-      // Detect daily or monthly limit reached
-      if (message.includes("limit reached") || message.includes("Daily lead find limit") || message.includes("Monthly lead find limit")) {
+      // Detect rate limit or plan limit warnings
+      const isLimitWarning = message.includes("limit reached") || message.includes("Daily lead find limit") || message.includes("Monthly lead find limit") || message.includes("rate limit") || message.includes("Maximum");
+      if (isLimitWarning) {
         setFindLimitReached(true);
         setFindLimitMsg(message);
+        toast.addToast(message, "warning");
+        console.warn("Find leads limit:", message);
+      } else {
+        toast.addToast(message, "error");
+        console.error("Find leads error:", err);
       }
-      toast.addToast(message, "error");
       findProgress.cancel();
-      console.error("Find leads error:", err);
     } finally {
       setFindingLeads(false);
     }
@@ -340,12 +354,12 @@ export default function AutoLeadsPage() {
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
 
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl p-8 md:p-10 mb-8" style={{ background: 'linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)' }}>
+      <div ref={heroRef} className="relative overflow-hidden rounded-2xl p-8 md:p-10 mb-8" style={{ background: 'linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)' }}>
         <div className="absolute inset-0">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl" style={{ background: 'rgba(105, 98, 196, 0.12)' }} />
           <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full blur-3xl" style={{ background: 'rgba(167, 139, 250, 0.10)' }} />
         </div>
-        <div className="relative z-10 flex items-center justify-between">
+        <div className="relative z-10 flex items-start justify-between">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 mb-4">
               <svg className="w-4 h-4" style={{ color: '#c4b5fd' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -358,20 +372,28 @@ export default function AutoLeadsPage() {
               Enter a niche and location — our AI finds, enriches, and scores leads automatically.
             </p>
           </div>
-          <div className="hidden lg:flex items-center gap-3">
-            {["Search", "Enrich", "Score", "Email"].map((s, i) => (
-              <div key={s} className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(167, 139, 250, 0.12)', border: '1px solid rgba(196, 181, 253, 0.25)' }}>
-                  <div className="w-6 h-6 rounded-full grid place-items-center" style={{ background: 'linear-gradient(135deg, #6962c4, #a78bfa)', boxShadow: '0 2px 8px rgba(105, 98, 196, 0.4)' }}>
-                    <span className="text-[10px] font-bold text-white" style={{ lineHeight: 1 }}>{i + 1}</span>
+          <div className="hidden lg:flex flex-col items-end gap-6 mt-1">
+            <div className="flex items-center gap-3">
+              {["Search", "Enrich", "Score", "Email"].map((s, i) => (
+                <div key={s} className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(167, 139, 250, 0.12)', border: '1px solid rgba(196, 181, 253, 0.25)' }}>
+                    <div className="w-6 h-6 rounded-full grid place-items-center" style={{ background: 'linear-gradient(135deg, #6962c4, #a78bfa)', boxShadow: '0 2px 8px rgba(105, 98, 196, 0.4)' }}>
+                      <span className="text-[10px] font-bold text-white" style={{ lineHeight: 1 }}>{i + 1}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-white">{s}</span>
                   </div>
-                  <span className="text-xs font-semibold text-white">{s}</span>
+                  {i < 3 && (
+                    <span className="text-sm" style={{ color: 'rgba(196, 181, 253, 0.7)' }}>→</span>
+                  )}
                 </div>
-                {i < 3 && (
-                  <span className="text-sm" style={{ color: 'rgba(196, 181, 253, 0.7)' }}>→</span>
-                )}
+              ))}
+            </div>
+            {/* Progress Bar — right side in hero */}
+            {findProgress.active && (
+              <div className="w-[560px]">
+                <ProgressBar tracker={findProgress} />
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -468,7 +490,7 @@ export default function AutoLeadsPage() {
                         value={niche}
                         onChange={(e) => setNiche(e.target.value)}
                         placeholder="e.g., dentists, plumbers, lawyers"
-                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
                         disabled={findingLeads}
                       />
                     </div>
@@ -491,7 +513,7 @@ export default function AutoLeadsPage() {
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
                         placeholder="e.g., San Francisco, California, USA"
-                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6962c4]/20 focus:border-[#6962c4] focus:bg-white transition-all placeholder-gray-400"
                         disabled={findingLeads}
                       />
                     </div>
@@ -526,7 +548,6 @@ export default function AutoLeadsPage() {
                   </button>
                 </form>
 
-                <ProgressBar tracker={findProgress} />
               </div>
 
               {/* Quick Fill Footer */}

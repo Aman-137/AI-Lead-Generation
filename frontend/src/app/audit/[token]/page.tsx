@@ -711,11 +711,10 @@ export default function AuditReportPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero — matches app dashboard dark gradient */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800">
+      <div className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)" }}>
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-blue-500/20 blur-3xl" />
-          <div className="absolute bottom-0 left-1/4 w-64 h-64 rounded-full bg-indigo-500/15 blur-3xl" />
-          <div className="absolute top-1/2 right-1/3 w-48 h-48 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105,98,196,0.15)" }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(167,139,250,0.1)" }} />
         </div>
 
         <div className="relative max-w-xl mx-auto px-5 pt-10 pb-8 text-center">
@@ -723,13 +722,18 @@ export default function AuditReportPage() {
           <div className="flex justify-center mb-2">
             <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14" />
           </div>
-          <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "rgba(196,181,253,0.85)" }}>
             {serviceType === "digital_marketing" || serviceType === "social_media"
               ? "Digital Marketing Audit"
               : serviceType === "seo"
               ? "SEO & Visibility Audit"
               : "Website Audit Report"}
-          </p>
+            </span>
+          </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white capitalize tracking-tight leading-tight">
             {data.company}
@@ -737,12 +741,12 @@ export default function AuditReportPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-3">
             {data.website && (
-              <a href={data.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-blue-300 hover:bg-white/15 transition-colors" title={data.website}>
+              <a href={data.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-violet-300 hover:bg-white/15 transition-colors" style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(196,181,253,0.25)" }} title={data.website}>
                 <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 {truncateUrl(data.website)}
               </a>
             )}
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30 capitalize">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold text-violet-300 capitalize" style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(196,181,253,0.25)" }}>
               {data.industry}
             </span>
           </div>
@@ -1187,14 +1191,14 @@ export default function AuditReportPage() {
         )}
 
         {/* CTA */}
-        <div className="mt-6 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 p-8 text-center">
+        <div className="mt-6 relative overflow-hidden rounded-2xl p-8 text-center" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)" }}>
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-blue-500/15 blur-3xl" />
-            <div className="absolute bottom-0 left-1/4 w-48 h-48 rounded-full bg-indigo-500/10 blur-3xl" />
+            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full blur-3xl" style={{ background: "rgba(105,98,196,0.15)" }} />
+            <div className="absolute bottom-0 left-1/4 w-48 h-48 rounded-full blur-3xl" style={{ background: "rgba(167,139,250,0.1)" }} />
           </div>
           <div className="relative z-10">
-            <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(196,181,253,0.25)" }}>
+              <svg className="w-5 h-5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
             </div>
             <h2 className="text-lg font-bold text-white mb-2">
               {failChecks.length > 0 ? "These issues are all fixable." : "Your site is in good shape."}

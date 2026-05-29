@@ -265,7 +265,7 @@ export default function AuthPage() {
               <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none rounded-r-3xl" />
               <div className="relative z-10 px-8 py-8 min-h-full flex flex-col justify-center">
                 {/* Inner glass card for auth form */}
-                <div className="rounded-2xl border border-white/[0.08] p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div className="dark-inputs rounded-2xl border border-white/[0.08] p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
           {/* Mobile logo - only shows on small screens */}
           <div className="lg:hidden text-center mb-6">
             <img src="/images/logo-3.png" alt="Inertia Leads" className="h-14 mx-auto" />
@@ -499,8 +499,8 @@ function BrandingSide() {
 
       <div className="space-y-5">
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
-            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.35))", boxShadow: "0 0 12px rgba(139,92,246,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -513,8 +513,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
-            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.35))", boxShadow: "0 0 12px rgba(139,92,246,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
@@ -527,8 +527,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
-            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.35))", boxShadow: "0 0 12px rgba(139,92,246,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
@@ -541,8 +541,8 @@ function BrandingSide() {
         </div>
 
         <div className="flex items-start gap-4 group">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
-            <svg className="w-5 h-5" style={{ color: "rgba(105,98,196,0.9)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.35))", boxShadow: "0 0 12px rgba(139,92,246,0.15)" }}>
+            <svg className="w-5 h-5" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
             </svg>
           </div>

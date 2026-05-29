@@ -40,24 +40,24 @@ function CustomSelect<T extends string>({
         type="button"
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
-        className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2.5 hover:bg-gray-100 hover:border-gray-400 transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        className="group inline-flex items-center gap-1.5 text-[11px] font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-white/80 hover:text-white"
       >
         <span>{selected?.label || "Select..."}</span>
-        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        <svg className={`w-3 h-3 opacity-40 group-hover:opacity-70 transition-all duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 z-50 mt-1.5 bg-white border border-gray-300 rounded-xl shadow-xl py-1.5 overflow-hidden" style={{ minWidth: ref.current?.offsetWidth }}>
+        <div className="absolute left-1/2 -translate-x-1/2 z-50 mt-2 rounded-lg shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] py-1.5 overflow-hidden bg-white ring-1 ring-black/[0.06]" style={{ minWidth: "210px" }}>
           {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
               onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`w-full text-left px-3.5 py-2 text-sm whitespace-nowrap transition-colors ${
+              className={`w-full text-left px-3.5 py-[7px] text-[12px] whitespace-nowrap transition-all duration-150 ${
                 opt.value === value
-                  ? "bg-blue-50 text-blue-700 font-semibold"
-                  : "text-gray-700 hover:bg-gray-50 font-medium"
+                  ? "text-violet-700 font-semibold bg-violet-50"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 font-medium"
               }`}
             >
               {opt.label}
@@ -286,25 +286,27 @@ function ProgressBar({ tracker }: { tracker: ReturnType<typeof useProgressTracke
   const step = tracker.currentStep >= 0 ? tracker.steps[tracker.currentStep] : null;
 
   return (
-    <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      {/* Progress bar */}
-      <div className="w-full bg-gray-100 rounded-full h-2 mb-3 overflow-hidden">
-        <div
-          className="h-2 rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-blue-500 to-purple-500"
-          style={{ width: `${tracker.progress}%` }}
-        />
-      </div>
-      {/* Step label */}
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 relative flex-shrink-0">
-          <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-        </div>
-        <span className="text-sm text-gray-700 font-medium">
-          {step?.label || "Starting..."}
-        </span>
-        <span className="text-xs text-gray-400 ml-auto">
+    <div className="rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ background: "rgba(15,12,40,0.7)", border: "1px solid rgba(167,139,250,0.35)", boxShadow: "0 0 20px rgba(105,98,196,0.15), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
+      {/* Spinner */}
+      <div className="w-10 h-10 relative flex-shrink-0">
+        <svg className="w-10 h-10 animate-spin" viewBox="0 0 40 40" fill="none">
+          <circle cx="20" cy="20" r="16" stroke="rgba(167,139,250,0.2)" strokeWidth="3" />
+          <path d="M20 4a16 16 0 0116 16" stroke="url(#spinGrad)" strokeWidth="3" strokeLinecap="round" />
+          <defs><linearGradient id="spinGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#6962c4" /><stop offset="100%" stopColor="#c4b5fd" /></linearGradient></defs>
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: "#c4b5fd" }}>
           {Math.round(tracker.progress)}%
         </span>
+      </div>
+      {/* Label + bar */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate mb-1" style={{ color: "#e2e0ff" }}>{step?.label || "Starting..."}</p>
+        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(167,139,250,0.12)" }}>
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${tracker.progress}%`, background: "linear-gradient(90deg, #6962c4, #a78bfa, #c4b5fd)", boxShadow: "0 0 8px rgba(167,139,250,0.5)" }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -374,19 +376,6 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditProgress, setAuditProgress] = useState(0);
   const [auditStep, setAuditStep] = useState("");
-  const scoreColor =
-    lead.score && lead.score >= 70
-      ? "text-emerald-700 bg-emerald-50 ring-emerald-300"
-      : lead.score && lead.score >= 40
-      ? "text-amber-700 bg-amber-50 ring-amber-300"
-      : "text-red-600 bg-red-50 ring-red-200";
-
-  const scoreLabel =
-    lead.score && lead.score >= 70
-      ? "High Opportunity"
-      : lead.score && lead.score >= 40
-      ? "Medium Opportunity"
-      : "Low Opportunity";
 
   // Build scoring reasons
   const positiveReasons: string[] = [];
@@ -437,92 +426,98 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        className="relative rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: "#0d0a25", border: "1px solid rgba(105,98,196,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold ring-2 ${scoreColor}`}>
-                {lead.score ?? "—"}
-              </span>
-              <div className="min-w-0">
-                <h3 className="text-base font-bold text-gray-900 capitalize truncate">{lead.company || lead.name}</h3>
-                {lead.name && lead.name.toLowerCase() !== (lead.company || "").toLowerCase() && (
-                  <p className="text-xs text-gray-400 capitalize truncate">{lead.name}</p>
-                )}
-              </div>
+        <div className="shrink-0 px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(105,98,196,0.15)" }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold" style={{
+              background: lead.score && lead.score >= 70 ? "rgba(16,185,129,0.1)" : lead.score && lead.score >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+              color: lead.score && lead.score >= 70 ? "#10b981" : lead.score && lead.score >= 40 ? "#f59e0b" : "#ef4444",
+              border: `2px solid ${lead.score && lead.score >= 70 ? "rgba(16,185,129,0.4)" : lead.score && lead.score >= 40 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.4)"}`,
+            }}>
+              {lead.score ?? "—"}
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white capitalize truncate">{lead.company || lead.name}</h3>
+              {lead.name && lead.name.toLowerCase() !== (lead.company || "").toLowerCase() && (
+                <p className="text-xs capitalize truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{lead.name}</p>
+              )}
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors flex-shrink-0"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(105,98,196,0.3) transparent" }}>
           {/* Top Row: Contact + Audit side by side */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Contact Info */}
-            <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Contact</p>
+            <div className="rounded-xl p-4 space-y-2.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(105,98,196,0.15)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "#a78bfa" }}>Contact</p>
               {lead.email && (
                 <div className="flex items-center gap-2 text-sm">
-                  <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                  <span className="text-gray-700 break-all text-xs">{lead.email}</span>
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  <span className="break-all text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{lead.email}</span>
                 </div>
               )}
               {lead.phone && (
                 <div className="flex items-center gap-2 text-sm">
-                  <svg className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                  <span className="text-gray-700 text-xs">{lead.phone}</span>
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#f97316" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{lead.phone}</span>
                 </div>
               )}
               {lead.website && (
                 <div className="flex items-center gap-2 text-sm">
-                  <svg className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                  <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all text-xs">{lead.website.replace(/^https?:\/\//, "")}</a>
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#a78bfa" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                  <a href={lead.website} target="_blank" rel="noopener noreferrer" className="hover:underline break-all text-xs" style={{ color: "#a78bfa" }}>{lead.website.replace(/^https?:\/\//, "")}</a>
                 </div>
               )}
               {ed?.industry && (
                 <div className="pt-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600 capitalize">{ed.industry}</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold capitalize" style={{ background: "rgba(105,98,196,0.15)", color: "#a78bfa" }}>{ed.industry}</span>
                 </div>
               )}
             </div>
 
             {/* Audit Report */}
             {ed && (
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 flex flex-col justify-center">
+              <div className="rounded-xl p-4 flex flex-col justify-center" style={{ background: "rgba(105,98,196,0.06)", border: "1px solid rgba(105,98,196,0.2)" }}>
                 {auditLoading ? (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-blue-900">{auditStep}</p>
-                      <p className="text-xs text-blue-600 font-semibold">{Math.round(auditProgress)}%</p>
+                      <p className="text-xs font-semibold" style={{ color: "#a78bfa" }}>{auditStep}</p>
+                      <p className="text-xs font-semibold" style={{ color: "#6962c4" }}>{Math.round(auditProgress)}%</p>
                     </div>
-                    <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
+                    <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "rgba(105,98,196,0.15)" }}>
                       <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${auditProgress}%` }}
+                        className="h-full rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${auditProgress}%`, background: "linear-gradient(90deg, #6962c4, #a78bfa)" }}
                       />
                     </div>
-                    <p className="text-[10px] text-blue-400 mt-2">Powered by Google PageSpeed Insights</p>
+                    <p className="text-[10px] mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>Powered by Google PageSpeed Insights</p>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <p className="text-sm font-semibold text-blue-900 mb-1">Website Audit Report</p>
-                    <p className="text-[11px] text-blue-500 mb-3">
+                    <p className="text-sm font-semibold text-white mb-1">Website Audit Report</p>
+                    <p className="text-[11px] mb-3" style={{ color: "rgba(255,255,255,0.4)" }}>
                       {auditUrl ? "Report ready — share with lead" : "Generate a visual report"}
                     </p>
                     {auditUrl ? (
                       <button
                         onClick={() => window.open(auditUrl, "_blank")}
-                        className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        className="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+                        style={{ background: "#6962c4" }}
                       >
                         Preview Report
                       </button>
@@ -559,7 +554,8 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
                           }
                           setTimeout(() => setAuditLoading(false), 500);
                         }}
-                        className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        className="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+                        style={{ background: "#6962c4" }}
                       >
                         Generate Report
                       </button>
@@ -573,22 +569,22 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
           {/* Summary */}
           {ed?.summary && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Summary</p>
-              <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">{ed.summary}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>Summary</p>
+              <p className="text-sm leading-relaxed line-clamp-3" style={{ color: "rgba(255,255,255,0.65)" }}>{ed.summary}</p>
             </div>
           )}
 
           {/* Issues Found */}
           {ed?.issues && ed.issues.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Issues Found</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.35)" }}>Issues Found</p>
               <div className="space-y-1.5">
                 {ed.issues.map((issue, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "rgba(239,68,68,0.15)" }}>
+                      <svg className="w-3 h-3" style={{ color: "#f87171" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </span>
-                    <span className="text-sm text-gray-700">{issue}</span>
+                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>{issue}</span>
                   </div>
                 ))}
               </div>
@@ -597,105 +593,66 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
 
           {/* Opportunity */}
           {ed?.opportunity && (
-            <div className="bg-emerald-50 rounded-xl p-4">
-              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Opportunity</p>
-              <p className="text-sm text-emerald-700 font-medium">{ed.opportunity}</p>
+            <div className="rounded-xl p-4" style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#34d399" }}>Opportunity</p>
+              <p className="text-sm font-medium" style={{ color: "#6ee7b7" }}>{ed.opportunity}</p>
             </div>
           )}
 
           {/* Digital Presence */}
           {ed && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Digital Presence</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>Digital Presence</p>
 
               {/* Alert badges for critical issues */}
               {(ed._siteDown || ed.isParkedDomain) && (
-                <div className="mb-3 rounded-xl p-3 bg-red-50 ring-1 ring-red-200">
-                  <p className="text-sm font-bold text-red-700">
+                <div className="mb-3 rounded-xl p-3" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                  <p className="text-sm font-bold" style={{ color: "#fca5a5" }}>
                     {ed._siteDown ? "⚠ Website is completely down/unreachable" : "⚠ Domain is parked or under construction"}
                   </p>
-                  <p className="text-xs text-red-500 mt-0.5">This business has no functional website for customers.</p>
+                  <p className="text-xs mt-0.5" style={{ color: "#f87171" }}>This business has no functional website for customers.</p>
                 </div>
               )}
 
               {ed.isSPA && (
-                <div className="mb-3 rounded-xl p-3 bg-amber-50 ring-1 ring-amber-200">
-                  <p className="text-xs font-semibold text-amber-700">⚡ JavaScript-rendered site detected — some signals may be partial</p>
+                <div className="mb-3 rounded-xl p-3" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "#fbbf24" }}>⚡ JavaScript-rendered site detected — some signals may be partial</p>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className={`rounded-xl p-3 ${ed.hasOnlineBooking ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasOnlineBooking ? "text-green-600" : "text-gray-500"}`}>
-                    Online Booking
-                  </p>
-                  <p className={`text-sm font-bold ${ed.hasOnlineBooking ? "text-green-700" : "text-gray-600"}`}>
-                    {ed.hasOnlineBooking ? "✓ Yes" : "✗ No"}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-3 ${ed.hasContactForm ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasContactForm ? "text-green-600" : "text-gray-500"}`}>
-                    Contact Form
-                  </p>
-                  <p className={`text-sm font-bold ${ed.hasContactForm ? "text-green-700" : "text-gray-600"}`}>
-                    {ed.hasContactForm ? "✓ Yes" : "✗ No"}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-3 ${ed.hasSSL !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasSSL !== false ? "text-green-600" : "text-gray-500"}`}>
-                    SSL (HTTPS)
-                  </p>
-                  <p className={`text-sm font-bold ${ed.hasSSL !== false ? "text-green-700" : "text-gray-600"}`}>
-                    {ed.hasSSL !== false ? "✓ Secure" : "✗ Not Secure"}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-3 ${ed.isMobileFriendly !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.isMobileFriendly !== false ? "text-green-600" : "text-gray-500"}`}>
-                    Mobile-Friendly
-                  </p>
-                  <p className={`text-sm font-bold ${ed.isMobileFriendly !== false ? "text-green-700" : "text-gray-600"}`}>
-                    {ed.isMobileFriendly !== false ? "✓ Yes" : "✗ No"}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-3 ${ed.hasMetaDescription !== false ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-amber-50/70 ring-1 ring-amber-200/60"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.hasMetaDescription !== false ? "text-green-600" : "text-amber-600"}`}>
-                    SEO Meta
-                  </p>
-                  <p className={`text-sm font-bold ${ed.hasMetaDescription !== false ? "text-green-700" : "text-amber-700"}`}>
-                    {ed.hasMetaDescription !== false ? "✓ Present" : "⚠ Missing"}
-                  </p>
-                </div>
-                {ed.pageLoadTimeMs !== undefined && (
-                  <div className={`rounded-xl p-3 ${ed.pageLoadTimeMs <= 3000 ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-gray-50 ring-1 ring-gray-200"}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.pageLoadTimeMs <= 3000 ? "text-green-600" : "text-gray-500"}`}>
-                      Page Speed
+                {[
+                  { label: "Online Booking", value: ed.hasOnlineBooking ? "✓ Yes" : "✗ No", positive: ed.hasOnlineBooking },
+                  { label: "Contact Form", value: ed.hasContactForm ? "✓ Yes" : "✗ No", positive: ed.hasContactForm },
+                  { label: "SSL (HTTPS)", value: ed.hasSSL !== false ? "✓ Secure" : "✗ Not Secure", positive: ed.hasSSL !== false },
+                  { label: "Mobile-Friendly", value: ed.isMobileFriendly !== false ? "✓ Yes" : "✗ No", positive: ed.isMobileFriendly !== false },
+                  { label: "SEO Meta", value: ed.hasMetaDescription !== false ? "✓ Present" : "⚠ Missing", positive: ed.hasMetaDescription !== false },
+                  ...(ed.pageLoadTimeMs !== undefined ? [{ label: "Page Speed", value: `${(ed.pageLoadTimeMs / 1000).toFixed(1)}s ${ed.pageSizeKB ? `(${ed.pageSizeKB}KB)` : ""}`, positive: ed.pageLoadTimeMs <= 3000 }] : []),
+                  ...(ed.copyrightYear ? [{ label: "Copyright Year", value: `© ${ed.copyrightYear}`, positive: ed.copyrightYear >= new Date().getFullYear() - 1 }] : []),
+                ].map((item, i) => (
+                  <div key={i} className="rounded-xl p-3" style={{
+                    background: item.positive ? "rgba(16,185,129,0.05)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${item.positive ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.06)"}`,
+                  }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: item.positive ? "#34d399" : "rgba(255,255,255,0.45)" }}>
+                      {item.label}
                     </p>
-                    <p className={`text-sm font-bold ${ed.pageLoadTimeMs <= 3000 ? "text-green-700" : "text-gray-600"}`}>
-                      {(ed.pageLoadTimeMs / 1000).toFixed(1)}s {ed.pageSizeKB ? `(${ed.pageSizeKB}KB)` : ""}
+                    <p className="text-sm font-bold" style={{ color: item.positive ? "#6ee7b7" : "rgba(255,255,255,0.7)" }}>
+                      {item.value}
                     </p>
                   </div>
-                )}
-                {ed.copyrightYear && (
-                  <div className={`rounded-xl p-3 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "bg-green-50/70 ring-1 ring-green-200/60" : "bg-amber-50/70 ring-1 ring-amber-200/60"}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-green-600" : "text-amber-600"}`}>
-                      Copyright Year
-                    </p>
-                    <p className={`text-sm font-bold ${ed.copyrightYear >= new Date().getFullYear() - 1 ? "text-green-700" : "text-amber-700"}`}>
-                      © {ed.copyrightYear}
-                    </p>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           )}
 
-          {/* Technologies + Social in row */}
+          {/* Technologies */}
           {ed?.technologies && ed.technologies.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Technologies</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.35)" }}>Technologies</p>
               <div className="flex flex-wrap gap-1.5">
                 {ed.technologies.map((tech, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200">{tech}</span>
+                  <span key={i} className="px-2 py-0.5 rounded text-[11px] font-semibold" style={{ background: "rgba(105,98,196,0.12)", color: "#a78bfa", border: "1px solid rgba(105,98,196,0.25)" }}>{tech}</span>
                 ))}
               </div>
             </div>
@@ -704,10 +661,10 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
           {/* Social Links */}
           {ed?.socialLinks && ed.socialLinks.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Social Media</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.35)" }}>Social Media</p>
               <div className="flex flex-wrap gap-2">
                 {ed.socialLinks.map((link, i) => (
-                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors break-all">
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[11px] font-medium hover:brightness-125 transition-all break-all" style={{ background: "rgba(167,139,250,0.08)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.2)" }}>
                     {link.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
                   </a>
                 ))}
@@ -718,22 +675,22 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
           {/* Score Breakdown */}
           {(positiveReasons.length > 0 || negativeReasons.length > 0) && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Score Breakdown</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>Score Breakdown</p>
               <div className="space-y-1.5">
                 {positiveReasons.map((r, i) => (
                   <div key={`p-${i}`} className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "rgba(16,185,129,0.15)" }}>
+                      <svg className="w-3 h-3" style={{ color: "#34d399" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
                     </span>
-                    <span className="text-sm text-gray-700">{r}</span>
+                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>{r}</span>
                   </div>
                 ))}
                 {negativeReasons.map((r, i) => (
                   <div key={`n-${i}`} className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" /></svg>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "rgba(239,68,68,0.15)" }}>
+                      <svg className="w-3 h-3" style={{ color: "#f87171" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" /></svg>
                     </span>
-                    <span className="text-sm text-gray-700">{r}</span>
+                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>{r}</span>
                   </div>
                 ))}
               </div>
@@ -742,9 +699,9 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
 
           {/* Not Enriched */}
           {!ed && (
-            <div className="bg-amber-50 rounded-xl p-4 text-center">
-              <p className="text-sm text-amber-700 font-medium">This lead has not been enriched yet.</p>
-              <p className="text-xs text-amber-500 mt-1">Click &quot;Enrich Leads&quot; to analyze this lead&apos;s digital presence.</p>
+            <div className="rounded-xl p-4 text-center" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+              <p className="text-sm font-medium" style={{ color: "#f59e0b" }}>This lead has not been enriched yet.</p>
+              <p className="text-xs mt-1" style={{ color: "rgba(245,158,11,0.6)" }}>Click &quot;Enrich Leads&quot; to analyze this lead&apos;s digital presence.</p>
             </div>
           )}
         </div>
@@ -757,30 +714,39 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
 function CallScriptModal({ script, onClose }: { script: { lead_id: string; company: string; phone?: string; opening: string; script: string }; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        className="relative rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: "#0d0a25", border: "1px solid rgba(105,98,196,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-              <h3 className="text-base font-bold text-gray-900">Call Script</h3>
+        {/* Header */}
+        <div className="shrink-0 px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(105,98,196,0.15)" }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(251,146,60,0.15)" }}>
+              <svg className="w-4 h-4" style={{ color: "#fb923c" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <h3 className="text-sm font-bold text-white">Call Script</h3>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
-        <div className="px-6 py-5">
-          <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <div className="h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(105,98,196,0.3) transparent" }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(251,146,60,0.25)" }}>
+            {/* Top accent bar */}
+            <div className="h-0.5" style={{ background: "linear-gradient(90deg, #fb923c, #f59e0b)" }} />
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
-                <span className="font-semibold text-gray-900 capitalize">{script.company}</span>
+                <span className="font-semibold text-white capitalize">{script.company}</span>
                 {script.phone && (
-                  <a href={`tel:${script.phone}`} className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-orange-700 bg-orange-50 rounded-lg ring-1 ring-orange-200 hover:bg-orange-100 transition-colors">
+                  <a href={`tel:${script.phone}`} className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-colors hover:brightness-125" style={{ color: "#fb923c", background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.25)" }}>
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                     {script.phone}
                   </a>
@@ -788,13 +754,13 @@ function CallScriptModal({ script, onClose }: { script: { lead_id: string; compa
               </div>
               {script.opening && (
                 <div className="mb-4">
-                  <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1.5">Opening</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{script.opening}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "#fb923c" }}>Opening</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.7)" }}>{script.opening}</p>
                 </div>
               )}
               <div>
-                <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1.5">Full Script</p>
-                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{script.script}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "#fb923c" }}>Full Script</p>
+                <p className="text-sm whitespace-pre-line leading-relaxed" style={{ color: "rgba(255,255,255,0.6)" }}>{script.script}</p>
               </div>
             </div>
           </div>
@@ -806,10 +772,10 @@ function CallScriptModal({ script, onClose }: { script: { lead_id: string; compa
 
 // ===== Email Preview Modal =====
 function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; onClose: () => void; onMarkReply: (id: string) => void }) {
-  const stepColors = [
-    "from-blue-500 to-indigo-500",
-    "from-violet-500 to-purple-500",
-    "from-orange-500 to-amber-500",
+  const stepStyles = [
+    { border: "rgba(105,98,196,0.3)", label: "rgba(105,98,196,0.9)" },
+    { border: "rgba(167,139,250,0.3)", label: "rgba(167,139,250,0.9)" },
+    { border: "rgba(251,146,60,0.3)", label: "rgba(251,146,60,0.9)" },
   ];
 
   // Convert URLs in text to clickable links
@@ -818,7 +784,7 @@ function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; 
     const parts = text.split(urlRegex);
     return parts.map((part, i) =>
       urlRegex.test(part) ? (
-        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="hover:underline break-all" style={{ color: "#a78bfa" }}>{part}</a>
       ) : (
         <span key={i}>{part}</span>
       )
@@ -827,92 +793,97 @@ function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        className="relative rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: "#0d0a25", border: "1px solid rgba(105,98,196,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-              <h3 className="text-base font-bold text-gray-900">Email Sequence ({emails.length})</h3>
+        <div className="shrink-0 px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(105,98,196,0.15)" }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(105,98,196,0.15)" }}>
+              <svg className="w-4 h-4" style={{ color: "#a78bfa" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <h3 className="text-sm font-bold text-white">Email Sequence</h3>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(105,98,196,0.2)", color: "#a78bfa" }}>{emails.length}</span>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(105,98,196,0.3) transparent" }}>
           {emails.map((email) => {
             const stepIdx = Math.min((email.sequence_step || 1) - 1, 2);
+            const style = stepStyles[stepIdx];
             return (
-              <div key={email.id} className="rounded-xl border border-gray-200 overflow-hidden">
-                <div className={`h-1 bg-gradient-to-r ${stepColors[stepIdx]}`} />
+              <div key={email.id} className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${style.border}` }}>
+                {/* Top accent bar */}
+                <div className="h-0.5" style={{ background: style.label }} />
                 <div className="p-5">
                   {/* Meta row */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold text-white bg-gradient-to-r ${stepColors[stepIdx]}`}>
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold text-white" style={{ background: style.label }}>
                         {(email.sequence_step || 1) === 1 ? "Initial" : `Follow-up ${(email.sequence_step || 1) - 1}`}
                       </span>
                       {email.tone_variant && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium uppercase">{email.tone_variant}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded font-medium uppercase" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)" }}>{email.tone_variant}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       {email.replied ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Replied
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981", border: "1px solid rgba(16,185,129,0.2)" }}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Replied
                         </span>
                       ) : email.status === "sent" ? (
                         <button
                           onClick={() => onMarkReply(email.id)}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors hover:brightness-125"
+                          style={{ color: "#a78bfa", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}
                         >
                           Mark Replied
                         </button>
                       ) : null}
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                        email.status === "sent" ? "bg-emerald-50 text-emerald-700" :
-                        email.status === "failed" ? "bg-red-50 text-red-600" :
-                        "bg-amber-50 text-amber-700"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          email.status === "sent" ? "bg-emerald-500" :
-                          email.status === "failed" ? "bg-red-500" :
-                          "bg-amber-500"
-                        }`} />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold" style={{
+                        background: email.status === "sent" ? "rgba(16,185,129,0.1)" : email.status === "failed" ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
+                        color: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : "#f59e0b",
+                        border: `1px solid ${email.status === "sent" ? "rgba(16,185,129,0.2)" : email.status === "failed" ? "rgba(239,68,68,0.2)" : "rgba(245,158,11,0.2)"}`,
+                      }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{
+                          background: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : "#f59e0b",
+                        }} />
                         {email.status === "sent" ? "Sent" : email.status === "failed" ? "Failed" : "Pending"}
                       </span>
                     </div>
                   </div>
 
                   {/* Email header */}
-                  <div className="mb-4 pb-3 border-b border-gray-100">
-                    <p className="text-xs text-gray-400 mb-1">To: <span className="text-gray-600">{email.to_email}</span></p>
-                    <h4 className="text-base font-semibold text-gray-900">{email.subject}</h4>
+                  <div className="mb-4 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <p className="text-xs mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>To: <span style={{ color: "rgba(255,255,255,0.6)" }}>{email.to_email}</span></p>
+                    <h4 className="text-sm font-semibold text-white">{email.subject}</h4>
                   </div>
 
                   {/* Email body */}
-                  <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                  <div className="text-sm whitespace-pre-line leading-relaxed" style={{ color: "rgba(255,255,255,0.7)" }}>
                     {renderBody(email.body)}
                   </div>
 
                   {/* Footer meta */}
                   {(email.sent_at || email.scheduled_at || email.error_log || (!email.sent_at && email.status === "pending")) && (
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap text-[11px] text-gray-400">
+                    <div className="mt-4 pt-3 flex items-center gap-3 flex-wrap text-[11px]" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)" }}>
                       {email.gmail_email && <span>From: {email.gmail_email}</span>}
                       {email.sent_at && <span>Sent {new Date(email.sent_at).toLocaleString()}</span>}
-                      {!email.sent_at && !email.scheduled_at && email.status === "pending" && <span className="text-amber-600">Sends during next business hours</span>}
-                      {!email.sent_at && email.scheduled_at && <span className="text-amber-600">Scheduled: {new Date(email.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (during business hours)</span>}
-                      {email.replied_at && <span className="text-emerald-600">Replied {new Date(email.replied_at).toLocaleString()}</span>}
-                      {email.error_log && email.status === "failed" && <span className="text-red-500">Error: {email.error_log}</span>}
+                      {!email.sent_at && !email.scheduled_at && email.status === "pending" && <span style={{ color: "#f59e0b" }}>Sends during next business hours</span>}
+                      {!email.sent_at && email.scheduled_at && <span style={{ color: "#f59e0b" }}>Scheduled: {new Date(email.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (during business hours)</span>}
+                      {email.replied_at && <span style={{ color: "#10b981" }}>Replied {new Date(email.replied_at).toLocaleString()}</span>}
+                      {email.error_log && email.status === "failed" && <span style={{ color: "#ef4444" }}>Error: {email.error_log}</span>}
                     </div>
                   )}
                 </div>
@@ -1081,6 +1052,18 @@ export default function CampaignDetailPage() {
     }
   };
 
+  // Reactivate campaign
+  const handleReactivate = async () => {
+    if (!campaign) return;
+    try {
+      const data = await apiPut<{ campaign: Campaign }>(`/campaigns/${campaign.id}`, { status: "draft" });
+      setCampaign(data.campaign);
+      toast.addToast("Campaign reactivated!", "success");
+    } catch (err) {
+      toast.addToast(err instanceof Error ? err.message : "Failed to reactivate", "error");
+    }
+  };
+
   // Enrich leads
   const handleEnrich = async () => {
     if (leads.length === 0) return;
@@ -1188,7 +1171,7 @@ export default function CampaignDetailPage() {
   const hasEmails = emails.length > 0;
   const hasPendingEmails = emails.some((e) => e.status === "pending");
   const allLeadsHaveEmails = leads.filter(l => l.contact_method !== "call").every(l => emails.some(e => e.lead_id === l.id));
-  const contactedLeadCount = leads.filter(l => l.contacted).length;
+  const contactedLeadCount = leads.filter(l => l.contacted || emails.some(e => e.lead_id === l.id && e.status === "sent")).length;
   const queuedLeadCount = leads.filter(l => l.source_type === "csv_queued").length;
   const activeLeadCount = leads.length - queuedLeadCount;
   const sentEmailCount = emails.filter(e => e.status === "sent").length;
@@ -1214,25 +1197,85 @@ export default function CampaignDetailPage() {
       })()}
 
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-10 mb-8">
-        <div className="absolute inset-0">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="relative rounded-2xl p-8 md:p-10 mb-8" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)" }}>
+        <div className="absolute inset-0 overflow-hidden rounded-2xl">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105,98,196,0.15)" }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(167,139,250,0.1)" }} />
         </div>
         <div className="relative z-10">
-          <button onClick={() => router.push("/campaigns")} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-5">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            Back to campaigns
-          </button>
+          <div className="flex items-center justify-between mb-5">
+            <button onClick={() => router.push("/campaigns")} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              Back to campaigns
+            </button>
+            {/* Settings */}
+            <div className="flex items-center gap-5">
+              <div className="relative flex items-center gap-2 rounded-lg px-3 py-[6px]" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <svg className="w-3.5 h-3.5" style={{ color: "#a78bfa" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <CustomSelect
+                  value={sendTimezone}
+                  onChange={(val) => setSendTimezone(val)}
+                  options={TIMEZONE_OPTIONS.map(tz => ({ value: tz.value, label: tz.label }))}
+                  disabled={savingSettings}
+                />
+              </div>
+
+              <div className="w-px h-4 bg-white/10" />
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enableFollowups}
+                onClick={() => !savingSettings && setEnableFollowups(!enableFollowups)}
+                disabled={savingSettings}
+                className="flex items-center gap-2.5 transition-all duration-200 cursor-pointer"
+              >
+                <span className={`text-[12px] font-semibold transition-colors duration-200 ${enableFollowups ? "text-white" : "text-white/70"}`}>Follow-ups</span>
+                <div
+                  className="relative w-9 h-5 rounded-full transition-all duration-300 ease-in-out"
+                  style={{ background: enableFollowups ? "#a78bfa" : "rgba(255,255,255,0.2)" }}
+                >
+                  <span
+                    className="absolute top-[3px] left-[3px] w-3.5 h-3.5 rounded-full shadow-sm transition-all duration-300 ease-in-out"
+                    style={{
+                      transform: enableFollowups ? "translateX(16px)" : "translateX(0)",
+                      background: enableFollowups ? "#fff" : "rgba(255,255,255,0.7)",
+                    }}
+                  />
+                </div>
+              </button>
+
+              <div className="w-px h-4 bg-white/10" />
+
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings || (enableFollowups === (campaign?.enable_followups !== false) && sendTimezone === (campaign?.send_timezone || "US_EAST"))}
+                className="px-3 py-[5px] text-[11px] font-semibold text-white/90 rounded-md transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}
+              >
+                {savingSettings ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
 
           <div className="flex items-start justify-between gap-6 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl md:text-3xl font-bold text-white capitalize truncate">{campaign.name}</h1>
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-white/10 border border-white/10`}>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
                   <span className={`w-1.5 h-1.5 rounded-full ${heroStatus.dot}`} />
                   <span className="text-gray-300">{heroStatus.label}</span>
                 </span>
+                {campaign.status === "completed" && (
+                  <button
+                    onClick={handleReactivate}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg text-white/80 hover:text-white transition-colors"
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Reactivate
+                  </button>
+                )}
               </div>
               <p className="text-sm text-gray-400">
                 {leads.length} leads · Created {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -1240,7 +1283,7 @@ export default function CampaignDetailPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               {(() => {
                 const isActive = campaign.status === "draft" || campaign.status === "running" || campaign.status === "failed";
                 const selectedLeads = leads.filter(l => selectedLeadIds.has(l.id));
@@ -1252,47 +1295,55 @@ export default function CampaignDetailPage() {
 
                 return (
                   <>
-                    {/* Enrich — show when selected leads have un-enriched ones */}
+                    {/* Enrich */}
                     {isActive && selectedLeadIds.size > 0 && selectedUnenriched.length > 0 && (
                       <button
                         onClick={handleEnrich}
                         disabled={enriching || enrichLimitReached}
-                        className="px-5 py-2.5 bg-white text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-100 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:scale-[1.04] hover:brightness-125 hover:-translate-y-0.5"
+                        style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.5), rgba(167,139,250,0.35))", border: "1px solid rgba(167,139,250,0.5)", boxShadow: "0 2px 12px rgba(105,98,196,0.2)" }}
                         title={enrichLimitReached ? enrichLimitMsg : ""}
                       >
-                        {enriching ? "Enriching..." : enrichLimitReached ? "Limit Reached" : `Enrich ${selectedUnenriched.length} Selected`}
+                        <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                        {enriching ? "Enriching..." : enrichLimitReached ? "Limit Reached" : `Enrich (${selectedUnenriched.length})`}
                       </button>
                     )}
-                    {/* Generate Emails — show when selected enriched leads don't have emails yet */}
+                    {/* Generate Emails */}
                     {isActive && selectedEnrichedWithoutEmails.length > 0 && (
                       <button
                         onClick={handleGenerate}
                         disabled={generating || generateLimitReached}
-                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:scale-[1.04] hover:brightness-125 hover:-translate-y-0.5"
+                        style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.5), rgba(167,139,250,0.35))", border: "1px solid rgba(167,139,250,0.5)", boxShadow: "0 2px 12px rgba(105,98,196,0.2)" }}
                         title={generateLimitReached ? generateLimitMsg : ""}
                       >
-                        {generating ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : `Generate for ${selectedEnrichedWithoutEmails.length} Selected`}
+                        <svg className="w-4 h-4 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        {generating ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : `Generate Emails (${selectedEnrichedWithoutEmails.length})`}
                       </button>
                     )}
-                    {/* Generate Call Scripts — show when selected enriched leads are call-only */}
+                    {/* Generate Call Scripts */}
                     {isActive && selectedEnriched.length > 0 && selectedCallLeads.length > 0 && (
                       <button
                         onClick={handleGenerateCallScripts}
                         disabled={generatingScripts || generateLimitReached}
-                        className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:scale-[1.04] hover:brightness-125 hover:-translate-y-0.5"
+                        style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.5), rgba(167,139,250,0.35))", border: "1px solid rgba(167,139,250,0.5)", boxShadow: "0 2px 12px rgba(105,98,196,0.2)" }}
                         title={generateLimitReached ? generateLimitMsg : ""}
                       >
-                        {generatingScripts ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : "Generate Call Scripts"}
+                        <svg className="w-4 h-4 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        {generatingScripts ? "Generating..." : generateLimitReached ? "Daily Limit Reached" : `Call Scripts (${selectedCallLeads.length})`}
                       </button>
                     )}
-                    {/* Send — show when selected leads have pending emails ready to send */}
+                    {/* Send — primary */}
                     {isActive && selectedPendingEmails.length > 0 && (
                       <button
                         onClick={handleSend}
                         disabled={sending}
-                        className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:scale-[1.05] hover:brightness-110 hover:-translate-y-0.5"
+                        style={{ background: "linear-gradient(135deg, #6962c4, #a78bfa)", boxShadow: "0 4px 20px rgba(105,98,196,0.35)" }}
                       >
-                        {sending ? "Sending..." : `Send to ${new Set(selectedPendingEmails.map(e => e.lead_id)).size} Selected`}
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                        <span className="text-white">{sending ? "Sending..." : `Send to ${new Set(selectedPendingEmails.map(e => e.lead_id)).size} Selected`}</span>
                       </button>
                     )}
                   </>
@@ -1302,142 +1353,95 @@ export default function CampaignDetailPage() {
           </div>
 
           {/* Stats Row */}
-          <div className="mt-6 flex items-center gap-6 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-white">{activeLeadCount}</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Active</p>
-              </div>
-            </div>
-            {queuedLeadCount > 0 && (
-              <>
-                <div className="w-px h-10 bg-white/10" />
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-white">{queuedLeadCount}</p>
-                    <p className="text-[10px] text-amber-400 uppercase tracking-wider">Queued</p>
-                  </div>
+          <div className="mt-6 flex items-center gap-5 flex-wrap relative">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                  <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 </div>
-              </>
-            )}
-            <div className="w-px h-10 bg-white/10" />
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <div>
+                  <p className="text-lg font-bold text-white">{activeLeadCount}</p>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">Active</p>
+                </div>
               </div>
-              <div>
-                <p className="text-lg font-bold text-white">{contactedLeadCount}</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Contacted</p>
+              {queuedLeadCount > 0 && (
+                <>
+                  <div className="w-px h-8 bg-white/10" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                      <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-white">{queuedLeadCount}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Queued</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              <div className="w-px h-8 bg-white/10" />
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                  <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-white">{contactedLeadCount}</p>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">Contacted</p>
+                </div>
               </div>
-            </div>
-            {hasEmails && (
-              <>
-                <div className="w-px h-10 bg-white/10" />
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {hasEmails && (
+                <>
+                  <div className="w-px h-8 bg-white/10" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                      <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-white">{sentEmailCount}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Sent</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-white">{sentEmailCount}</p>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Sent</p>
+                </>
+              )}
+              {repliedEmailCount > 0 && (
+                <>
+                  <div className="w-px h-8 bg-white/10" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                      <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-white">{repliedEmailCount}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Replies</p>
+                    </div>
                   </div>
+                </>
+              )}
+              {auditViewedCount > 0 && (
+                <>
+                  <div className="w-px h-8 bg-white/10" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(167,139,250,0.12)" }}>
+                      <svg className="w-4 h-4" style={{ color: "#c4b5fd" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-white">{auditViewedCount}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Viewed Audit</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Progress Indicator — right side, absolutely positioned */}
+              {(enrichProgress.active || generateProgress.active || sendProgress.active || scriptProgress.active) && (
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[560px]">
+                  <ProgressBar tracker={enrichProgress} />
+                  <ProgressBar tracker={generateProgress} />
+                  <ProgressBar tracker={sendProgress} />
+                  <ProgressBar tracker={scriptProgress} />
                 </div>
-              </>
-            )}
-            {repliedEmailCount > 0 && (
-              <>
-                <div className="w-px h-10 bg-white/10" />
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-white">{repliedEmailCount}</p>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Replies</p>
-                  </div>
-                </div>
-              </>
-            )}
-            {auditViewedCount > 0 && (
-              <>
-                <div className="w-px h-10 bg-white/10" />
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-white">{auditViewedCount}</p>
-                    <p className="text-[10px] text-orange-400 uppercase tracking-wider">Viewed Audit</p>
-                  </div>
-                </div>
-              </>
-            )}
+              )}
           </div>
         </div>
       </div>
-
-      {/* Settings Card */}
-      <div className="bg-blue-50/50 rounded-2xl border border-blue-200 p-5 mb-6">
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <div className="flex items-center gap-2">
-              <CustomSelect
-                value={sendTimezone}
-                onChange={(val) => setSendTimezone(val)}
-                options={TIMEZONE_OPTIONS.map(tz => ({ value: tz.value, label: tz.label }))}
-                disabled={savingSettings}
-              />
-              <span className="text-xs text-gray-400 hidden md:block">{TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.hours}</span>
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-gray-200" />
-
-          <label htmlFor="followups-toggle" className="flex items-center gap-3 cursor-pointer">
-            <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-              <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-            </div>
-            <input
-              type="checkbox"
-              id="followups-toggle"
-              checked={enableFollowups}
-              onChange={(e) => setEnableFollowups(e.target.checked)}
-              disabled={savingSettings}
-              className="w-4 h-4 rounded cursor-pointer accent-violet-600"
-            />
-            <span className="text-sm text-gray-700 font-medium">Follow-up sequences</span>
-          </label>
-
-          {(enableFollowups !== (campaign?.enable_followups !== false) ||
-            sendTimezone !== (campaign?.send_timezone || "US_EAST")) && (
-            <button
-              onClick={handleSaveSettings}
-              disabled={savingSettings}
-              className="ml-auto px-5 py-2 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 font-semibold transition-all"
-            >
-              {savingSettings ? "Saving..." : "Save Settings"}
-            </button>
-          )}
-        </div>
-        <div className="mt-3 text-xs text-gray-400 pl-11">
-          Emails send during peak open times · Morning: 8 AM–12 PM · Afternoon: 1–5 PM ({TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label})
-        </div>
-      </div>
-
-      {/* Progress Indicators */}
-      <ProgressBar tracker={enrichProgress} />
-      <ProgressBar tracker={generateProgress} />
-      <ProgressBar tracker={sendProgress} />
-      <ProgressBar tracker={scriptProgress} />
 
       {/* Leads Section */}
       <div className="mt-8">
@@ -1454,21 +1458,21 @@ export default function CampaignDetailPage() {
               })
             : leads;
 
-          const contactedCount = filteredLeads.filter(l => l.contacted).length;
-          const uncontactedCount = filteredLeads.filter(l => !l.contacted && l.source_type !== "csv_queued").length;
+          const contactedCount = filteredLeads.filter(l => l.contacted || emails.some(e => e.lead_id === l.id && e.status === "sent")).length;
+          const uncontactedCount = filteredLeads.filter(l => !l.contacted && !emails.some(e => e.lead_id === l.id && e.status === "sent") && l.source_type !== "csv_queued").length;
           const queuedCount = filteredLeads.filter(l => l.source_type === "csv_queued").length;
 
           const leadStart = (leadPage - 1) * LEADS_PER_PAGE;
           const paginatedLeads = filteredLeads.slice(leadStart, leadStart + LEADS_PER_PAGE);
 
           return filteredLeads.length === 0 && leads.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+              <div className="flex items-center justify-between px-6 py-4" style={{ background: "#2f276c" }}>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                     <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   </div>
-                  <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                  <h2 className="text-sm font-bold text-white">Leads <span style={{ color: "rgba(255,255,255,0.7)" }}>({leads.length})</span></h2>
                 </div>
               </div>
               <div className="py-12 text-center">
@@ -1476,14 +1480,14 @@ export default function CampaignDetailPage() {
               </div>
             </div>
           ) : filteredLeads.length === 0 && leads.length > 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+              <div className="flex items-center justify-between px-6 py-4" style={{ background: "#2f276c" }}>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                       <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
-                    <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                    <h2 className="text-sm font-bold text-white">Leads <span style={{ color: "rgba(255,255,255,0.7)" }}>({leads.length})</span></h2>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1499,26 +1503,27 @@ export default function CampaignDetailPage() {
                 <p className="text-sm text-gray-500">No leads matching &ldquo;{leadSearch}&rdquo;</p>
                 <button
                   onClick={() => setLeadSearch("")}
-                  className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                  className="mt-3 text-sm font-medium transition-colors"
+                  style={{ color: "#6962c4" }}
                 >
                   Clear search
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
               {/* Table Header */}
-              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+              <div className="flex items-center justify-between px-6 py-4" style={{ background: "#2f276c" }}>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-100">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
                       <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
-                    <h2 className="text-lg font-bold text-gray-900">Leads <span className="text-gray-400 font-medium">({leads.length})</span></h2>
+                    <h2 className="text-sm font-bold text-white">Leads <span style={{ color: "rgba(255,255,255,0.7)" }}>({leads.length})</span></h2>
                   </div>
-                  <div className="h-6 w-px bg-blue-200" />
+                  <div className="h-5 w-px" style={{ background: "rgba(255,255,255,0.2)" }} />
                   <div className="flex items-center gap-2.5">
-                    <span className="text-xs text-gray-500">{filteredLeads.length} showing</span>
+                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{filteredLeads.length} showing</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1529,7 +1534,7 @@ export default function CampaignDetailPage() {
                     className="w-64"
                   />
                   {selectedLeadIds.size > 0 && (
-                    <span className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg ring-1 ring-blue-200">
+                    <span className="px-3 py-1.5 text-xs font-semibold text-white rounded-lg" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}>
                       {selectedLeadIds.size} selected
                     </span>
                   )}
@@ -1539,7 +1544,7 @@ export default function CampaignDetailPage() {
               {/* Table */}
               <table className="min-w-full">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/80">
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
                       <th className="px-4 py-3.5 text-left">
                         <input
                           type="checkbox"
@@ -1551,7 +1556,7 @@ export default function CampaignDetailPage() {
                               setSelectedLeadIds(new Set());
                             }
                           }}
-                          className="w-4 h-4 rounded cursor-pointer accent-blue-600"
+                          className="w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#6962c4] checked:border-[#6962c4] cursor-pointer appearance-none relative after:content-[''] after:absolute after:top-[2px] after:left-[4.5px] after:w-[5px] after:h-[8px] after:border-white after:border-r-2 after:border-b-2 after:rotate-45 after:opacity-0 checked:after:opacity-100"
                         />
                       </th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
@@ -1574,7 +1579,7 @@ export default function CampaignDetailPage() {
                       const isCallLead = lead.contact_method === "call";
                       const isSelected = selectedLeadIds.has(lead.id);
                       return (
-                        <tr key={lead.id} className={`transition-colors ${isSelected ? "bg-blue-50/70" : "hover:bg-gray-50/70"}`}>
+                        <tr key={lead.id} className={`transition-colors ${isSelected ? "bg-indigo-50/50" : "hover:bg-gray-50/70"}`}>
                           <td className="px-4 py-3.5">
                             <input
                               type="checkbox"
@@ -1588,7 +1593,7 @@ export default function CampaignDetailPage() {
                                 }
                                 setSelectedLeadIds(next);
                               }}
-                              className="w-4 h-4 rounded cursor-pointer accent-blue-600"
+                              className="w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#6962c4] checked:border-[#6962c4] cursor-pointer appearance-none relative after:content-[''] after:absolute after:top-[2px] after:left-[4.5px] after:w-[5px] after:h-[8px] after:border-white after:border-r-2 after:border-b-2 after:rotate-45 after:opacity-0 checked:after:opacity-100"
                             />
                           </td>
                           <td className="px-4 py-3.5 text-sm font-medium text-gray-900 capitalize">{lead.company}</td>
@@ -1599,7 +1604,7 @@ export default function CampaignDetailPage() {
                                 {lead.phone && lead.phone.trim() ? lead.phone : "No number"}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold ring-1" style={{ background: "rgba(105,98,196,0.08)", color: "#3d3580", borderColor: "rgba(105,98,196,0.2)" }}>
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                 {lead.email}
                               </span>
@@ -1625,38 +1630,24 @@ export default function CampaignDetailPage() {
                               <span className="text-gray-300 text-xs">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3.5 text-sm">
-                            <div className="flex flex-col items-start gap-1">
+                          <td className="pl-2 pr-4 py-3.5 text-sm">
+                            <div className="flex flex-col items-start">
                               {emails.some(e => e.lead_id === lead.id && e.replied) ? (
-                                <div>
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    Replied
-                                  </span>
-                                  {(() => { const r = emails.find(e => e.lead_id === lead.id && e.replied_at); return r?.replied_at ? <p className="text-[10px] text-emerald-500 mt-0.5">{new Date(r.replied_at).toLocaleDateString()}</p> : null; })()}
-                                </div>
-                              ) : lead.contacted ? (
-                                <div>
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    Contacted
-                                  </span>
-                                  {lead.contacted_at && (
-                                    <p className="text-[10px] text-gray-400 mt-0.5">
-                                      {new Date(lead.contacted_at).toLocaleDateString()}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-500">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                                  Uncontacted
+                                <span className="inline-flex items-center whitespace-nowrap rounded-md text-xs font-bold overflow-hidden" style={{ border: "1px solid rgba(16,185,129,0.3)" }}>
+                                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700">Replied</span>
+                                  {(() => { const r = emails.find(e => e.lead_id === lead.id && e.replied_at); return r?.replied_at ? <span className="px-2 py-1 text-emerald-600 border-l" style={{ borderColor: "rgba(16,185,129,0.3)" }}>{new Date(r.replied_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span> : null; })()}
+                                  {auditViews[lead.id] && <span className="px-2 py-1 text-emerald-600/80 border-l" style={{ borderColor: "rgba(16,185,129,0.3)" }}>{auditViews[lead.id].count} {auditViews[lead.id].count === 1 ? "view" : "views"}</span>}
                                 </span>
-                              )}
-                              {auditViews[lead.id] && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-200 ml-1">
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                  {auditViews[lead.id].count > 1 ? `${auditViews[lead.id].count} views` : formatTimeAgo(auditViews[lead.id].lastViewed)}
+                              ) : (lead.contacted || emails.some(e => e.lead_id === lead.id && e.status === "sent")) ? (
+                                <span className="inline-flex items-center whitespace-nowrap rounded-md text-xs font-bold overflow-hidden" style={{ border: "1px solid rgba(59,130,246,0.3)" }}>
+                                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700">Contacted</span>
+                                  {lead.contacted_at && <span className="px-2 py-1 text-blue-600 border-l" style={{ borderColor: "rgba(59,130,246,0.3)" }}>{new Date(lead.contacted_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+                                  {auditViews[lead.id] && <span className="px-2 py-1 text-blue-600/80 border-l" style={{ borderColor: "rgba(59,130,246,0.3)" }}>{auditViews[lead.id].count} {auditViews[lead.id].count === 1 ? "view" : "views"}</span>}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center whitespace-nowrap rounded-md text-xs font-bold overflow-hidden" style={{ border: "1px solid rgba(107,114,128,0.2)" }}>
+                                  <span className="px-2.5 py-1 bg-gray-50 text-gray-600">Uncontacted</span>
+                                  {auditViews[lead.id] && <span className="px-2 py-1 text-gray-500 border-l" style={{ borderColor: "rgba(107,114,128,0.2)" }}>{auditViews[lead.id].count} {auditViews[lead.id].count === 1 ? "view" : "views"}</span>}
                                 </span>
                               )}
                             </div>
@@ -1685,14 +1676,13 @@ export default function CampaignDetailPage() {
                                 <button
                                   onClick={() => setEmailPreviewLeadId(lead.id)}
                                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg ring-1 transition-colors ${
-                                    hasReply ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100" :
-                                    latest.status === "sent" ? "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100" :
+                                    latest.status === "sent" || hasReply ? "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100" :
                                     latest.status === "failed" ? "bg-red-50 text-red-600 ring-red-200 hover:bg-red-100" :
                                     "bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100"
                                   }`}
                                 >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                  {hasReply ? "Replied" : latest.status === "sent" ? "Sent" : latest.status === "failed" ? "Failed" : "Pending"}
+                                  {hasReply ? "Sent" : latest.status === "sent" ? "Sent" : latest.status === "failed" ? "Failed" : "Pending"}
                                   {leadEmails.length > 1 && <span className="text-[9px] opacity-70">+{leadEmails.length - 1}</span>}
                                 </button>
                               );
@@ -1701,7 +1691,8 @@ export default function CampaignDetailPage() {
                           <td className="px-4 py-3.5">
                             <button
                               onClick={() => setDetailLead(lead)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg ring-1 ring-blue-200 transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg ring-1 transition-colors"
+                              style={{ color: "#3d3580", background: "rgba(105,98,196,0.08)", borderColor: "rgba(105,98,196,0.2)" }}
                             >
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                               View

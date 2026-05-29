@@ -72,17 +72,23 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
+      <div className="min-h-screen relative overflow-hidden flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
+        <div className="absolute inset-0 opacity-[0.06]">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots-s" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#dots-s)" /></svg>
+        </div>
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.12)" }} />
+        <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.10)" }} />
+        <div className="relative z-10 max-w-md w-full p-8 rounded-2xl border text-center" style={{ background: "rgba(26, 21, 64, 0.6)", borderColor: "rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
           <div className="text-5xl mb-4">✅</div>
-          <h2 className="text-2xl font-bold text-gray-900">Password updated</h2>
-          <p className="mt-3 text-gray-600 text-sm">
+          <h2 className="text-2xl font-bold text-white">Password updated</h2>
+          <p className="mt-3 text-white/60 text-sm">
             Your password has been reset successfully. You can now sign in with your new password.
           </p>
           <div className="mt-6">
             <button
               onClick={() => router.push("/")}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              className="px-5 py-2.5 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition-all"
+              style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
             >
               Go to Dashboard
             </button>
@@ -94,17 +100,22 @@ export default function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
+      <div className="min-h-screen relative overflow-hidden flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
+        <div className="absolute inset-0 opacity-[0.06]">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots-l" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#dots-l)" /></svg>
+        </div>
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.12)" }} />
+        <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.10)" }} />
+        <div className="relative z-10 max-w-md w-full p-8 rounded-2xl border text-center" style={{ background: "rgba(26, 21, 64, 0.6)", borderColor: "rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
           <div className="text-5xl mb-4">🔑</div>
-          <h2 className="text-2xl font-bold text-gray-900">Loading...</h2>
-          <p className="mt-3 text-gray-600 text-sm">
+          <h2 className="text-2xl font-bold text-white">Loading...</h2>
+          <p className="mt-3 text-white/60 text-sm">
             Verifying your reset link. If this takes too long, the link may have expired.
           </p>
           <div className="mt-6">
             <Link
               href="/forgot-password"
-              className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+              className="text-sm text-violet-400 hover:text-violet-300 font-medium transition-colors"
             >
               Request a new reset link
             </Link>
@@ -115,27 +126,32 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+    <div className="min-h-screen relative overflow-hidden flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #0d0a25 100%)" }}>
+      <div className="absolute inset-0 opacity-[0.06]">
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots-f" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#dots-f)" /></svg>
+      </div>
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105, 98, 196, 0.12)" }} />
+      <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(61, 53, 128, 0.10)" }} />
+      <div className="relative z-10 max-w-md w-full space-y-8 p-8 rounded-2xl border" style={{ background: "rgba(26, 21, 64, 0.6)", borderColor: "rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
         <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">
+          <h2 className="text-center text-3xl font-bold text-white">
             Set new password
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-white/60">
             Enter your new password below
           </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleReset}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="border text-sm px-4 py-3 rounded-lg" style={{ background: "rgba(239,68,68,0.1)", borderColor: "rgba(239,68,68,0.3)", color: "#fca5a5" }}>
               {error}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-white/70">
                 New password
               </label>
               <div className="relative">
@@ -146,13 +162,14 @@ export default function ResetPasswordPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full px-3 py-2.5 pr-10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 transition-colors"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)" }}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -165,7 +182,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-white/70">
                 Confirm new password
               </label>
               <div className="relative">
@@ -176,13 +193,14 @@ export default function ResetPasswordPage() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full px-3 py-2.5 pr-10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 transition-colors"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)" }}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
                   tabIndex={-1}
                 >
                   {showConfirmPassword ? (
@@ -198,7 +216,8 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
           >
             {loading ? "Updating..." : "Update password"}
           </button>

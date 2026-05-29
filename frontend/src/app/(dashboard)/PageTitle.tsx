@@ -7,6 +7,7 @@ const pageTitles: Record<string, string> = {
   "/auto-leads": "Auto Lead Finder",
   "/campaigns": "Campaigns",
   "/upload": "Upload Leads",
+  "/hot-leads": "Hot Leads",
   "/settings": "Settings",
   "/help": "Help & Support",
 };
@@ -20,6 +21,9 @@ export default function PageTitle() {
     (pathname.startsWith("/campaigns/") ? "Campaign Details" : "Dashboard");
 
   return (
-    <h2 className="text-base font-semibold" style={{ color: "#1a1540" }}>{title}</h2>
+    <div className="flex items-center gap-3">
+      <div className="w-1.5 h-5 rounded-full" style={{ background: "linear-gradient(180deg, #6962c4, #a78bfa)" }} />
+      <h2 className="text-base font-semibold tracking-tight" style={{ color: "#1a1540" }}>{title}</h2>
+    </div>
   );
 }

@@ -44,44 +44,6 @@ interface AuditViewsResponse {
   leads: Record<string, { company: string; campaign_id: string }>;
 }
 
-function CircularProgress({ value, max, color, size = 80 }: { value: number; max: number; color: string; size?: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  const r = (size - 8) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (pct / 100) * circ;
-  const colors: Record<string, { stroke: string; track: string }> = {
-    blue: { stroke: "#3b82f6", track: "#dbeafe" },
-    emerald: { stroke: "#10b981", track: "#d1fae5" },
-    amber: { stroke: "#f59e0b", track: "#fef3c7" },
-    violet: { stroke: "#8b5cf6", track: "#ede9fe" },
-    rose: { stroke: "#f43f5e", track: "#ffe4e6" },
-  };
-  const c = colors[color] || colors.blue;
-  return (
-    <svg width={size} height={size} className="transform -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={c.track} strokeWidth="6" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={c.stroke} strokeWidth="6"
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-        className="transition-all duration-1000 ease-out" />
-    </svg>
-  );
-}
-
-function MiniBar({ values, maxVal, color }: { values: number[]; maxVal: number; color: string }) {
-  const colors: Record<string, string> = {
-    blue: "bg-blue-400", emerald: "bg-emerald-400", amber: "bg-amber-400", violet: "bg-violet-400", rose: "bg-rose-400",
-  };
-  const bg = colors[color] || "bg-blue-400";
-  return (
-    <div className="flex items-end gap-[3px] h-10">
-      {values.map((v, i) => (
-        <div key={i} className={`w-[6px] rounded-full ${bg} transition-all duration-500`}
-          style={{ height: `${Math.max(8, maxVal > 0 ? (v / maxVal) * 100 : 15)}%`, opacity: 0.4 + (i / values.length) * 0.6 }} />
-      ))}
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     totalLeads: 0, totalCampaigns: 0, emailsSent: 0, totalEmails: 0,
@@ -148,49 +110,45 @@ export default function DashboardPage() {
 
   const v = (val: number | string) => loading ? "—" : val;
 
-  // Fake sparkline data for visual appeal (in production, use real historical data)
+  // Sparkline data for activity chart (in production, use real historical data)
   const leadSpark = [12, 18, 25, 20, 35, 42, stats.leadsFoundToday || 50];
   const emailSpark = [5, 8, 3, 12, 15, 10, stats.sentToday || 0];
-  const replySpark = [0, 1, 0, 2, 1, 3, stats.repliesReceived || 0];
 
   const leadPct = stats.dailyLeadFindLimit > 0 ? Math.round((stats.leadsFoundToday / stats.dailyLeadFindLimit) * 100) : 0;
   const monthPct = stats.monthlyLeadFindLimit > 0 ? Math.round((stats.leadsFoundThisMonth / stats.monthlyLeadFindLimit) * 100) : 0;
-  const scorePct = stats.avgLeadScore;
 
   if (loading) return <DashboardSkeleton />;
 
   return (
     <div>
       {/* Welcome Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 p-8 mb-6">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500/30 blur-3xl" />
-          <div className="absolute bottom-0 left-1/4 w-72 h-72 rounded-full bg-indigo-500/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl p-8 mb-6" style={{ background: "linear-gradient(135deg, #0d0a25 0%, #1a1540 50%, #2a2158 100%)" }}>
+        <div className="absolute inset-0">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(105,98,196,0.15)" }} />
+          <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full blur-3xl" style={{ background: "rgba(167,139,250,0.1)" }} />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-blue-300 text-sm font-medium">
+            <p className="text-sm font-medium" style={{ color: "#a78bfa" }}>
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>
             <h1 className="text-3xl font-bold text-white mt-1">
               Welcome back, {displayName.split(" ")[0]} 👋
             </h1>
             <div className="flex items-center gap-3 mt-3">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "rgba(105,98,196,0.2)", color: "#c4b5fd", boxShadow: "inset 0 0 0 1px rgba(105,98,196,0.4)" }}>
                 {stats.planLabel} Plan
               </span>
-              {stats.warmupDay > 0 && !stats.warmupComplete && !stats.warmupPaused && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30">
-                  ⏳ Warmup Day {stats.warmupDay}/21
-                </span>
-              )}
-              {stats.warmupPaused && !stats.warmupComplete && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-500/20 text-slate-300 ring-1 ring-slate-500/30">
-                  ⏸ Warmup Paused
+              {!stats.warmupComplete && (stats.warmupDay > 0 || stats.warmupPaused) && (
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium" style={{ background: stats.warmupPaused ? "rgba(148,163,184,0.15)" : "rgba(245,158,11,0.15)", color: stats.warmupPaused ? "#94a3b8" : "#fbbf24", boxShadow: `inset 0 0 0 1px ${stats.warmupPaused ? "rgba(148,163,184,0.3)" : "rgba(245,158,11,0.3)"}` }}>
+                  {stats.warmupPaused ? "⏸" : "⏳"} Warmup · Day {stats.warmupDay}/21
+                  <span className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: stats.warmupPaused ? "rgba(148,163,184,0.3)" : "rgba(245,158,11,0.3)" }}>
+                    <span className="block h-full rounded-full" style={{ width: `${Math.min(100, (stats.warmupDay / 21) * 100)}%`, background: stats.warmupPaused ? "#94a3b8" : "#fbbf24" }} />
+                  </span>
                 </span>
               )}
               {stats.warmupComplete && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium" style={{ background: "rgba(16,185,129,0.15)", color: "#34d399", boxShadow: "inset 0 0 0 1px rgba(16,185,129,0.3)" }}>
                   ✓ Warmup Complete
                 </span>
               )}
@@ -200,15 +158,15 @@ export default function DashboardPage() {
           <div className="flex gap-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-white">{v(stats.totalLeads)}</p>
-              <p className="text-xs text-slate-400">Total Leads</p>
+              <p className="text-xs" style={{ color: "#94a3b8" }}>Total Leads</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-white">{v(stats.totalCampaigns)}</p>
-              <p className="text-xs text-slate-400">Campaigns</p>
+              <p className="text-xs" style={{ color: "#94a3b8" }}>Campaigns</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-emerald-400">{v(stats.replyRate)}</p>
-              <p className="text-xs text-slate-400">Reply Rate</p>
+              <p className="text-2xl font-bold" style={{ color: "#34d399" }}>{v(stats.replyRate)}</p>
+              <p className="text-xs" style={{ color: "#94a3b8" }}>Reply Rate</p>
             </div>
           </div>
         </div>
@@ -350,195 +308,276 @@ export default function DashboardPage() {
       ) : (
       <>
 
-      {/* Primary Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+      {/* ── Key Metrics ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+
         {/* Leads Found Today */}
-        <div className="bg-blue-50 rounded-2xl border-2 border-blue-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-blue-700">Leads Found Today</p>
-              <p className="text-4xl font-extrabold text-blue-900 mt-2">{v(stats.leadsFoundToday)}</p>
-              <p className="text-sm text-blue-600 mt-1 font-medium">
-                of {v(stats.dailyLeadFindLimit)} daily limit
-              </p>
+        <div className="group relative rounded-2xl p-[1.5px] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-200/60" style={{ background: "linear-gradient(135deg, #818cf8, #c7d2fe, #818cf8)", boxShadow: "0 2px 12px rgba(99,102,241,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-5 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #fafaff 100%)" }}>
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-80 transition-all duration-700" style={{ background: "radial-gradient(circle, rgba(99,102,241,0.18), transparent 70%)" }} />
+            <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-[14.5px]" style={{ background: "linear-gradient(180deg, #4f46e5, #818cf8)" }} />
+            <div className="relative pl-3">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full" style={{ background: leadPct >= 80 ? "linear-gradient(135deg, #fef2f2, #fee2e2)" : leadPct >= 50 ? "linear-gradient(135deg, #fffbeb, #fef3c7)" : "linear-gradient(135deg, #f0fdf4, #dcfce7)", color: leadPct >= 80 ? "#dc2626" : leadPct >= 50 ? "#d97706" : "#16a34a" }}>
+                  {leadPct}%
+                </span>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Leads Today</p>
+              <p className="text-3xl font-black text-gray-900 tracking-tight leading-none">{v(stats.leadsFoundToday)}<span className="text-sm font-medium text-gray-300 ml-1">/ {v(stats.dailyLeadFindLimit)}</span></p>
+              <div className="mt-4 w-full rounded-full h-2 overflow-hidden" style={{ background: "linear-gradient(90deg, #eef2ff, #f5f3ff)" }}>
+                <div className="h-2 rounded-full transition-all duration-1000 ease-out" style={{ width: `${leadPct}%`, background: "linear-gradient(90deg, #4f46e5, #a5b4fc)" }} />
+              </div>
             </div>
-            <MiniBar values={leadSpark} maxVal={Math.max(...leadSpark)} color="blue" />
-          </div>
-          <div className="mt-4 w-full bg-blue-100 rounded-full h-2 overflow-hidden">
-            <div className="h-2 rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${leadPct}%` }} />
           </div>
         </div>
 
         {/* Emails Sent */}
-        <div className="bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-emerald-700">Emails Sent</p>
-              <p className="text-4xl font-extrabold text-emerald-900 mt-2">{v(stats.emailsSent)}</p>
-              <p className="text-sm text-emerald-600 mt-1 font-medium">
-                {v(stats.sentToday)}/{v(stats.dailySendLimit)} sent today
-              </p>
+        <div className="group relative rounded-2xl p-[1.5px] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-200/60" style={{ background: "linear-gradient(135deg, #34d399, #a7f3d0, #34d399)", boxShadow: "0 2px 12px rgba(16,185,129,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-5 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #f8fdfb 100%)" }}>
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-80 transition-all duration-700" style={{ background: "radial-gradient(circle, rgba(16,185,129,0.18), transparent 70%)" }} />
+            <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-[14.5px]" style={{ background: "linear-gradient(180deg, #059669, #34d399)" }} />
+            <div className="relative pl-3">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #059669, #34d399)", boxShadow: "0 4px 14px rgba(16,185,129,0.35)" }}>
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)", color: "#059669" }}>
+                  {v(stats.sentToday)} today
+                </span>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Emails Sent</p>
+              <p className="text-3xl font-black text-gray-900 tracking-tight leading-none">{v(stats.emailsSent)}</p>
+              {stats.dailySendLimit > 0 && (
+                <div className="mt-4 w-full rounded-full h-2 overflow-hidden" style={{ background: "linear-gradient(90deg, #ecfdf5, #f0fdf4)" }}>
+                  <div className="h-2 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(100, (stats.sentToday / stats.dailySendLimit) * 100)}%`, background: "linear-gradient(90deg, #059669, #6ee7b7)" }} />
+                </div>
+              )}
             </div>
-            <MiniBar values={emailSpark} maxVal={Math.max(...emailSpark, 1)} color="emerald" />
-          </div>
-          {!loading && stats.dailySendLimit > 0 && (
-            <div className="mt-4 w-full bg-emerald-100 rounded-full h-2 overflow-hidden">
-              <div className="h-2 rounded-full bg-emerald-500 transition-all duration-700"
-                style={{ width: `${Math.min(100, (stats.sentToday / stats.dailySendLimit) * 100)}%` }} />
-            </div>
-          )}
-        </div>
-
-        {/* Replies */}
-        <div className="bg-violet-50 rounded-2xl border-2 border-violet-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-violet-700">Replies Received</p>
-              <p className="text-4xl font-extrabold text-violet-900 mt-2">{v(stats.repliesReceived)}</p>
-              <p className="text-sm text-violet-600 mt-1 font-medium">
-                {v(stats.replyRate)} reply rate
-              </p>
-            </div>
-            <MiniBar values={replySpark} maxVal={Math.max(...replySpark, 1)} color="violet" />
           </div>
         </div>
 
-        {/* Call Leads */}
-        <div className="bg-amber-50 rounded-2xl border-2 border-amber-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-amber-700">Call-Ready Leads</p>
-              <p className="text-4xl font-extrabold text-amber-900 mt-2">{v(stats.callLeads)}</p>
-              <p className="text-sm text-amber-600 mt-1 font-medium">
-                with phone numbers
-              </p>
+        {/* Reply Rate */}
+        <div className="group relative rounded-2xl p-[1.5px] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-200/60" style={{ background: "linear-gradient(135deg, #a78bfa, #ddd6fe, #a78bfa)", boxShadow: "0 2px 12px rgba(139,92,246,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-5 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #fbfaff 100%)" }}>
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-80 transition-all duration-700" style={{ background: "radial-gradient(circle, rgba(139,92,246,0.18), transparent 70%)" }} />
+            <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-[14.5px]" style={{ background: "linear-gradient(180deg, #7c3aed, #a78bfa)" }} />
+            <div className="relative pl-3">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)", boxShadow: "0 4px 14px rgba(139,92,246,0.35)" }}>
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </div>
+                <span className={`text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full`}
+                  style={{ background: parseFloat(stats.replyRate) >= 5 ? "linear-gradient(135deg, #f0fdf4, #dcfce7)" : "linear-gradient(135deg, #fffbeb, #fef3c7)", color: parseFloat(stats.replyRate) >= 5 ? "#16a34a" : "#d97706" }}>
+                  {parseFloat(stats.replyRate) >= 5 ? "↑ Good" : "→ Avg"}
+                </span>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Reply Rate</p>
+              <p className="text-3xl font-black text-gray-900 tracking-tight leading-none">{v(stats.replyRate)}</p>
+              <p className="text-xs text-gray-400 mt-2">{v(stats.repliesReceived)} replies received</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
+          </div>
+        </div>
+
+        {/* Lead Quality */}
+        <div className="group relative rounded-2xl p-[1.5px] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-amber-200/60" style={{ background: "linear-gradient(135deg, #fbbf24, #fde68a, #fbbf24)", boxShadow: "0 2px 12px rgba(245,158,11,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-5 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #fffef8 100%)" }}>
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-80 transition-all duration-700" style={{ background: "radial-gradient(circle, rgba(245,158,11,0.18), transparent 70%)" }} />
+            <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-[14.5px]" style={{ background: "linear-gradient(180deg, #d97706, #fbbf24)" }} />
+            <div className="relative pl-3">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #d97706, #fbbf24)", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full"
+                  style={{ background: stats.avgLeadScore >= 70 ? "linear-gradient(135deg, #f0fdf4, #dcfce7)" : stats.avgLeadScore >= 40 ? "linear-gradient(135deg, #fffbeb, #fef3c7)" : "linear-gradient(135deg, #fef2f2, #fee2e2)", color: stats.avgLeadScore >= 70 ? "#16a34a" : stats.avgLeadScore >= 40 ? "#d97706" : "#dc2626" }}>
+                  {stats.avgLeadScore >= 70 ? "Excellent" : stats.avgLeadScore >= 40 ? "Good" : "Low"}
+                </span>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Lead Score</p>
+              <p className="text-3xl font-black text-gray-900 tracking-tight leading-none">{v(stats.avgLeadScore)}<span className="text-sm font-medium text-gray-300 ml-0.5">/100</span></p>
+              <p className="text-xs text-gray-400 mt-2">avg quality score</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Analytics Row — Circular Gauges */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-        {/* Daily Usage */}
-        <div className="bg-blue-50 rounded-2xl border-2 border-blue-200 p-6">
-          <p className="text-sm font-semibold text-blue-800 mb-4">Daily Lead Usage</p>
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <CircularProgress value={stats.leadsFoundToday} max={stats.dailyLeadFindLimit} color="blue" size={90} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-blue-700">{loading ? "—" : `${leadPct}%`}</span>
+      {/* ── Activity + Account Overview ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
+
+        {/* 7-Day Activity Chart */}
+        <div className="lg:col-span-3 relative rounded-2xl p-[1.5px] overflow-hidden" style={{ background: "linear-gradient(135deg, #818cf8, #c7d2fe, #a78bfa)", boxShadow: "0 2px 12px rgba(99,102,241,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-6 h-full" style={{ background: "linear-gradient(180deg, #ffffff 0%, #fafaff 100%)" }}>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 tracking-tight">Weekly Overview</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Your outreach activity this week</p>
+              </div>
+              <div className="flex items-center gap-5">
+                <span className="flex items-center gap-2 text-[11px] font-medium text-gray-500">
+                  <span className="w-3 h-3 rounded" style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)" }}></span>Leads
+                </span>
+                <span className="flex items-center gap-2 text-[11px] font-medium text-gray-500">
+                  <span className="w-3 h-3 rounded" style={{ background: "linear-gradient(135deg, #10b981, #34d399)" }}></span>Emails
+                </span>
               </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{v(stats.leadsFoundToday)} <span className="text-base font-normal text-gray-400">/ {v(stats.dailyLeadFindLimit)}</span></p>
-              <p className="text-sm text-gray-500 mt-1">leads found today</p>
-              <p className="text-xs text-blue-600 mt-2 font-medium">
-                {v(stats.dailyLeadFindLimit - stats.leadsFoundToday)} remaining
-              </p>
+            {/* Grid lines */}
+            <div className="relative">
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none" style={{ height: "10rem" }}>
+                {[0, 1, 2, 3].map((l) => (
+                  <div key={l} className="w-full border-b border-dashed" style={{ borderColor: "rgba(99,102,241,0.06)" }} />
+                ))}
+              </div>
+              <div className="flex items-end gap-2.5 h-40 px-1 relative z-10">
+                {leadSpark.map((lead, i) => {
+                  const email = emailSpark[i] || 0;
+                  const maxH = Math.max(...leadSpark, ...emailSpark, 1);
+                  const isToday = i === leadSpark.length - 1;
+                  return (
+                    <div key={i} className="flex-1 flex items-end gap-1 h-full">
+                      <div className={`flex-1 rounded-lg cursor-default relative group transition-all duration-500`}
+                        style={{ height: `${Math.max(8, (lead / maxH) * 100)}%`, background: isToday ? "linear-gradient(180deg, #4338ca, #6366f1)" : "linear-gradient(180deg, #a5b4fc, #c7d2fe)", boxShadow: isToday ? "0 4px 14px rgba(99,102,241,0.35)" : "0 2px 6px rgba(99,102,241,0.08)", borderRadius: "8px 8px 4px 4px" }}>
+                        <div className="absolute -top-9 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-20" style={{ background: "linear-gradient(135deg, #1e1b4b, #312e81)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>{lead}
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-[#312e81]"></div>
+                        </div>
+                      </div>
+                      <div className={`flex-1 rounded-lg cursor-default relative group transition-all duration-500`}
+                        style={{ height: `${Math.max(8, (email / maxH) * 100)}%`, background: isToday ? "linear-gradient(180deg, #047857, #10b981)" : "linear-gradient(180deg, #6ee7b7, #a7f3d0)", boxShadow: isToday ? "0 4px 14px rgba(16,185,129,0.35)" : "0 2px 6px rgba(16,185,129,0.08)", borderRadius: "8px 8px 4px 4px" }}>
+                        <div className="absolute -top-9 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-20" style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>{email}
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-[#065f46]"></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-between mt-4 px-1">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Today"].map((d, i) => (
+                <span key={d} className={`text-[11px] flex-1 text-center font-medium ${i === 6 ? "font-bold text-indigo-600" : "text-gray-400"}`}>{d}</span>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Monthly Usage */}
-        <div className="bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-6">
-          <p className="text-sm font-semibold text-emerald-800 mb-4">Monthly Lead Usage</p>
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <CircularProgress value={stats.leadsFoundThisMonth} max={stats.monthlyLeadFindLimit} color="emerald" size={90} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-emerald-700">{loading ? "—" : `${monthPct}%`}</span>
+        {/* Account Overview */}
+        <div className="lg:col-span-2 relative rounded-2xl p-[1.5px]" style={{ background: "linear-gradient(135deg, #818cf8, #c7d2fe, #a78bfa)", boxShadow: "0 2px 12px rgba(99,102,241,0.10)" }}>
+          <div className="rounded-[14.5px] p-6 h-full" style={{ background: "linear-gradient(180deg, #ffffff 0%, #fafaff 100%)" }}>
+            <h3 className="text-base font-extrabold text-gray-900 tracking-tight mb-6">Account Overview</h3>
+            <div className="space-y-5">
+              {/* Monthly usage */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-semibold text-gray-500">Monthly leads</span>
+                  <span className="text-xs font-extrabold text-gray-900">{v(stats.leadsFoundThisMonth)} <span className="font-normal text-gray-400">/ {v(stats.monthlyLeadFindLimit)}</span></span>
+                </div>
+                <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ background: "linear-gradient(90deg, #eef2ff, #f5f3ff)" }}>
+                  <div className="h-2.5 rounded-full transition-all duration-1000 ease-out" style={{ width: `${monthPct}%`, background: "linear-gradient(90deg, #4f46e5, #a5b4fc)" }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5">{v(stats.monthlyLeadFindLimit - stats.leadsFoundThisMonth)} remaining this month</p>
               </div>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{v(stats.leadsFoundThisMonth)} <span className="text-base font-normal text-gray-400">/ {v(stats.monthlyLeadFindLimit)}</span></p>
-              <p className="text-sm text-gray-500 mt-1">leads this month</p>
-              <p className="text-xs text-emerald-600 mt-2 font-medium">
-                {v(stats.monthlyLeadFindLimit - stats.leadsFoundThisMonth)} remaining
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Lead Score */}
-        <div className="bg-violet-50 rounded-2xl border-2 border-violet-200 p-6">
-          <p className="text-sm font-semibold text-violet-800 mb-4">Average Lead Score</p>
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <CircularProgress value={stats.avgLeadScore} max={100} color="violet" size={90} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-violet-700">{v(stats.avgLeadScore)}</span>
+              {/* Daily send */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-semibold text-gray-500">Daily email limit</span>
+                  <span className="text-xs font-extrabold text-gray-900">{v(stats.sentToday)} <span className="font-normal text-gray-400">/ {v(stats.dailySendLimit)}</span></span>
+                </div>
+                <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ background: "linear-gradient(90deg, #ecfdf5, #f0fdf4)" }}>
+                  <div className="h-2.5 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${stats.dailySendLimit > 0 ? Math.min(100, (stats.sentToday / stats.dailySendLimit) * 100) : 0}%`, background: "linear-gradient(90deg, #059669, #6ee7b7)" }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5">{v(stats.dailySendLimit - stats.sentToday)} sends remaining today</p>
               </div>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{v(stats.avgLeadScore)} <span className="text-base font-normal text-gray-400">/ 100</span></p>
-              <p className="text-sm text-gray-500 mt-1">quality score</p>
-              <p className={`text-xs mt-2 font-medium ${
-                !loading && stats.avgLeadScore >= 70 ? "text-emerald-600" :
-                !loading && stats.avgLeadScore >= 40 ? "text-amber-600" : "text-rose-600"
-              }`}>
-                {!loading && (stats.avgLeadScore >= 70 ? "Excellent quality" : stats.avgLeadScore >= 40 ? "Good quality" : "Needs improvement")}
-              </p>
+              {/* Stats Grid */}
+              <div className="pt-4" style={{ borderTop: "1px solid #eef2ff" }}>
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="text-center p-3 rounded-xl" style={{ background: "linear-gradient(145deg, #eef2ff, #e0e7ff)", boxShadow: "inset 0 1px 2px rgba(99,102,241,0.06)" }}>
+                    <p className="text-lg font-black text-gray-900">{v(stats.totalCampaigns)}</p>
+                    <p className="text-[10px] font-semibold text-indigo-500 mt-0.5">Campaigns</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl" style={{ background: "linear-gradient(145deg, #ecfdf5, #d1fae5)", boxShadow: "inset 0 1px 2px rgba(16,185,129,0.06)" }}>
+                    <p className="text-lg font-black text-gray-900">{v(stats.callLeads)}</p>
+                    <p className="text-[10px] font-semibold text-emerald-500 mt-0.5">Call-ready</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl" style={{ background: stats.emailsFailed > 0 ? "linear-gradient(145deg, #fef2f2, #fee2e2)" : "linear-gradient(145deg, #f9fafb, #f3f4f6)", boxShadow: stats.emailsFailed > 0 ? "inset 0 1px 2px rgba(244,63,94,0.06)" : "inset 0 1px 2px rgba(0,0,0,0.02)" }}>
+                    <p className={`text-lg font-black ${stats.emailsFailed > 0 ? "text-rose-600" : "text-gray-900"}`}>{v(stats.emailsFailed)}</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${stats.emailsFailed > 0 ? "text-rose-500" : "text-gray-400"}`}>Failed</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Warmup Progress */}
-      {!loading && !stats.warmupComplete && (stats.warmupDay > 0 || stats.warmupPaused) && (
-        <div className={`rounded-2xl border-2 p-6 mb-6 ${stats.warmupPaused ? 'bg-slate-50 border-slate-200' : 'bg-orange-50 border-orange-200'}`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stats.warmupPaused ? 'bg-slate-100' : 'bg-orange-100'}`}>
-                <svg className={`w-5 h-5 ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      {/* ── Quick Actions ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <button onClick={() => router.push("/auto-leads")} className="group relative rounded-2xl p-[1.5px] text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-200/60 overflow-hidden" style={{ background: "linear-gradient(135deg, #818cf8, #c7d2fe, #818cf8)", boxShadow: "0 2px 12px rgba(99,102,241,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-6 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #fafaff 100%)" }}>
+            <div className="absolute -right-8 -bottom-8 w-36 h-36 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-3xl" style={{ background: "radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)" }} />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-extrabold text-gray-900 tracking-tight">Find New Leads</p>
+              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">Auto-discover businesses in any niche & location</p>
+              <div className="mt-5 inline-flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg text-white transition-all group-hover:gap-3 group-hover:shadow-lg group-hover:shadow-indigo-300/50" style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)", boxShadow: "0 2px 8px rgba(99,102,241,0.25)" }}>
+                <span>Get started</span>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </div>
+          </div>
+        </button>
+        <button onClick={() => router.push("/campaigns")} className="group relative rounded-2xl p-[1.5px] text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-200/60 overflow-hidden" style={{ background: "linear-gradient(135deg, #34d399, #a7f3d0, #34d399)", boxShadow: "0 2px 12px rgba(16,185,129,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-6 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #f8fdfb 100%)" }}>
+            <div className="absolute -right-8 -bottom-8 w-36 h-36 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-3xl" style={{ background: "radial-gradient(circle, rgba(16,185,129,0.22), transparent 70%)" }} />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style={{ background: "linear-gradient(135deg, #059669, #34d399)", boxShadow: "0 4px 14px rgba(16,185,129,0.35)" }}>
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-extrabold text-gray-900 tracking-tight">View Campaigns</p>
+              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">Manage sequences, track opens & replies</p>
+              <div className="mt-5 inline-flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg text-white transition-all group-hover:gap-3 group-hover:shadow-lg group-hover:shadow-emerald-300/50" style={{ background: "linear-gradient(135deg, #059669, #34d399)", boxShadow: "0 2px 8px rgba(16,185,129,0.25)" }}>
+                <span>View all</span>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </div>
+          </div>
+        </button>
+        <button onClick={() => router.push("/hot-leads")} className="group relative rounded-2xl p-[1.5px] text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-amber-200/60 overflow-hidden" style={{ background: "linear-gradient(135deg, #fbbf24, #fde68a, #fbbf24)", boxShadow: "0 2px 12px rgba(245,158,11,0.10)" }}>
+          <div className="relative rounded-[14.5px] p-6 h-full overflow-hidden" style={{ background: "linear-gradient(135deg, #ffffff 0%, #fffef8 100%)" }}>
+            <div className="absolute -right-8 -bottom-8 w-36 h-36 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-3xl" style={{ background: "radial-gradient(circle, rgba(245,158,11,0.22), transparent 70%)" }} />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style={{ background: "linear-gradient(135deg, #d97706, #fbbf24)", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
                 </svg>
               </div>
-              <div>
-                <p className={`text-base font-bold ${stats.warmupPaused ? 'text-slate-900' : 'text-orange-900'}`}>
-                  {stats.warmupPaused ? 'Email Warmup Paused' : 'Email Warmup in Progress'}
-                </p>
-                <p className={`text-sm ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-700'}`}>
-                  {stats.warmupPaused
-                    ? stats.warmupDay === 0
-                      ? 'Send your first emails to begin warmup'
-                      : `Day ${stats.warmupDay}/21 · Send emails to continue warmup`
-                    : `Week ${stats.warmupWeek} · Day ${stats.warmupDay}/21 · Sending up to ${stats.dailySendLimit}/day`
-                  }
-                </p>
+              <p className="text-sm font-extrabold text-gray-900 tracking-tight">Hot Leads</p>
+              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">Leads that viewed your audit report page</p>
+              <div className="mt-5 inline-flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg text-white transition-all group-hover:gap-3 group-hover:shadow-lg group-hover:shadow-amber-300/50" style={{ background: "linear-gradient(135deg, #d97706, #fbbf24)", boxShadow: "0 2px 8px rgba(245,158,11,0.25)" }}>
+                <span>Check now</span>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
               </div>
             </div>
-            <span className={`text-lg font-bold ${stats.warmupPaused ? 'text-slate-600' : 'text-orange-700'}`}>{Math.round((stats.warmupDay / 21) * 100)}%</span>
           </div>
-          <div className={`w-full rounded-full h-3 overflow-hidden ${stats.warmupPaused ? 'bg-slate-200' : 'bg-orange-100'}`}>
-            <div className={`h-3 rounded-full transition-all duration-700 ${stats.warmupPaused ? 'bg-slate-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`}
-              style={{ width: `${Math.min(100, (stats.warmupDay / 21) * 100)}%` }} />
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-sky-50 rounded-2xl border-2 border-sky-200 p-5">
-          <p className="text-sm font-semibold text-sky-700">Total Leads</p>
-          <p className="text-3xl font-extrabold text-sky-900 mt-2">{v(stats.totalLeads)}</p>
-        </div>
-        <div className="bg-teal-50 rounded-2xl border-2 border-teal-200 p-5">
-          <p className="text-sm font-semibold text-teal-700">Campaigns</p>
-          <p className="text-3xl font-extrabold text-teal-900 mt-2">{v(stats.totalCampaigns)}</p>
-        </div>
-        <div className="bg-pink-50 rounded-2xl border-2 border-pink-200 p-5">
-          <p className="text-sm font-semibold text-pink-700">Max Daily Emails</p>
-          <p className="text-3xl font-extrabold text-pink-900 mt-2">{v(stats.maxDailyEmails)}</p>
-        </div>
-        <div className="bg-rose-50 rounded-2xl border-2 border-rose-200 p-5">
-          <p className="text-sm font-semibold text-rose-700">Failed Emails</p>
-          <p className="text-3xl font-extrabold text-rose-900 mt-2">{v(stats.emailsFailed)}</p>
-        </div>
+        </button>
       </div>
       </>
       )}
