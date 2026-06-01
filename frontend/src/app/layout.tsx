@@ -22,6 +22,9 @@ const oughter = localFont({
 export const metadata: Metadata = {
   title: "Inertia Leads - AI-Powered Lead Generation & Cold Email Outreach",
   description: "Find leads, generate personalized cold emails with AI, and send them automatically with inbox rotation.",
+  icons: {
+    icon: "/images/favicon-2.png",
+  },
 };
 
 export default function RootLayout({
