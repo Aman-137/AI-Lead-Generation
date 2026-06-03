@@ -5,6 +5,7 @@ import supabase from "../services/supabase";
 import openai from "../services/openai";
 import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday, ServiceType } from "../services/planLimits";
 import { getPageSpeedScores } from "../services/pageSpeed";
+import { getLanguageName } from "../utils/languageDetection";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -58,7 +59,7 @@ function appendOptOut(body: string): string {
   return body.trimEnd() + "\n\nP.S. If this isn't relevant, just reply \"unsubscribe\" and I won't reach out again.";
 }
 
-function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string; digitalGaps?: string; noWebsite?: boolean; brokenWebsite?: boolean; auditUrl?: string }, serviceType: ServiceType = "web_dev"): string {
+function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string; digitalGaps?: string; noWebsite?: boolean; brokenWebsite?: boolean; auditUrl?: string }, serviceType: ServiceType = "web_dev", language: string = "eng"): string {
   const company = lead.company;
   const industry = lead.industry || "Local business";
   const address = lead.enriched_data?.address || "";
@@ -124,18 +125,26 @@ WRITING STRUCTURE:
     seo: `YOUR ANGLE: You do SEO for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
 
 WRITING STRUCTURE:
-1. OPEN with a specific, verifiable observation about where they rank. Tell them to Google something specific and describe what they'll find (or won't find). Example: "Google '${industry.toLowerCase()} ${city || "near me"}' — scroll through the first 3 pages. You're not there. But [vague competitor description] on [street/area] is #2."
-2. CONNECT to consequences in ONE sentence — how many customers per day search for this and click competitors instead.
-3. SOCIAL PROOF in ONE casual sentence — "Helped a ${industry.toLowerCase()} a few miles from you go from page 6 to the top 3 map results in about 5 weeks." Use realistic, modest numbers and timeframes.
-4. END with a question about their Google presence: "Do you know where you show up when someone searches '${industry.toLowerCase()} in ${city || "your area"}' right now?"`,
+1. OPEN with a specific, verifiable ON-SITE issue you found on their website. This must be based ONLY on the enrichment data provided (missing meta descriptions, slow loading, not mobile-friendly, no schema markup, no SSL, thin content, poor heading structure, missing alt tags, outdated platform, etc.). Tell them exactly what you found — make it visceral: "Pulled up ${company}'s site on my phone — took 6 seconds to load and the text was unreadable without zooming."
+2. FEAR — Connect this issue DIRECTLY to Google's ranking algorithm. Be blunt and scary: explain that Google actively pushes sites with this exact problem DOWN in search results. Their competitors who DON'T have this problem are stealing their spot. People searching "${industry.toLowerCase()} ${city || "near me"}" right now are clicking on competitors instead because Google is burying sites with these issues. Frame it as: this isn't a future risk — it's happening RIGHT NOW, every single day. Customers searching for exactly what they offer are going to competitors because of this one fixable problem.
+3. SOCIAL PROOF in ONE casual sentence — "I helped a ${industry.toLowerCase()} nearby fix this exact thing — they went from barely visible on Google to the top 3 map results in about 5 weeks." Use realistic, modest numbers and timeframes.
+4. END with a fear-triggering question: "Do you know how many people searched '${industry.toLowerCase()} in ${city || "your area"}' this week and ended up at a competitor because of this?" or "Have you checked what Google actually shows people who search for your type of business right now?"
+
+FEAR FRAMEWORK: The structure is: [Real verifiable problem on their site] → [This is EXACTLY what Google penalizes] → [Your competitors don't have this problem, so they get all the customers] → [This is costing you real customers every single day]. Make them feel like every day they don't fix this, money is walking out the door to the business down the street.
+
+IMPORTANT: Do NOT claim you checked their actual rankings or that they don't appear on page 1 — you haven't verified that. Instead, explain that the technical issues you DID find are proven ranking killers according to Google's own algorithm updates. The fear comes from "this problem guarantees you're losing ground to competitors" — not from "I checked and you're not ranking."`,
 
     digital_marketing: `YOUR ANGLE: You do digital marketing for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
 
 WRITING STRUCTURE:
-1. OPEN with a specific, verifiable observation about their online marketing (or lack of it). Tell them what you found when you searched for their type of business: "Searched '${industry.toLowerCase()} in ${city || "your area"}' — your competitors are running Google Ads at the top of every search. You're not."
-2. CONNECT to consequences in ONE sentence — people searching right now are clicking on competitors' ads instead.
-3. SOCIAL PROOF in ONE casual sentence — "Set up ads + tracking for a ${industry.toLowerCase()} nearby — they went from zero online leads to about 8-12/week within the first month." Use realistic, modest numbers.
-4. END with a question about their customer acquisition: "Quick question — do you track where your new customers actually come from right now?"`,
+1. OPEN with a specific, verifiable gap in their marketing setup based on what you found on their site. Reference actual findings: no Google Analytics (flying blind), no Facebook/Meta Pixel (can't retarget), no Google Ads, no email capture forms, no lead nurturing. Example: "Checked ${company}'s site — no tracking pixel, no analytics, no retargeting. Every single visitor who doesn't convert on the first visit is gone forever."
+2. FEAR — Connect this gap to what it's costing them RIGHT NOW. Be blunt: their competitors ARE running ads, ARE retargeting visitors, ARE capturing emails — and every person who visits ${company}'s site and leaves is being scooped up by a competitor's retargeting ad within hours. Frame it as: "Right now, someone searches '${industry.toLowerCase()} ${city || "near me"}', visits your site, leaves without calling — and 20 minutes later sees your competitor's ad on Facebook. That customer is gone." Make them feel the daily bleeding of customers they can't see.
+3. SOCIAL PROOF in ONE casual sentence — "Set up tracking + retargeting for a ${industry.toLowerCase()} nearby — they went from zero online leads to about 8-12/week within the first month." Use realistic, modest numbers.
+4. END with a fear-triggering question: "Do you know how many people visited ${company}'s site this month and left without you ever knowing they existed?" or "Quick question — if 100 people visit your site this month and 95 leave, do you have any way to reach them again?"
+
+FEAR FRAMEWORK: The structure is: [Verified marketing gap on their site] → [Your competitors are doing this and catching YOUR customers] → [Every day without this, you're invisible while competitors retarget your own visitors] → [You're bleeding money you can't even measure]. The fear comes from the INVISIBLE loss — they can't see what they're losing because they don't have tracking.
+
+IMPORTANT: Do NOT claim you checked their ad accounts or competitor ad spend — you haven't. Instead, explain that the gaps you DID find mean they're flying completely blind while competitors with these tools installed are capturing every lead that slips through.`,
 
     social_media: `YOUR ANGLE: You manage social media for local ${industry.toLowerCase()} businesses${city ? ` in ${city}` : ""}.
 
@@ -184,11 +193,13 @@ AUDIT LINK: ${enriched.auditUrl}
 Include this link naturally in the email after mentioning 1-2 specific issues. Introduce it as "a quick snapshot of what I found" or "put together a quick breakdown" — NOT "audit report." The link MUST be on its own line with \\n before it. Do NOT put any punctuation right after the URL. The link should feel like a helpful extra, not the main pitch. Example:
 "Here's a quick breakdown of what I found:
 ${enriched.auditUrl}"` : ""}
+${language !== "eng" ? `
+LANGUAGE: Write the ENTIRE email (subject line AND body) in ${getLanguageName(language)}. The lead's website is in ${getLanguageName(language)}, so they expect communication in their own language. Write naturally as a native speaker would — do NOT translate from English. Keep the same tone, structure, and rules above but in ${getLanguageName(language)}.` : ""}
 
 Return ONLY a JSON object with "subject" and "body" fields. The body should NOT include a sign-off name or signature.`;
 }
 
-function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey, topGap?: string): string {
+function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey, topGap?: string, language: string = "eng"): string {
   const toneStyle: Record<ToneKey, string> = {
     friendly: `TONE: Warm, zero pressure — like texting a friend you haven't heard back from.`,
     direct: `TONE: Brief and matter-of-fact — one quick bump, no fluff.`,
@@ -220,11 +231,12 @@ Rules:
 Subject line: A reply-style subject — "re: [original subject variation]" or something casual like "one more thing" or "forgot to mention"
 
 ${toneStyle[tone]}
+${language !== "eng" ? `\nLANGUAGE: Write the ENTIRE email (subject and body) in ${getLanguageName(language)}. Write naturally as a native speaker would.` : ""}
 
 Return ONLY JSON with "subject" and "body" fields.`;
 }
 
-function buildFollowup2Prompt(company: string, tone: ToneKey): string {
+function buildFollowup2Prompt(company: string, tone: ToneKey, language: string = "eng"): string {
   const toneStyle: Record<ToneKey, string> = {
     friendly: `TONE: Genuinely no-pressure — like closing a thread with a friend. Zero guilt.`,
     direct: `TONE: Quick, clean close. One sentence, done.`,
@@ -253,6 +265,7 @@ Rules:
 Subject line: Something casual like "closing the loop" or "last one from me"
 
 ${toneStyle[tone]}
+${language !== "eng" ? `\nLANGUAGE: Write the ENTIRE email (subject and body) in ${getLanguageName(language)}. Write naturally as a native speaker would.` : ""}
 
 Return ONLY JSON with "subject" and "body" fields.`;
 }
@@ -342,7 +355,7 @@ function isValidLead(lead: any): { valid: boolean; reason?: string } {
 }
 
 // ===== CALL SCRIPT GENERATION =====
-function buildCallScriptPrompt(lead: any, enriched?: { summary?: string; issues?: string }): string {
+function buildCallScriptPrompt(lead: any, enriched?: { summary?: string; issues?: string }, language: string = "eng"): string {
   const industry = lead.industry || "Local business";
   const address = lead.enriched_data?.address || "";
   const city = address ? address.split(",")[0].trim() : "";
@@ -371,6 +384,7 @@ RULES:
 - NEVER use placeholder brackets like [City], [Your Name], etc. Use actual data or skip.
 - The "opening" field should ONLY be the first greeting line
 - The "script" field should contain the full conversation flow after the opening
+${language !== "eng" ? `\nLANGUAGE: Write the ENTIRE script in ${getLanguageName(language)}. The business speaks ${getLanguageName(language)}, so the call must be in their language. Write naturally as a native speaker would.` : ""}
 
 Return ONLY JSON with "opening" and "script" fields.`;
 }
@@ -458,7 +472,8 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       const hasBrokenWebsite = !hasNoWebsite && (enrichedData._siteDown === true || (!enrichedData.title && !enrichedData.description && (!enrichedData.technologies || enrichedData.technologies.length === 0)));
       const auditUrl = await ensureAuditToken(lead, basicServiceType);
       const summary = enrichedData.summary || lead.company;
-      const prompt = buildInitialPrompt(lead, tone, hasNoWebsite ? { noWebsite: true, auditUrl } : hasBrokenWebsite ? { brokenWebsite: true, auditUrl } : { summary, auditUrl }, basicServiceType);
+      const leadLanguage = lead.detected_language || "eng";
+      const prompt = buildInitialPrompt(lead, tone, hasNoWebsite ? { noWebsite: true, auditUrl } : hasBrokenWebsite ? { brokenWebsite: true, auditUrl } : { summary, auditUrl }, basicServiceType, leadLanguage);
 
       try {
         const completion = await openai.chat.completions.create({
@@ -783,7 +798,8 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
 
       // Initial email — auto-generate audit token if enrichment exists
       const auditUrl = await ensureAuditToken(lead, userServiceType);
-      const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues, digitalGaps, noWebsite: hasNoWebsite, brokenWebsite: hasBrokenWebsite, auditUrl }, userServiceType);
+      const leadLanguage = lead.detected_language || "eng";
+      const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues, digitalGaps, noWebsite: hasNoWebsite, brokenWebsite: hasBrokenWebsite, auditUrl }, userServiceType, leadLanguage);
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
@@ -816,7 +832,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                 (async () => {
                   try {
                     const topGap = gaps.length > 0 ? gaps[0].replace("- ", "") : undefined;
-                    const f1Prompt = buildFollowup1Prompt(lead.company, issues, tone, topGap);
+                    const f1Prompt = buildFollowup1Prompt(lead.company, issues, tone, topGap, leadLanguage);
                     const f1 = await openai.chat.completions.create({
                       model: "gpt-4o",
                       messages: [{ role: "user", content: f1Prompt }],
@@ -847,7 +863,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                 // Follow-up 2
                 (async () => {
                   try {
-                    const f2Prompt = buildFollowup2Prompt(lead.company, tone);
+                    const f2Prompt = buildFollowup2Prompt(lead.company, tone, leadLanguage);
                     const f2 = await openai.chat.completions.create({
                       model: "gpt-4o",
                       messages: [{ role: "user", content: f2Prompt }],
@@ -982,10 +998,11 @@ router.post("/call-scripts", authMiddleware, async (req: AuthenticatedRequest, r
     // Generate call scripts in parallel batches of 5
     const scripts = await processBatch(cappedLeads, PARALLEL_BATCH_SIZE, async (lead) => {
       const enrichedData = lead.enriched_data || {};
+      const leadLanguage = lead.detected_language || "eng";
       const prompt = buildCallScriptPrompt(lead, {
         summary: enrichedData.summary,
         issues: (enrichedData.issues || []).join(", "),
-      });
+      }, leadLanguage);
 
       try {
         const completion = await openai.chat.completions.create({

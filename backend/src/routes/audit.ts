@@ -306,7 +306,7 @@ router.get("/:token", async (req, res) => {
     // Find lead by audit token in enriched_data JSONB
     const { data: leads, error } = await supabase
       .from("leads")
-      .select("id, company, website, industry, score, enriched_data")
+      .select("id, company, website, industry, score, enriched_data, detected_language")
       .eq("enriched_data->>audit_token", token)
       .limit(1);
 
@@ -340,6 +340,7 @@ router.get("/:token", async (req, res) => {
       industry: lead.industry || ed.industry || "Local Business",
       score: lead.score,
       serviceType,
+      language: lead.detected_language || "eng",
       summary: ed.summary || null,
       issues: ed.issues || [],
       opportunity: ed.opportunity || null,

@@ -22,6 +22,8 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
   try {
     const file = req.file;
     const campaignName = req.body.campaignName;
+    const VALID_TIMEZONES = ["US_EAST", "US_CENTRAL", "US_MOUNTAIN", "US_WEST", "US_ALASKA", "US_HAWAII", "CA_ATLANTIC", "CA_NEWFOUNDLAND", "UK", "EU_CENTRAL", "EU_EAST", "UAE", "ARABIA", "INDIA", "SINGAPORE", "PHILIPPINES", "JAPAN", "AU_WEST", "AU_CENTRAL", "AU_EAST", "NZ", "BRAZIL", "SOUTH_AFRICA"];
+    const sendTimezone = VALID_TIMEZONES.includes(req.body.sendTimezone) ? req.body.sendTimezone : "US_EAST";
 
     if (!file || !campaignName) {
       res.status(400).json({ error: "File and campaign name are required" });
@@ -122,6 +124,7 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req: Authen
         status: "draft",
         total_leads: cappedLeads.length,
         queued_leads: queuedLeads.length,
+        send_timezone: sendTimezone,
       })
       .select()
       .single();
@@ -599,6 +602,8 @@ router.post("/auto-find", authMiddleware, autoFindLimiter, async (req: Authentic
                     ...(lead.enriched_data?.address ? { address: lead.enriched_data.address } : {}),
                   },
                   score,
+                  // Persist detected language from website content
+                  detected_language: websiteData.detectedLanguage || "eng",
                 };
 
                 // Priority 1: Email — if found on website, use it and ignore website phone
@@ -771,6 +776,8 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
               ...(lead.enriched_data?.address ? { address: lead.enriched_data.address } : {}),
             },
             score,
+            // Persist detected language from website content
+            detected_language: websiteData?.detectedLanguage || "eng",
           };
 
           // Priority 1: Email — if found on website, use it and ignore website phone
@@ -803,11 +810,23 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
             }
           }
 
-          const { error: updateError } = await supabase
+          let { error: updateError } = await supabase
             .from("leads")
             .update(updateFields)
             .eq("id", lead.id)
             .eq("user_id", req.userId);
+
+          // If update failed (e.g. detected_language column missing), retry without it
+          if (updateError) {
+            logger.warn({ leadId: lead.id, error: updateError.message }, "Enrichment update failed, retrying without detected_language");
+            const { detected_language, ...fieldsWithoutLang } = updateFields;
+            const retry = await supabase
+              .from("leads")
+              .update(fieldsWithoutLang)
+              .eq("id", lead.id)
+              .eq("user_id", req.userId);
+            updateError = retry.error;
+          }
 
           if (!updateError) {
             return {
@@ -816,6 +835,7 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
               summary: enrichmentSummary.summary,
             };
           }
+          logger.error({ leadId: lead.id, error: updateError.message }, "Failed to update lead during enrichment");
         } catch (error) {
           logger.error({ leadId: lead.id, error }, "Error enriching lead");
         }

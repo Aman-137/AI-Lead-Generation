@@ -35,6 +35,7 @@ create table if not exists leads (
   contact_method text not null default 'email' check (contact_method in ('email', 'call')),
   source_type text not null default 'auto_find' check (source_type in ('auto_find', 'csv', 'csv_queued')),
   enriched_data jsonb,
+  detected_language text default 'eng',
   score integer default 0,
   contacted boolean default false,
   contacted_at timestamp with time zone,
@@ -85,7 +86,8 @@ create table if not exists campaigns (
   total_leads integer default 0,
   queued_leads integer default 0,
   enable_followups boolean default true,
-  send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_MOUNTAIN', 'US_WEST', 'US_ALASKA', 'US_HAWAII', 'UK', 'EU_CENTRAL', 'EU_EAST')),
+  send_timezone text not null default 'US_EAST' check (send_timezone in ('US_EAST', 'US_CENTRAL', 'US_MOUNTAIN', 'US_WEST', 'US_ALASKA', 'US_HAWAII', 'CA_ATLANTIC', 'CA_NEWFOUNDLAND', 'UK', 'EU_CENTRAL', 'EU_EAST', 'UAE', 'ARABIA', 'INDIA', 'SINGAPORE', 'PHILIPPINES', 'JAPAN', 'AU_WEST', 'AU_CENTRAL', 'AU_EAST', 'NZ', 'BRAZIL', 'SOUTH_AFRICA')),
+  settings_confirmed boolean default false,
   created_at timestamp with time zone default now()
 );
 

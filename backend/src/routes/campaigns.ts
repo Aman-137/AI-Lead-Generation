@@ -85,6 +85,24 @@ router.get("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
       .eq("user_id", req.userId)
       .order("sequence_step", { ascending: true });
 
+    // Auto-cancel pending follow-ups for leads that already have a reply
+    const repliedLeadIds = new Set(
+      (emails || []).filter((e: any) => e.replied === true).map((e: any) => e.lead_id)
+    );
+    const staleFollowups = (emails || []).filter(
+      (e: any) => e.status === "pending" && e.sequence_step > 1 && repliedLeadIds.has(e.lead_id)
+    );
+    if (staleFollowups.length > 0) {
+      await supabase
+        .from("emails")
+        .update({ status: "cancelled" })
+        .in("id", staleFollowups.map((e: any) => e.id));
+      // Update local array
+      for (const e of staleFollowups) {
+        e.status = "cancelled";
+      }
+    }
+
     // Flatten gmail_accounts join into gmail_email field
     const enrichedEmails = (emails || []).map(e => ({
       ...e,
@@ -136,9 +154,10 @@ router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => {
       updateData.status = status;
     }
     if (send_timezone !== undefined) {
-      const validTimezones = ["US_EAST", "US_CENTRAL", "US_MOUNTAIN", "US_WEST", "US_ALASKA", "US_HAWAII", "UK", "EU_CENTRAL", "EU_EAST"];
+      const validTimezones = ["US_EAST", "US_CENTRAL", "US_MOUNTAIN", "US_WEST", "US_ALASKA", "US_HAWAII", "CA_ATLANTIC", "CA_NEWFOUNDLAND", "UK", "EU_CENTRAL", "EU_EAST", "UAE", "ARABIA", "INDIA", "SINGAPORE", "PHILIPPINES", "JAPAN", "AU_WEST", "AU_CENTRAL", "AU_EAST", "NZ", "BRAZIL", "SOUTH_AFRICA"];
       if (validTimezones.includes(send_timezone)) {
         updateData.send_timezone = send_timezone;
+        updateData.settings_confirmed = true;
       }
     }
 

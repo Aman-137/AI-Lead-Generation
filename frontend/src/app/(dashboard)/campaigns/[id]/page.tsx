@@ -12,27 +12,44 @@ function CustomSelect<T extends string>({
   value,
   onChange,
   options,
+  searchEntries,
   disabled,
   className,
 }: {
   value: T;
   onChange: (val: T) => void;
   options: { value: T; label: string }[];
+  searchEntries?: { value: T; label: string }[];
   disabled?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setSearch(""); }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const selected = options.find(o => o.value === value);
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open]);
+
+  // Display: use stored label if set, otherwise fall back to first match in entries or options
+  const entries = searchEntries || options;
+  const displayLabel = selectedLabel || entries.find(o => o.value === value)?.label || options.find(o => o.value === value)?.label || "Select...";
+
+  const filtered = search.trim()
+    ? entries.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : entries;
+
+  const deduped = filtered;
 
   return (
     <div ref={ref} className={`relative inline-block ${className || ""}`}>
@@ -42,27 +59,42 @@ function CustomSelect<T extends string>({
         disabled={disabled}
         className="group inline-flex items-center gap-1.5 text-[11px] font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-white/80 hover:text-white"
       >
-        <span>{selected?.label || "Select..."}</span>
+        <span>{displayLabel}</span>
         <svg className={`w-3 h-3 opacity-40 group-hover:opacity-70 transition-all duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
       {open && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-50 mt-2 rounded-lg shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] py-1.5 overflow-hidden bg-white ring-1 ring-black/[0.06]" style={{ minWidth: "210px" }}>
-          {options.map((opt) => (
+        <div className="absolute left-1/2 -translate-x-1/2 z-50 mt-2 rounded-xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] bg-white ring-1 ring-black/[0.06] overflow-hidden" style={{ minWidth: "260px" }}>
+          <div className="px-2.5 pt-2.5 pb-1.5">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search country or city..."
+              className="w-full px-3 py-1.5 text-[12px] text-gray-700 placeholder-gray-400 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-violet-300 focus:ring-1 focus:ring-violet-200 transition-all"
+            />
+          </div>
+          <div className="overflow-y-auto overscroll-contain py-1" style={{ maxHeight: "240px", scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 transparent" }}>
+          {deduped.length === 0 ? (
+            <div className="px-3.5 py-3 text-[12px] text-gray-400 text-center">No timezone found</div>
+          ) : (
+          deduped.map((opt, idx) => (
             <button
-              key={opt.value}
+              key={`${opt.value}-${idx}`}
               type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`w-full text-left px-3.5 py-[7px] text-[12px] whitespace-nowrap transition-all duration-150 ${
-                opt.value === value
+              onClick={() => { onChange(opt.value); setSelectedLabel(opt.label); setOpen(false); setSearch(""); }}
+              className={`w-full text-left px-3.5 py-2 text-[12px] transition-all duration-150 ${
+                opt.label === displayLabel
                   ? "text-violet-700 font-semibold bg-violet-50"
                   : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 font-medium"
               }`}
             >
               {opt.label}
             </button>
-          ))}
+          )))}
+          </div>
         </div>
       )}
     </div>
@@ -211,20 +243,125 @@ interface Campaign {
   total_leads: number;
   enable_followups?: boolean;
   send_timezone?: string;
+  settings_confirmed?: boolean;
   created_at: string;
 }
 
-// Timezone options for email sending
+// Timezone options for email sending (concise labels shown in button & default list)
 const TIMEZONE_OPTIONS = [
-  { value: "US_EAST", label: "US East (New York)", hours: "8 AM-12 PM & 1-5 PM EST" },
-  { value: "US_CENTRAL", label: "US Central (Chicago)", hours: "8 AM-12 PM & 1-5 PM CST" },
-  { value: "US_MOUNTAIN", label: "US Mountain (Denver)", hours: "8 AM-12 PM & 1-5 PM MST" },
-  { value: "US_WEST", label: "US West (Los Angeles)", hours: "8 AM-12 PM & 1-5 PM PST" },
-  { value: "US_ALASKA", label: "US Alaska (Anchorage)", hours: "8 AM-12 PM & 1-5 PM AKST" },
-  { value: "US_HAWAII", label: "US Hawaii (Honolulu)", hours: "8 AM-12 PM & 1-5 PM HST" },
-  { value: "UK", label: "UK (London)", hours: "8 AM-12 PM & 1-5 PM GMT" },
-  { value: "EU_CENTRAL", label: "Europe Central (Berlin/Paris)", hours: "8 AM-12 PM & 1-5 PM CET" },
-  { value: "EU_EAST", label: "Europe East (Athens/Helsinki)", hours: "8 AM-12 PM & 1-5 PM EET" },
+  { value: "US_EAST", label: "US East (New York)" },
+  { value: "US_CENTRAL", label: "US Central (Chicago)" },
+  { value: "US_MOUNTAIN", label: "US Mountain (Denver)" },
+  { value: "US_WEST", label: "US West (Los Angeles)" },
+  { value: "US_ALASKA", label: "US Alaska (Anchorage)" },
+  { value: "US_HAWAII", label: "US Hawaii (Honolulu)" },
+  { value: "CA_ATLANTIC", label: "Canada Atlantic (Halifax)" },
+  { value: "CA_NEWFOUNDLAND", label: "Canada Newfoundland (St. John's)" },
+  { value: "UK", label: "UK (London)" },
+  { value: "EU_CENTRAL", label: "Europe Central (Berlin/Paris)" },
+  { value: "EU_EAST", label: "Europe East (Athens/Helsinki)" },
+  { value: "ARABIA", label: "Saudi Arabia (AST)" },
+  { value: "UAE", label: "UAE (GST)" },
+  { value: "INDIA", label: "India (IST)" },
+  { value: "SINGAPORE", label: "Singapore (SGT)" },
+  { value: "PHILIPPINES", label: "Philippines (PHT)" },
+  { value: "JAPAN", label: "Japan (JST)" },
+  { value: "AU_WEST", label: "Australia West (Perth)" },
+  { value: "AU_CENTRAL", label: "Australia Central (Adelaide)" },
+  { value: "AU_EAST", label: "Australia East (Sydney)" },
+  { value: "NZ", label: "New Zealand (Auckland)" },
+  { value: "BRAZIL", label: "Brazil (São Paulo)" },
+  { value: "SOUTH_AFRICA", label: "South Africa (Johannesburg)" },
+];
+
+// Searchable entries — one entry per country (mapped to correct timezone)
+const TIMEZONE_SEARCH_ENTRIES: { value: string; label: string }[] = [
+  // United States (multiple timezones)
+  { value: "US_EAST", label: "USA - Eastern (New York)" },
+  { value: "US_CENTRAL", label: "USA - Central (Chicago)" },
+  { value: "US_MOUNTAIN", label: "USA - Mountain (Denver)" },
+  { value: "US_WEST", label: "USA - Pacific (Los Angeles)" },
+  { value: "US_ALASKA", label: "USA - Alaska" },
+  { value: "US_HAWAII", label: "USA - Hawaii" },
+  // Canada (multiple timezones)
+  { value: "US_EAST", label: "Canada - Eastern (Toronto)" },
+  { value: "US_CENTRAL", label: "Canada - Central (Winnipeg)" },
+  { value: "US_MOUNTAIN", label: "Canada - Mountain (Calgary)" },
+  { value: "US_WEST", label: "Canada - Pacific (Vancouver)" },
+  { value: "CA_ATLANTIC", label: "Canada - Atlantic (Halifax)" },
+  { value: "CA_NEWFOUNDLAND", label: "Canada - Newfoundland (St. John's)" },
+  // UK & Western Europe (UTC+0)
+  { value: "UK", label: "United Kingdom (GMT)" },
+  { value: "UK", label: "Ireland (GMT)" },
+  { value: "UK", label: "Portugal (WET)" },
+  // Europe Central (UTC+1)
+  { value: "EU_CENTRAL", label: "France (CET)" },
+  { value: "EU_CENTRAL", label: "Germany (CET)" },
+  { value: "EU_CENTRAL", label: "Spain (CET)" },
+  { value: "EU_CENTRAL", label: "Italy (CET)" },
+  { value: "EU_CENTRAL", label: "Netherlands (CET)" },
+  { value: "EU_CENTRAL", label: "Belgium (CET)" },
+  { value: "EU_CENTRAL", label: "Austria (CET)" },
+  { value: "EU_CENTRAL", label: "Switzerland (CET)" },
+  { value: "EU_CENTRAL", label: "Sweden (CET)" },
+  { value: "EU_CENTRAL", label: "Norway (CET)" },
+  { value: "EU_CENTRAL", label: "Denmark (CET)" },
+  { value: "EU_CENTRAL", label: "Poland (CET)" },
+  { value: "EU_CENTRAL", label: "Czech Republic (CET)" },
+  { value: "EU_CENTRAL", label: "Hungary (CET)" },
+  { value: "EU_CENTRAL", label: "Croatia (CET)" },
+  { value: "EU_CENTRAL", label: "Nigeria (WAT)" },
+  // Europe East (UTC+2)
+  { value: "EU_EAST", label: "Greece (EET)" },
+  { value: "EU_EAST", label: "Finland (EET)" },
+  { value: "EU_EAST", label: "Romania (EET)" },
+  { value: "EU_EAST", label: "Bulgaria (EET)" },
+  { value: "EU_EAST", label: "Ukraine (EET)" },
+  { value: "EU_EAST", label: "Israel (IST)" },
+  { value: "EU_EAST", label: "Lithuania (EET)" },
+  { value: "EU_EAST", label: "Latvia (EET)" },
+  // Arabia / East Africa (UTC+3)
+  { value: "ARABIA", label: "Turkey (TRT)" },
+  { value: "ARABIA", label: "Saudi Arabia (AST)" },
+  { value: "ARABIA", label: "Qatar (AST)" },
+  { value: "ARABIA", label: "Kuwait (AST)" },
+  { value: "ARABIA", label: "Bahrain (AST)" },
+  { value: "ARABIA", label: "Iraq (AST)" },
+  { value: "ARABIA", label: "Kenya (EAT)" },
+  { value: "ARABIA", label: "Ethiopia (EAT)" },
+  { value: "ARABIA", label: "Tanzania (EAT)" },
+  // UAE / Gulf (UTC+4)
+  { value: "UAE", label: "UAE (GST)" },
+  { value: "UAE", label: "Oman (GST)" },
+  // India & South Asia (UTC+5:30)
+  { value: "INDIA", label: "India (IST)" },
+  { value: "INDIA", label: "Sri Lanka (IST)" },
+  // Southeast Asia (UTC+8)
+  { value: "SINGAPORE", label: "Singapore (SGT)" },
+  { value: "SINGAPORE", label: "Malaysia (MYT)" },
+  { value: "SINGAPORE", label: "Hong Kong (HKT)" },
+  { value: "SINGAPORE", label: "China (CST)" },
+  { value: "SINGAPORE", label: "Taiwan (CST)" },
+  { value: "PHILIPPINES", label: "Philippines (PHT)" },
+  // East Asia (UTC+9)
+  { value: "JAPAN", label: "Japan (JST)" },
+  { value: "JAPAN", label: "South Korea (KST)" },
+  // Australia (multiple timezones)
+  { value: "AU_WEST", label: "Australia - Western (Perth)" },
+  { value: "AU_CENTRAL", label: "Australia - Central (Adelaide)" },
+  { value: "AU_EAST", label: "Australia - Eastern (Sydney)" },
+  // New Zealand
+  { value: "NZ", label: "New Zealand (NZST)" },
+  // South America (UTC-3)
+  { value: "BRAZIL", label: "Brazil (BRT)" },
+  { value: "BRAZIL", label: "Argentina (ART)" },
+  { value: "BRAZIL", label: "Uruguay (UYT)" },
+  // Africa (UTC+2)
+  { value: "SOUTH_AFRICA", label: "South Africa (SAST)" },
+  { value: "SOUTH_AFRICA", label: "Egypt (EET)" },
+  { value: "SOUTH_AFRICA", label: "Botswana (CAT)" },
+  { value: "SOUTH_AFRICA", label: "Zimbabwe (CAT)" },
+  { value: "SOUTH_AFRICA", label: "Mozambique (CAT)" },
 ];
 
 // ===== Progress Tracker =====
@@ -852,14 +989,14 @@ function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; 
                         </button>
                       ) : null}
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold" style={{
-                        background: email.status === "sent" ? "rgba(16,185,129,0.1)" : email.status === "failed" ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
-                        color: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : "#f59e0b",
-                        border: `1px solid ${email.status === "sent" ? "rgba(16,185,129,0.2)" : email.status === "failed" ? "rgba(239,68,68,0.2)" : "rgba(245,158,11,0.2)"}`,
+                        background: email.status === "sent" ? "rgba(16,185,129,0.1)" : email.status === "failed" ? "rgba(239,68,68,0.1)" : email.status === "cancelled" ? "rgba(203,213,225,0.1)" : "rgba(245,158,11,0.1)",
+                        color: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : email.status === "cancelled" ? "#cbd5e1" : "#f59e0b",
+                        border: `1px solid ${email.status === "sent" ? "rgba(16,185,129,0.2)" : email.status === "failed" ? "rgba(239,68,68,0.2)" : email.status === "cancelled" ? "rgba(203,213,225,0.25)" : "rgba(245,158,11,0.2)"}`,
                       }}>
                         <span className="w-1.5 h-1.5 rounded-full" style={{
-                          background: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : "#f59e0b",
+                          background: email.status === "sent" ? "#10b981" : email.status === "failed" ? "#ef4444" : email.status === "cancelled" ? "#cbd5e1" : "#f59e0b",
                         }} />
-                        {email.status === "sent" ? "Sent" : email.status === "failed" ? "Failed" : "Pending"}
+                        {email.status === "sent" ? "Sent" : email.status === "failed" ? "Failed" : email.status === "cancelled" ? "Cancelled" : "Pending"}
                       </span>
                     </div>
                   </div>
@@ -910,6 +1047,8 @@ export default function CampaignDetailPage() {
   const [enableFollowups, setEnableFollowups] = useState(true);
   const [sendTimezone, setSendTimezone] = useState("US_EAST");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [showTzWarning, setShowTzWarning] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [generatingScripts, setGeneratingScripts] = useState(false);
   const [callScripts, setCallScripts] = useState<{ lead_id: string; company: string; phone?: string; opening: string; script: string }[]>([]);
@@ -951,6 +1090,7 @@ export default function CampaignDetailPage() {
       setEmails(data.emails);
       setEnableFollowups(data.campaign.enable_followups !== false);
       setSendTimezone(data.campaign.send_timezone || "US_EAST");
+      setSettingsSaved(!!data.campaign.settings_confirmed);
 
       // Load call scripts from enriched_data
       const existingScripts = data.leads
@@ -1043,6 +1183,7 @@ export default function CampaignDetailPage() {
         send_timezone: sendTimezone,
       });
       setCampaign(data.campaign);
+      setSettingsSaved(true);
       const tzLabel = TIMEZONE_OPTIONS.find(t => t.value === sendTimezone)?.label || sendTimezone;
       toast.addToast(`Settings saved! Timezone: ${tzLabel}`, "success");
     } catch (err) {
@@ -1095,8 +1236,15 @@ export default function CampaignDetailPage() {
   const handleMarkReply = async (emailId: string) => {
     try {
       await apiPost("/send/mark-reply", { emailId });
-      setEmails(prev => prev.map(e => e.id === emailId ? { ...e, replied: true, replied_at: new Date().toISOString() } : e));
-      toast.addToast("Email marked as replied", "success");
+      // Mark replied and cancel pending follow-ups for the same lead in UI
+      const repliedEmail = emails.find(e => e.id === emailId);
+      setEmails(prev => prev.map(e => {
+        if (e.id === emailId) return { ...e, replied: true, replied_at: new Date().toISOString() };
+        if (repliedEmail && e.lead_id === repliedEmail.lead_id && e.status === "pending") return { ...e, status: "cancelled" };
+        return e;
+      }));
+      toast.addToast("Email marked as replied — follow-ups cancelled", "success");
+      await fetchCampaign();
     } catch {
       toast.addToast("Failed to mark reply", "error");
     }
@@ -1210,14 +1358,42 @@ export default function CampaignDetailPage() {
             </button>
             {/* Settings */}
             <div className="flex items-center gap-5">
-              <div className="relative flex items-center gap-2 rounded-lg px-3 py-[6px]" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <div className="relative flex items-center gap-2 rounded-lg px-3 py-[6px]" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }} onClickCapture={() => setShowTzWarning(false)}>
                 <svg className="w-3.5 h-3.5" style={{ color: "#a78bfa" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <CustomSelect
                   value={sendTimezone}
-                  onChange={(val) => setSendTimezone(val)}
-                  options={TIMEZONE_OPTIONS.map(tz => ({ value: tz.value, label: tz.label }))}
+                  onChange={(val) => { setSendTimezone(val); setShowTzWarning(false); }}
+                  options={TIMEZONE_OPTIONS}
+                  searchEntries={TIMEZONE_SEARCH_ENTRIES}
                   disabled={savingSettings}
                 />
+                {/* Timezone warning card */}
+                {showTzWarning && (
+                  <div className="absolute top-full right-0 mt-3 z-50 w-80 animate-in fade-in slide-in-from-top-2 duration-200">
+                    {/* Arrow pointing up */}
+                    <div className="absolute -top-2 right-8 w-4 h-4 bg-white rotate-45 rounded-sm shadow-lg" />
+                    <div className="relative bg-white rounded-xl shadow-2xl border border-gray-100 p-4">
+                      <button onClick={() => setShowTzWarning(false)} className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                        <div className="flex-1 pr-4">
+                          <h4 className="text-sm font-bold text-gray-900 mb-1">Select Timezone First</h4>
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            Select the correct timezone for your leads and click <span className="font-semibold text-[#6962c4]">Save</span> before selecting leads. Emails will be sent during business hours in the selected timezone.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-400 font-medium">
+                        <svg className="w-3.5 h-3.5 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                        Select timezone above, then click Save
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="w-px h-4 bg-white/10" />
@@ -1266,7 +1442,7 @@ export default function CampaignDetailPage() {
                   <span className={`w-1.5 h-1.5 rounded-full ${heroStatus.dot}`} />
                   <span className="text-gray-300">{heroStatus.label}</span>
                 </span>
-                {campaign.status === "completed" && (
+                {campaign.status === "completed" && leads.some(l => !emails.some(e => e.lead_id === l.id && e.replied)) && (
                   <button
                     onClick={handleReactivate}
                     className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg text-white/80 hover:text-white transition-colors"
@@ -1541,6 +1717,8 @@ export default function CampaignDetailPage() {
                 </div>
               </div>
 
+
+
               {/* Table */}
               <table className="min-w-full">
                 <thead>
@@ -1550,6 +1728,10 @@ export default function CampaignDetailPage() {
                           type="checkbox"
                           checked={filteredLeads.length > 0 && filteredLeads.every(l => selectedLeadIds.has(l.id))}
                           onChange={(e) => {
+                            if (!settingsSaved) {
+                              setShowTzWarning(true);
+                              return;
+                            }
                             if (e.target.checked) {
                               setSelectedLeadIds(new Set(filteredLeads.map(l => l.id)));
                             } else {
@@ -1585,6 +1767,10 @@ export default function CampaignDetailPage() {
                               type="checkbox"
                               checked={isSelected}
                               onChange={(e) => {
+                                if (!settingsSaved) {
+                                  setShowTzWarning(true);
+                                  return;
+                                }
                                 const next = new Set(selectedLeadIds);
                                 if (e.target.checked) {
                                   next.add(lead.id);

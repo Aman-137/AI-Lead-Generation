@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { URL } from "url";
 import dns from "dns/promises";
 import logger from "../utils/logger";
+import { detectLanguage } from "../utils/languageDetection";
 
 export interface WebsiteData {
   title: string;
@@ -36,6 +37,8 @@ export interface WebsiteData {
   hasEmailMarketing: boolean;    // Mailchimp, ConvertKit, HubSpot, Klaviyo, etc.
   hasCTA: boolean;               // Clear call-to-action button/form above the fold
   hasRetargeting: boolean;       // Any retargeting pixel beyond FB (TikTok, LinkedIn, Twitter, Pinterest)
+  // Language detection
+  detectedLanguage: string;      // ISO 639-3 language code detected from website content (default: "eng")
 }
 
 // Block private/internal IPs to prevent SSRF
@@ -833,6 +836,10 @@ export async function scrapeWebsite(
       return false;
     })();
 
+    // ===== LANGUAGE DETECTION =====
+    // Detect the dominant language from the visible page text
+    const detectedLanguage = await detectLanguage(allPageText);
+
     return {
       title: title.slice(0, 200),
       description: description.slice(0, 500),
@@ -862,6 +869,7 @@ export async function scrapeWebsite(
       hasEmailMarketing,
       hasCTA,
       hasRetargeting,
+      detectedLanguage,
     };
   } catch (error) {
     logger.error(

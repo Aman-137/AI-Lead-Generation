@@ -345,7 +345,7 @@ export default function UploadPage() {
                   { col: "website", desc: "Website URL" },
                 ].map((item) => (
                   <div key={item.col} className="flex items-center gap-3">
-                    <span className="px-2 py-0.5 text-xs font-mono font-bold rounded-md ring-1" style={{ color: "#3d3580", background: "rgba(105,98,196,0.08)", ringColor: "rgba(105,98,196,0.2)" }}>{item.col}</span>
+                    <span className="px-2 py-0.5 text-xs font-mono font-bold rounded-md ring-1 ring-[#6962c4]/20" style={{ color: "#3d3580", background: "rgba(105,98,196,0.08)" }}>{item.col}</span>
                     <span className="text-xs text-gray-500">{item.desc}</span>
                   </div>
                 ))}

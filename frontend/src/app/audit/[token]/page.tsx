@@ -21,6 +21,7 @@ interface AuditData {
   industry: string;
   score: number;
   serviceType: string;
+  language: string;
   summary: string | null;
   issues: string[];
   opportunity: string | null;

@@ -19,18 +19,43 @@ const TIMEZONE_OFFSETS: Record<string, number[]> = {
   US_WEST:     [-8, -7],   // PST/PDT
   US_ALASKA:   [-9, -8],   // AKST/AKDT
   US_HAWAII:   [-10, -10], // HST (no DST)
+  // Canada Timezones
+  CA_ATLANTIC: [-4, -3],   // AST/ADT (Nova Scotia, New Brunswick, PEI)
+  CA_NEWFOUNDLAND: [-3.5, -2.5], // NST/NDT (Newfoundland — half-hour offset)
   // UK & Europe Timezones
   UK:          [0, 1],     // GMT/BST
   EU_CENTRAL:  [1, 2],     // CET/CEST (France, Germany, Spain, Italy, Netherlands, etc.)
   EU_EAST:     [2, 3],     // EET/EEST (Greece, Romania, Finland, Bulgaria, etc.)
+  // Middle East
+  UAE:         [4, 4],     // GST (Gulf Standard Time — no DST) — UAE, Oman
+  ARABIA:     [3, 3],     // AST (Arabia Standard Time — no DST) — Saudi, Qatar, Kuwait, Bahrain, Turkey, Kenya
+  // South Asia
+  INDIA:       [5.5, 5.5], // IST (no DST — half-hour offset)
+  // Southeast Asia
+  SINGAPORE:   [8, 8],     // SGT (Singapore — no DST)
+  PHILIPPINES: [8, 8],     // PHT (Philippines — no DST)
+  // East Asia
+  JAPAN:       [9, 9],     // JST (Japan — no DST)
+  // Australia Timezones
+  AU_WEST:     [8, 8],     // AWST (Perth — no DST)
+  AU_CENTRAL:  [9.5, 10.5], // ACST/ACDT (Adelaide, Darwin)
+  AU_EAST:     [10, 11],   // AEST/AEDT (Sydney, Melbourne, Brisbane)
+  // New Zealand
+  NZ:          [12, 13],   // NZST/NZDT
+  // South America
+  BRAZIL:      [-3, -3],   // BRT (Brasília — no DST since 2019)
+  // Africa
+  SOUTH_AFRICA: [2, 2],    // SAST (South Africa — no DST)
 };
 
-// Determine if DST is active — different rules for US vs UK/EU
-function isDSTForRegion(date: Date, region: "US" | "EU"): boolean {
+// Determine if DST is active — different rules for US vs UK/EU vs AU vs NZ
+function isDSTForRegion(date: Date, region: "US" | "EU" | "AU" | "NZ" | "NONE"): boolean {
+  if (region === "NONE") return false;
+
   const year = date.getUTCFullYear();
 
   if (region === "US") {
-    // US: Second Sunday of March (2am EST = 7 UTC) → First Sunday of November (2am EDT = 6 UTC)
+    // US/Canada: Second Sunday of March (2am EST = 7 UTC) → First Sunday of November (2am EDT = 6 UTC)
     const mar1 = new Date(Date.UTC(year, 2, 1));
     const daysToFirstMarSun = (7 - mar1.getUTCDay()) % 7;
     const secondMarSun = 1 + daysToFirstMarSun + 7; // first Sunday + 7 = second Sunday
@@ -40,7 +65,7 @@ function isDSTForRegion(date: Date, region: "US" | "EU"): boolean {
     const firstNovSun = 1 + daysToFirstNovSun;
     const dstEnd = new Date(Date.UTC(year, 10, firstNovSun, 6));
     return date >= dstStart && date < dstEnd;
-  } else {
+  } else if (region === "EU") {
     // UK/EU: Last Sunday of March (1am UTC) → Last Sunday of October (1am UTC)
     const mar = new Date(Date.UTC(year, 2, 31));
     const marSun = 31 - mar.getUTCDay(); // last Sunday of March
@@ -49,19 +74,58 @@ function isDSTForRegion(date: Date, region: "US" | "EU"): boolean {
     const octSun = 31 - oct.getUTCDay(); // last Sunday of October
     const dstEnd = new Date(Date.UTC(year, 9, octSun, 1)); // 1am UTC
     return date >= dstStart && date < dstEnd;
+  } else if (region === "AU") {
+    // Australia (southern hemisphere): First Sunday of October → First Sunday of April
+    // DST active Oct-Apr (opposite of northern hemisphere)
+    const oct1 = new Date(Date.UTC(year, 9, 1));
+    const daysToOctSun = (7 - oct1.getUTCDay()) % 7;
+    const firstOctSun = 1 + daysToOctSun;
+    const dstStart = new Date(Date.UTC(year, 9, firstOctSun, 16)); // 2am AEST = 16 UTC prev day
+    const apr1 = new Date(Date.UTC(year, 3, 1));
+    const daysToAprSun = (7 - apr1.getUTCDay()) % 7;
+    const firstAprSun = 1 + daysToAprSun;
+    const dstEnd = new Date(Date.UTC(year, 3, firstAprSun, 16)); // 3am AEDT = 16 UTC
+    // Southern hemisphere: DST is Oct→Apr (wraps around new year)
+    return date >= dstStart || date < dstEnd;
+  } else if (region === "NZ") {
+    // New Zealand: Last Sunday of September → First Sunday of April
+    const sep = new Date(Date.UTC(year, 8, 30));
+    const sepSun = 30 - sep.getUTCDay(); // last Sunday of September
+    const dstStart = new Date(Date.UTC(year, 8, sepSun, 14)); // 2am NZST = 14 UTC
+    const apr1 = new Date(Date.UTC(year, 3, 1));
+    const daysToAprSun = (7 - apr1.getUTCDay()) % 7;
+    const firstAprSun = 1 + daysToAprSun;
+    const dstEnd = new Date(Date.UTC(year, 3, firstAprSun, 14)); // 3am NZDT = 14 UTC
+    return date >= dstStart || date < dstEnd;
   }
+
+  return false;
 }
 
-const TIMEZONE_REGIONS: Record<string, "US" | "EU"> = {
+const TIMEZONE_REGIONS: Record<string, "US" | "EU" | "AU" | "NZ" | "NONE"> = {
   US_EAST: "US",
   US_CENTRAL: "US",
   US_MOUNTAIN: "US",
   US_WEST: "US",
   US_ALASKA: "US",
-  US_HAWAII: "US",
+  US_HAWAII: "NONE",
+  CA_ATLANTIC: "US",
+  CA_NEWFOUNDLAND: "US",
   UK: "EU",
   EU_CENTRAL: "EU",
   EU_EAST: "EU",
+  UAE: "NONE",
+  ARABIA: "NONE",
+  INDIA: "NONE",
+  SINGAPORE: "NONE",
+  PHILIPPINES: "NONE",
+  JAPAN: "NONE",
+  AU_WEST: "NONE",
+  AU_CENTRAL: "AU",
+  AU_EAST: "AU",
+  NZ: "NZ",
+  BRAZIL: "NONE",
+  SOUTH_AFRICA: "NONE",
 };
 
 function getLocalHour(date: Date, timezone: string): { hour: number; dayOfWeek: number } {
@@ -71,6 +135,14 @@ function getLocalHour(date: Date, timezone: string): { hour: number; dayOfWeek: 
   const localMs = date.getTime() + offset * 3600000;
   const local = new Date(localMs);
   return { hour: local.getUTCHours(), dayOfWeek: local.getUTCDay() };
+}
+
+// Helper: set a Date to a specific local hour in a given timezone (handles fractional offsets like +5.5)
+function setToLocalHour(date: Date, targetHour: number, offset: number): void {
+  // Reset to start of UTC day, then compute: targetHour in local = (targetHour - offset) in UTC
+  date.setUTCHours(0, 0, 0, 0);
+  const offsetMs = (targetHour - offset) * 3600000;
+  date.setTime(date.getTime() + offsetMs);
 }
 
 // Check if current time is within sending hours
@@ -89,7 +161,7 @@ export function isWithinSendWindow(timezone: string, isFollowUp = false): { canS
     const offset = isDSTForRegion(now, region) ? offsets[1] : offsets[0];
     const next = new Date(now);
     next.setUTCDate(next.getUTCDate() + 1); // Sunday→Monday
-    next.setUTCHours(8 - offset, 0, 0, 0);
+    setToLocalHour(next, 8, offset);
     return { canSend: false, nextWindowMs: Math.max(0, next.getTime() - now.getTime()) };
   }
 
@@ -109,19 +181,20 @@ export function isWithinSendWindow(timezone: string, isFollowUp = false): { canS
 
   if (hour < 8) {
     // Before morning window → wait until 8am today
-    next.setUTCHours(8 - offset, 0, 0, 0);
+    setToLocalHour(next, 8, offset);
   } else if (hour >= 12 && hour < 13) {
     // Between windows → wait until 1pm today
-    next.setUTCHours(13 - offset, 0, 0, 0);
+    setToLocalHour(next, 13, offset);
   } else {
     // After 5pm → next day 8am
     next.setUTCDate(next.getUTCDate() + 1);
-    next.setUTCHours(8 - offset, 0, 0, 0);
+    setToLocalHour(next, 8, offset);
     // If next day is Sunday (and not follow-up), skip to Monday
     const nextDay = new Date(next);
     const { dayOfWeek: nextDayOfWeek } = getLocalHour(nextDay, timezone);
     if (!isFollowUp && nextDayOfWeek === 0) {
       next.setUTCDate(next.getUTCDate() + 1);
+      setToLocalHour(next, 8, offset);
     }
   }
 
@@ -375,6 +448,19 @@ router.post("/mark-reply", authMiddleware, async (req: AuthenticatedRequest, res
       return;
     }
 
+    // Get the email to find lead_id and campaign_id
+    const { data: email } = await supabase
+      .from("emails")
+      .select("id, lead_id, campaign_id")
+      .eq("id", emailId)
+      .eq("user_id", req.userId)
+      .single();
+
+    if (!email) {
+      res.status(404).json({ error: "Email not found" });
+      return;
+    }
+
     const { error } = await supabase
       .from("emails")
       .update({
@@ -387,6 +473,40 @@ router.post("/mark-reply", authMiddleware, async (req: AuthenticatedRequest, res
     if (error) {
       res.status(500).json({ error: "Failed to mark reply" });
       return;
+    }
+
+    // Cancel all pending follow-ups for this lead (no point sending them)
+    if (email.lead_id) {
+      await supabase
+        .from("emails")
+        .update({ status: "cancelled" })
+        .eq("lead_id", email.lead_id)
+        .eq("user_id", req.userId)
+        .eq("status", "pending");
+    }
+
+    // Check if campaign should be marked as completed
+    if (email.campaign_id) {
+      const { count: pendingCount } = await supabase
+        .from("emails")
+        .select("*", { count: "exact", head: true })
+        .eq("campaign_id", email.campaign_id)
+        .eq("status", "pending");
+
+      if (pendingCount === 0) {
+        const { count: sentCount } = await supabase
+          .from("emails")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", email.campaign_id)
+          .eq("status", "sent");
+
+        const finalStatus = (sentCount && sentCount > 0) ? "completed" : "draft";
+        await supabase
+          .from("campaigns")
+          .update({ status: finalStatus })
+          .eq("id", email.campaign_id)
+          .eq("user_id", req.userId);
+      }
     }
 
     res.json({ message: "Email marked as replied" });
