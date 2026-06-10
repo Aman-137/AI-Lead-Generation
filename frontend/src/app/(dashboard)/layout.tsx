@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 import SidebarNav from "./SidebarNav";
 import PageTitle from "./PageTitle";
+import { PlanProvider } from "./PlanContext";
 
 function AvatarDropdown({ displayName, avatarUrl }: { displayName: string; avatarUrl?: string }) {
   const initial = (displayName?.[0] || "U").toUpperCase();
@@ -116,7 +117,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="ml-64 pt-[88px] p-8">{children}</main>
+      <main className="ml-64 pt-[88px] p-8"><PlanProvider>{children}</PlanProvider></main>
     </div>
   );
 }

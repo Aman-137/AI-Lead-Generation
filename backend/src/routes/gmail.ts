@@ -3,6 +3,7 @@ import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import { getAuthUrl, handleOAuthCallback, isGmailConnected, getGmailAccounts, removeGmailAccount, verifyOAuthState, extractOAuthStateUserId } from "../services/gmail";
 import { getUserPlan, getMaxInboxes } from "../services/planLimits";
 import { isValidUUID } from "../middleware/validate";
+import { auditLog } from "../utils/auditLog";
 
 const router = Router();
 
@@ -73,6 +74,7 @@ router.post("/callback", authMiddleware, async (req: AuthenticatedRequest, res) 
     }
 
     const result = await handleOAuthCallback(code, req.userId!);
+    auditLog({ userId: req.userId, action: "gmail.connect", resource: "gmail_accounts", req, metadata: { email: result.email } });
     res.json({
       message: "Gmail connected successfully",
       email: result.email,
@@ -113,6 +115,7 @@ router.delete("/accounts/:id", authMiddleware, async (req: AuthenticatedRequest,
       return;
     }
     await removeGmailAccount(req.userId!, accountId);
+    auditLog({ userId: req.userId, action: "gmail.disconnect", resource: "gmail_accounts", resourceId: accountId, req });
     res.json({ message: "Gmail account removed successfully" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to remove Gmail account";

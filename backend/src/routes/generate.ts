@@ -3,12 +3,33 @@ import crypto from "crypto";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import openai from "../services/openai";
-import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday, ServiceType } from "../services/planLimits";
+import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday, ServiceType, getFeatureAccess } from "../services/planLimits";
 import { getPageSpeedScores } from "../services/pageSpeed";
 import { getLanguageName } from "../utils/languageDetection";
 import logger from "../utils/logger";
 
 const router = Router();
+
+// Sanitize user-supplied data before injecting into AI prompts
+// Strips instruction-like patterns that could manipulate the AI
+function sanitizeForPrompt(value: string): string {
+  if (!value) return "";
+  return value
+    // Remove common prompt injection patterns
+    .replace(/ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)/gi, "")
+    .replace(/you\s+are\s+now/gi, "")
+    .replace(/system\s*:/gi, "")
+    .replace(/\bprompt\s*:/gi, "")
+    .replace(/\bassistant\s*:/gi, "")
+    .replace(/\bhuman\s*:/gi, "")
+    .replace(/\buser\s*:/gi, "")
+    // Remove attempts to close/open JSON or code blocks
+    .replace(/```/g, "")
+    .replace(/\{\s*"role"/gi, "")
+    // Limit length to prevent prompt stuffing
+    .slice(0, 300)
+    .trim();
+}
 
 // Helper: process items in parallel batches
 async function processBatch<T, R>(
@@ -60,11 +81,18 @@ function appendOptOut(body: string): string {
 }
 
 function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string; digitalGaps?: string; noWebsite?: boolean; brokenWebsite?: boolean; auditUrl?: string }, serviceType: ServiceType = "web_dev", language: string = "eng"): string {
-  const company = lead.company;
-  const industry = lead.industry || "Local business";
-  const address = lead.enriched_data?.address || "";
+  const company = sanitizeForPrompt(lead.company);
+  const industry = sanitizeForPrompt(lead.industry || "Local business");
+  const address = sanitizeForPrompt(lead.enriched_data?.address || "");
+  const contactName = sanitizeForPrompt(lead.name || "");
+  const website = sanitizeForPrompt(lead.website || "");
   const hasNoWebsite = enriched?.noWebsite || (!lead.website || !lead.website.startsWith("http"));
   const hasBrokenWebsite = enriched?.brokenWebsite || false;
+
+  // Sanitize enrichment data too
+  const enrichedSummary = enriched?.summary ? sanitizeForPrompt(enriched.summary) : "";
+  const enrichedIssues = enriched?.issues ? sanitizeForPrompt(enriched.issues) : "";
+  const enrichedGaps = enriched?.digitalGaps ? sanitizeForPrompt(enriched.digitalGaps) : "";
 
   // Extract city from address for hyper-local references
   const city = address ? address.split(",")[0].trim() : "";
@@ -79,18 +107,18 @@ What this means:
 - They are completely invisible online — no way for anyone to check their services, prices, or reviews before calling`;
   } else if (hasBrokenWebsite) {
     context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}
-⚠️ BROKEN WEBSITE — ${lead.website} is down or unreachable.
+⚠️ BROKEN WEBSITE — ${website} is down or unreachable.
 What this means:
 - Anyone searching for them online right now sees an error page
 - A broken site is worse than no site — it screams "this business is closed" to customers
 - Every day it stays broken, they lose walk-in and phone customers who check online first`;
   } else if (enriched) {
-    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${lead.website}\nWhat their site does: ${enriched.summary}`;
-    if (enriched.digitalGaps) {
-      context += `\nSpecific problems found on their site:\n${enriched.digitalGaps}`;
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${website}\nWhat their site does: ${enrichedSummary}`;
+    if (enrichedGaps) {
+      context += `\nSpecific problems found on their site:\n${enrichedGaps}`;
     }
-    if (enriched.issues) {
-      context += `\nTechnical issues: ${enriched.issues}`;
+    if (enrichedIssues) {
+      context += `\nTechnical issues: ${enrichedIssues}`;
     }
     if ((serviceType === "digital_marketing" || serviceType === "social_media") && lead.enriched_data) {
       const rating = lead.enriched_data.googleRating;
@@ -101,7 +129,7 @@ What this means:
       if (lead.enriched_data.hasAnalytics === false) context += `\nNo Google Analytics (flying blind — no visitor data)`;
     }
   } else {
-    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${lead.website || "N/A"}\nContact: ${lead.name}`;
+    context = `Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}\nWebsite: ${website || "N/A"}\nContact: ${contactName}`;
   }
 
   const toneInstructions: Record<ToneKey, string> = {
@@ -163,7 +191,7 @@ ${serviceApproach[serviceType]}
 
 LEAD DATA:
 Company name: ${company}
-Contact name: ${lead.name || ""}
+Contact name: ${contactName}
 ${context}
 
 CRITICAL RULES:
@@ -356,18 +384,22 @@ function isValidLead(lead: any): { valid: boolean; reason?: string } {
 
 // ===== CALL SCRIPT GENERATION =====
 function buildCallScriptPrompt(lead: any, enriched?: { summary?: string; issues?: string }, language: string = "eng"): string {
-  const industry = lead.industry || "Local business";
-  const address = lead.enriched_data?.address || "";
+  const industry = sanitizeForPrompt(lead.industry || "Local business");
+  const address = sanitizeForPrompt(lead.enriched_data?.address || "");
   const city = address ? address.split(",")[0].trim() : "";
+  const company = sanitizeForPrompt(lead.company);
+  const contactName = sanitizeForPrompt(lead.name || "the owner");
+  const enrichedSummary = enriched?.summary ? sanitizeForPrompt(enriched.summary) : "";
+  const enrichedIssues = enriched?.issues ? sanitizeForPrompt(enriched.issues) : "";
 
   return `Write a natural phone call script for cold-calling a local ${industry.toLowerCase()} business.
 
 LEAD DATA:
-Company: ${lead.company}
+Company: ${company}
 Industry: ${industry}${city ? `\nCity: ${city}` : ""}${address ? `\nFull address: ${address}` : ""}
 Phone: ${lead.phone || "N/A"}
-Contact: ${lead.name || "the owner"}
-${enriched ? `Website: ${enriched.summary}\nIssues found: ${enriched.issues}` : "No website or website not analyzed."}
+Contact: ${contactName}
+${enriched ? `Website: ${enrichedSummary}\nIssues found: ${enrichedIssues}` : "No website or website not analyzed."}
 
 SCRIPT STRUCTURE:
 1. OPENING (1 line): "Hi, is this [contact name or company]?" — simple, human, gets them talking.
@@ -380,7 +412,7 @@ RULES:
 - Sound like a real person, not reading from a telemarketer script
 - Use their company name and city naturally
 - NEVER say: "I'm calling from [Agency Name]", "partnership opportunity", "I'd love to help you grow"
-- If they have no website, lead with that: "I noticed ${lead.company} doesn't have a website yet — in ${city || "your area"}, about 70% of people search online before picking a ${industry.toLowerCase()}. Just wanted to see if that's something you've been thinking about."
+- If they have no website, lead with that: "I noticed ${company} doesn't have a website yet — in ${city || "your area"}, about 70% of people search online before picking a ${industry.toLowerCase()}. Just wanted to see if that's something you've been thinking about."
 - NEVER use placeholder brackets like [City], [Your Name], etc. Use actual data or skip.
 - The "opening" field should ONLY be the first greeting line
 - The "script" field should contain the full conversation flow after the opening
@@ -414,6 +446,8 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     // Get user's service type for email personalization
     const basicUserPlan = await getUserPlan(req.userId!);
     const basicServiceType: ServiceType = basicUserPlan.serviceType;
+    const features = getFeatureAccess(basicUserPlan.plan, basicUserPlan.isOnTrial);
+    const canIncludeAudit = features.auditReports;
 
     // Fetch leads for the campaign (only email-contactable leads)
     let query = supabase
@@ -470,7 +504,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       const hasNoWebsite = !lead.website || !lead.website.startsWith("http");
       const enrichedData = lead.enriched_data || {};
       const hasBrokenWebsite = !hasNoWebsite && (enrichedData._siteDown === true || (!enrichedData.title && !enrichedData.description && (!enrichedData.technologies || enrichedData.technologies.length === 0)));
-      const auditUrl = await ensureAuditToken(lead, basicServiceType);
+      const auditUrl = canIncludeAudit ? await ensureAuditToken(lead, basicServiceType) : undefined;
       const summary = enrichedData.summary || lead.company;
       const leadLanguage = lead.detected_language || "eng";
       const prompt = buildInitialPrompt(lead, tone, hasNoWebsite ? { noWebsite: true, auditUrl } : hasBrokenWebsite ? { brokenWebsite: true, auditUrl } : { summary, auditUrl }, basicServiceType, leadLanguage);
@@ -579,6 +613,8 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
     // Get user's service type to tailor email generation
     const userPlan = await getUserPlan(req.userId!);
     const userServiceType: ServiceType = userPlan.serviceType;
+    const userFeatures = getFeatureAccess(userPlan.plan, userPlan.isOnTrial);
+    const userCanIncludeAudit = userFeatures.auditReports;
 
     // Fetch campaign
     const { data: campaign, error: campaignError } = await supabase
@@ -797,7 +833,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       const digitalGaps = gaps.length > 0 ? gaps.join("\n") : "";
 
       // Initial email — auto-generate audit token if enrichment exists
-      const auditUrl = await ensureAuditToken(lead, userServiceType);
+      const auditUrl = userCanIncludeAudit ? await ensureAuditToken(lead, userServiceType) : undefined;
       const leadLanguage = lead.detected_language || "eng";
       const initialPrompt = buildInitialPrompt(lead, tone, { summary, issues, digitalGaps, noWebsite: hasNoWebsite, brokenWebsite: hasBrokenWebsite, auditUrl }, userServiceType, leadLanguage);
       try {
@@ -832,7 +868,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                 (async () => {
                   try {
                     const topGap = gaps.length > 0 ? gaps[0].replace("- ", "") : undefined;
-                    const f1Prompt = buildFollowup1Prompt(lead.company, issues, tone, topGap, leadLanguage);
+                    const f1Prompt = buildFollowup1Prompt(sanitizeForPrompt(lead.company), sanitizeForPrompt(issues), tone, topGap ? sanitizeForPrompt(topGap) : undefined, leadLanguage);
                     const f1 = await openai.chat.completions.create({
                       model: "gpt-4o",
                       messages: [{ role: "user", content: f1Prompt }],
@@ -863,7 +899,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                 // Follow-up 2
                 (async () => {
                   try {
-                    const f2Prompt = buildFollowup2Prompt(lead.company, tone, leadLanguage);
+                    const f2Prompt = buildFollowup2Prompt(sanitizeForPrompt(lead.company), tone, leadLanguage);
                     const f2 = await openai.chat.completions.create({
                       model: "gpt-4o",
                       messages: [{ role: "user", content: f2Prompt }],

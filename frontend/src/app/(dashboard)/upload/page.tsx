@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { apiPostFormData, apiGet } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import FeatureGate from "../FeatureGate";
+import { usePlan } from "../PlanContext";
 
 // ===== Toast Notification System =====
 type ToastType = "success" | "error" | "info";
@@ -82,29 +84,70 @@ function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast:
 }
 
 export default function UploadPage() {
+  const plan = usePlan();
   const [file, setFile] = useState<File | null>(null);
   const [campaignName, setCampaignName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [dailyUsed, setDailyUsed] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(50);
-  const [planLabel, setPlanLabel] = useState("Starter");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const toast = useToast();
 
+  const dailyLimit = plan.dailyLeadFindLimit;
+  const planLabel = plan.planLabel || "Starter";
   const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
   const isAtLimit = dailyRemaining <= 0;
 
   useEffect(() => {
-    apiGet<{ leadsFoundToday: number; dailyLeadFindLimit: number; planLabel: string }>("/stats")
-      .then((data) => {
-        setDailyUsed(data.leadsFoundToday);
-        setDailyLimit(data.dailyLeadFindLimit);
-        setPlanLabel(data.planLabel);
-      })
-      .catch(() => {});
-  }, []);
+    if (plan.loaded) {
+      setDailyUsed(plan.leadsFoundToday);
+    }
+  }, [plan.loaded, plan.leadsFoundToday]);
+
+  if (!plan.loaded) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: "calc(100vh - 120px)" }}>
+        <div className="relative flex items-center justify-center">
+          {/* Background glow */}
+          <div className="absolute w-40 h-40 rounded-full animate-pulse" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.15) 0%, transparent 70%)", animationDuration: "2s" }} />
+          
+          {/* Outer dashed ring - slow rotate */}
+          <div className="absolute w-32 h-32 rounded-full border border-dashed border-[#6962c4]/20 animate-spin" style={{ animationDuration: "8s" }} />
+          
+          {/* Outer gradient ring */}
+          <div className="absolute w-28 h-28 rounded-full animate-spin" style={{ animationDuration: "3s", background: "conic-gradient(from 0deg, transparent 0%, #6962c4 30%, transparent 60%)", mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px))", WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px))" }} />
+          
+          {/* Second gradient ring - counter rotate */}
+          <div className="absolute w-20 h-20 rounded-full animate-spin" style={{ animationDuration: "2s", animationDirection: "reverse", background: "conic-gradient(from 180deg, transparent 0%, #a78bfa 40%, transparent 70%)", mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px))", WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px))" }} />
+          
+          {/* Inner gradient ring - fast */}
+          <div className="absolute w-12 h-12 rounded-full animate-spin" style={{ animationDuration: "1.2s", background: "conic-gradient(from 90deg, transparent 0%, #818cf8 50%, transparent 80%)", mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 2px))", WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #fff calc(100% - 2px))" }} />
+          
+          {/* Center core with breathing effect */}
+          <div className="relative w-6 h-6 rounded-full animate-pulse" style={{ animationDuration: "1.5s", background: "radial-gradient(circle, #a78bfa 0%, #6962c4 60%, #4338ca 100%)", boxShadow: "0 0 20px rgba(105,98,196,0.9), 0 0 40px rgba(105,98,196,0.5), 0 0 60px rgba(105,98,196,0.3), inset 0 0 10px rgba(255,255,255,0.3)" }} />
+          
+          {/* Orbiting particles */}
+          <div className="absolute w-28 h-28 animate-spin" style={{ animationDuration: "3s" }}>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full" style={{ background: "linear-gradient(135deg, #a78bfa, #6962c4)", boxShadow: "0 0 10px rgba(167,139,250,0.9), 0 0 20px rgba(167,139,250,0.4)" }} />
+          </div>
+          <div className="absolute w-24 h-24 animate-spin" style={{ animationDuration: "2.2s", animationDirection: "reverse" }}>
+            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full" style={{ background: "linear-gradient(135deg, #818cf8, #6366f1)", boxShadow: "0 0 8px rgba(129,140,248,0.9)" }} />
+          </div>
+          <div className="absolute w-16 h-16 animate-spin" style={{ animationDuration: "1.6s" }}>
+            <div className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full" style={{ background: "#c4b5fd", boxShadow: "0 0 6px rgba(196,181,253,0.9)" }} />
+          </div>
+          <div className="absolute w-32 h-32 animate-spin" style={{ animationDuration: "4s", animationDirection: "reverse" }}>
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full" style={{ background: "#e9d5ff", boxShadow: "0 0 6px rgba(233,213,255,0.8)" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!plan.features.csvUpload) {
+    return <FeatureGate featureName="CSV Lead Upload" description="Upload your own lead lists via CSV to enrich and campaign against. Import leads from any source." requiredPlan="Growth" />;
+  }
 
   const handleFilePick = (selected: File | null) => {
     if (selected && selected.size > 2 * 1024 * 1024) {
@@ -358,6 +401,24 @@ export default function UploadPage() {
                   ))}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const csv = "email,company,website,name,phone,title,location,industry";
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "leads-template.csv";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="mt-4 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all hover:opacity-80"
+                style={{ color: "#3d3580", background: "rgba(105,98,196,0.08)", border: "1px solid rgba(105,98,196,0.2)" }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download Sample Template
+              </button>
             </div>
           </div>
 

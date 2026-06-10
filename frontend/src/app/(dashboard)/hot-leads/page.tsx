@@ -5,6 +5,8 @@ import { apiGet } from "@/lib/api";
 import { DashboardSkeleton } from "../Skeleton";
 import Pagination from "../Pagination";
 import Link from "next/link";
+import FeatureGate from "../FeatureGate";
+import { usePlan } from "../PlanContext";
 
 const PER_PAGE = 20;
 
@@ -47,6 +49,7 @@ function getHeatLevel(totalViews: number): { label: string; color: string; bg: s
 }
 
 export default function HotLeadsPage() {
+  const plan = usePlan();
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "replied" | "not-contacted">("all");
@@ -54,11 +57,17 @@ export default function HotLeadsPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
+    // Only fetch hot leads data if plan is loaded and user has access
+    if (!plan.loaded) return;
+    if (!plan.features.hotLeadTracking) {
+      setLoading(false);
+      return;
+    }
     apiGet<{ hotLeads: HotLead[] }>("/audit/hot-leads")
       .then((data) => setHotLeads(data.hotLeads))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [plan.loaded, plan.features.hotLeadTracking]);
 
   const filtered = useMemo(() => {
     let result = hotLeads;
@@ -82,7 +91,12 @@ export default function HotLeadsPage() {
   // Reset page when filter/search changes
   useEffect(() => { setPage(1); }, [filter, search]);
 
-  if (loading) return <DashboardSkeleton />;
+  // Show FeatureGate immediately once plan is loaded and no access
+  if (plan.loaded && !plan.features.hotLeadTracking) {
+    return <FeatureGate featureName="Hot Lead Tracking" description="See which leads opened your audit reports and track their engagement. Identify your warmest prospects." requiredPlan="Growth" />;
+  }
+
+  if (!plan.loaded || loading) return <DashboardSkeleton />;
 
   const totalViews = hotLeads.reduce((sum, l) => sum + l.totalViews, 0);
   const repliedCount = hotLeads.filter((l) => l.replied).length;

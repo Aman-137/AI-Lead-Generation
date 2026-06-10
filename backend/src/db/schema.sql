@@ -151,6 +151,11 @@ create table if not exists user_plans (
   user_id uuid references auth.users(id) on delete cascade not null unique,
   plan text not null default 'starter' check (plan in ('starter', 'growth', 'agency')),
   service_type text not null default 'web_dev' check (service_type in ('web_dev', 'seo', 'digital_marketing', 'social_media')),
+  subscription_status text not null default 'trialing' check (subscription_status in ('trialing', 'active', 'cancelled', 'past_due', 'expired')),
+  trial_ends_at timestamp with time zone default (now() + interval '7 days'),
+  lemon_squeezy_subscription_id text,
+  lemon_squeezy_customer_id text,
+  current_period_end timestamp with time zone,
   gmail_connected_at timestamp with time zone,
   is_active boolean default true,
   leads_found_this_month integer default 0,
@@ -502,3 +507,35 @@ returns void as $$
   set locked_at = '2000-01-01T00:00:00Z', locked_by = ''
   where lock_name = p_lock_name and locked_by = p_locked_by;
 $$ language sql volatile security definer;
+
+-- =============================================
+-- Table: audit_logs (security audit trail)
+-- =============================================
+create table if not exists audit_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  resource text,
+  resource_id text,
+  ip_address text,
+  user_agent text,
+  metadata jsonb default '{}',
+  created_at timestamp with time zone default now()
+);
+
+-- Index for querying by user and time
+create index if not exists idx_audit_logs_user_id on audit_logs(user_id);
+create index if not exists idx_audit_logs_action on audit_logs(action);
+create index if not exists idx_audit_logs_created_at on audit_logs(created_at desc);
+
+-- RLS: Users can only see their own audit logs
+alter table audit_logs enable row level security;
+
+create policy "Users can view their own audit logs"
+  on audit_logs for select using (auth.uid() = user_id);
+
+create policy "Service can insert audit logs"
+  on audit_logs for insert with check (true);
+
+-- Auto-cleanup: delete audit logs older than 90 days (run via pg_cron or scheduled function)
+-- select delete from audit_logs where created_at < now() - interval '90 days';

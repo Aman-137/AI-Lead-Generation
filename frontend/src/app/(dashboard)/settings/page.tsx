@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { SettingsAccountSkeleton } from "../Skeleton";
+import PricingModal from "./PricingModal";
 
 // ===== Toast Notification System =====
 type ToastType = "success" | "error" | "info";
@@ -147,8 +148,13 @@ export default function SettingsPage() {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [maxInboxes, setMaxInboxes] = useState(1);
   const [plan, setPlan] = useState("starter");
+  const [hasPlan, setHasPlan] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
+  const [isOnTrial, setIsOnTrial] = useState(false);
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [showPricingModal, setShowPricingModal] = useState(false);
 
   // SMTP form state
   const [showSmtpForm, setShowSmtpForm] = useState(false);
@@ -227,8 +233,8 @@ export default function SettingsPage() {
       if (!user?.user_metadata?.full_name) setProfileEditing(true);
     };
     loadProfile();
-    // Load service type from stats
-    apiGet<{ serviceType?: string }>("/stats").then((data) => {
+    // Load service type and subscription status from stats
+    apiGet<{ serviceType?: string; subscriptionStatus?: string; isOnTrial?: boolean; trialDaysLeft?: number }>("/stats").then((data) => {
       if (data.serviceType) {
         // Migrate deprecated social_media to digital_marketing
         const mapped = data.serviceType === "social_media" ? "digital_marketing" : data.serviceType;
@@ -237,6 +243,19 @@ export default function SettingsPage() {
       } else {
         setServiceType("web_dev");
         setSavedServiceType("web_dev");
+      }
+      // Set plan/trial status
+      setIsOnTrial(data.isOnTrial || false);
+      setTrialDaysLeft(data.trialDaysLeft ?? null);
+      if (data.subscriptionStatus === "expired" || data.subscriptionStatus === "cancelled") {
+        setHasPlan(false);
+        setIsExpired(true);
+      } else {
+        // "trialing" (active or expired trial) and "active" — show active plan card
+        // Once payment integration is live, expired trials will transition to "expired" status via webhook
+        setHasPlan(true);
+        setIsExpired(false);
+        setIsOnTrial(false);
       }
     }).catch(() => {
       setServiceType("web_dev");
@@ -829,6 +848,229 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Billing & Plans Card */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
+          <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>
+                <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white">Billing & Plans</h2>
+                <p className="text-xs text-white/60">Manage your subscription</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 flex flex-col justify-between" style={{ minHeight: "240px" }}>
+            {!hasPlan && !isExpired ? (
+              /* New user - no plan selected */
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="px-2.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 flex items-center justify-center leading-none">
+                      No Active Plan
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                      <span className="text-[10px] text-amber-600 font-medium">Action needed</span>
+                    </div>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">Get started with a plan</h3>
+                  <p className="text-[11px] text-gray-400 mb-3">Unlock AI lead generation with a <span className="text-emerald-600 font-bold">7-day free trial</span> — no charges until day 8.</p>
+
+                  {/* Trial timeline */}
+                  <div className="rounded-lg p-3 border border-[#e8e6f5] relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.04) 0%, rgba(61,53,128,0.06) 100%)" }}>
+                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-30" style={{ background: "radial-gradient(circle, rgba(105,98,196,0.3) 0%, transparent 70%)", transform: "translate(30%, -30%)" }} />
+                    <p className="text-[10px] font-bold text-gray-700 mb-2 flex items-center gap-1.5">
+                      <svg className="w-3 h-3" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      How your trial works
+                    </p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0" style={{ background: "#6962c4" }}>1</div>
+                        <p className="text-[10px] text-gray-600"><span className="font-semibold text-gray-800">Day 1–7:</span> Full access, zero charges</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0" style={{ background: "#6962c4" }}>2</div>
+                        <p className="text-[10px] text-gray-600"><span className="font-semibold text-gray-800">Day 8:</span> First payment from your card</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0" style={{ background: "#6962c4" }}>3</div>
+                        <p className="text-[10px] text-gray-600"><span className="font-semibold text-gray-800">Monthly:</span> Auto-renews, cancel anytime</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowPricingModal(true)}
+                  className="w-full py-2.5 text-sm font-bold rounded-lg text-white transition-all hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] mt-3"
+                  style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 50%, #8b7fd4 100%)" }}
+                >
+                  Select a Plan & Start Free Trial
+                </button>
+              </div>
+            ) : isExpired ? (
+              /* Expired plan - needs renewal */
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="px-2.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-50 border border-red-200 flex items-center justify-center leading-none">
+                      Plan Expired
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      <span className="text-[10px] font-semibold text-red-700">Inactive</span>
+                    </div>
+                  </div>
+
+                  {/* Previous plan info */}
+                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+                    <div>
+                      <p className="text-[10px] text-gray-400 mb-0.5">Previous plan</p>
+                      <span className="text-sm font-bold text-gray-900 capitalize">{plan}</span>
+                      <span className="text-xs text-gray-400 ml-1.5">
+                        {plan === "starter" ? "$39" : plan === "growth" ? "$79" : "$129"}/mo
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-400">Expired on</p>
+                      <p className="text-xs font-semibold text-red-600">Jun 4, 2026</p>
+                    </div>
+                  </div>
+
+                  {/* Warning box */}
+                  <div className="rounded-lg p-3 border border-red-100 relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(239,68,68,0.04) 0%, rgba(185,28,28,0.06) 100%)" }}>
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <div>
+                        <p className="text-[11px] font-bold text-gray-800 mb-1">Your access has been paused</p>
+                        <p className="text-[10px] text-gray-500 leading-relaxed">Lead generation, email campaigns, and AI features are disabled. Renew now to resume where you left off.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* What you lose */}
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      <span className="text-[10px] text-gray-500">Leads</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      <span className="text-[10px] text-gray-500">Emails</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      <span className="text-[10px] text-gray-500">AI</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                      <span className="text-[10px] text-gray-500">Campaigns</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowPricingModal(true)}
+                  className="w-full py-2.5 text-sm font-bold rounded-lg text-white transition-all hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] mt-3"
+                  style={{ background: "linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%)" }}
+                >
+                  Renew Plan
+                </button>
+              </div>
+            ) : (
+              /* Existing user - active plan */
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  {/* Plan name & badge */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="px-3 py-1.5 rounded-full text-xs font-bold text-white uppercase tracking-wider" style={{ background: plan === "starter" ? "#6962c4" : plan === "growth" ? "#059669" : "#d97706" }}>
+                      {plan} Plan
+                    </div>
+                    {isOnTrial ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+                        <div className="w-2 h-2 rounded-full bg-amber-500" />
+                        <span className="text-xs font-semibold text-amber-700">Trial{trialDaysLeft !== null ? ` · ${trialDaysLeft}d left` : ""}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-xs font-semibold text-emerald-700">Active</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Price & dates */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                    <div>
+                      <span className="text-2xl font-extrabold text-gray-900">
+                        {plan === "starter" ? "$39" : plan === "growth" ? "$79" : "$129"}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">per month</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-400">Purchased: <span className="text-gray-600 font-medium">May 4, 2026</span></p>
+                      <p className="text-[10px] text-gray-400">Expires: <span className="text-gray-600 font-medium">Jun 4, 2026</span></p>
+                    </div>
+                  </div>
+
+                  {/* Limits boxes */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl p-3 text-center border-2 border-[#e8e6f5]" style={{ background: "rgba(105,98,196,0.06)" }}>
+                      <p className="text-lg font-bold" style={{ color: "#3d3580" }}>
+                        {plan === "starter" ? "50" : plan === "growth" ? "100" : "200"}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-0.5">Leads/day</p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center border-2 border-[#e8e6f5]" style={{ background: "rgba(105,98,196,0.06)" }}>
+                      <p className="text-lg font-bold" style={{ color: "#3d3580" }}>
+                        {plan === "starter" ? "1" : plan === "growth" ? "3" : "5"}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-0.5">Inboxes</p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center border-2 border-[#e8e6f5]" style={{ background: "rgba(105,98,196,0.06)" }}>
+                      <p className="text-lg font-bold" style={{ color: "#3d3580" }}>
+                        {plan === "starter" ? "50" : plan === "growth" ? "100" : "200"}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-0.5">Emails/day</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => setShowPricingModal(true)}
+                    className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-white transition-all hover:opacity-90 hover:shadow-md"
+                    style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+                  >
+                    {plan === "starter" ? "Upgrade Plan" : "Manage Subscription"}
+                  </button>
+
+                  <button
+                    onClick={() => toast.addToast("Payment integration coming soon!", "info")}
+                    className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-red-500 border border-red-200 hover:bg-red-50 transition-all"
+                  >
+                    Cancel Plan
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pricing Modal */}
+        {showPricingModal && (
+          <PricingModal plan={plan} hasPlan={hasPlan} isExpired={isExpired} onClose={() => setShowPricingModal(false)} onToast={toast.addToast} />
+        )}
+
         {/* Gmail Card */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(47,39,108,0.4)" }}>
           <div className="px-6 py-4 border-b" style={{ background: "#2f276c", borderColor: "#2f276c" }}>
@@ -855,7 +1097,7 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-6" style={{ minHeight: "240px" }}>
             {loading ? (
               <SettingsAccountSkeleton />
             ) : gmailAccounts.length === 0 ? (

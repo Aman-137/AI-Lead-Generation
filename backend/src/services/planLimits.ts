@@ -7,6 +7,7 @@ import supabase from "./supabase";
 // Warmup tracks per Gmail inbox (gmail_connected_at), NOT per billing cycle.
 
 export type PlanTier = "starter" | "growth" | "agency";
+export type SubscriptionStatus = "trialing" | "active" | "cancelled" | "past_due" | "expired";
 
 interface PlanConfig {
   // Warmup schedule: daily send limits per week
@@ -49,6 +50,98 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanConfig> = {
     priceMonthly: 129,
   },
 };
+
+// =============================================
+// Trial Limits — uniform for all plans during trial
+// =============================================
+const TRIAL_DAILY_EMAILS = 50;
+const TRIAL_DAILY_LEADS = 50;
+const TRIAL_DAILY_GENERATIONS = 150; // 50 × 3
+const TRIAL_ENRICH_BATCH = 50;
+const TRIAL_MONTHLY_LEADS = 350; // ~50/day × 7 days
+
+// =============================================
+// Feature Gating — which features each plan unlocks
+// During trial: ALL features are accessible
+// After payment: features gated by plan
+// =============================================
+export interface FeatureAccess {
+  hotLeadTracking: boolean;
+  csvUpload: boolean;
+  auditReports: boolean;
+  prioritySupport: boolean;
+  autoFindLeads: boolean;
+  leadScoring: boolean;
+  emailPersonalization: boolean;
+  gmailWarmup: boolean;
+}
+
+export function getFeatureAccess(plan: PlanTier, isOnTrial: boolean): FeatureAccess {
+  // During trial: everything unlocked
+  if (isOnTrial) {
+    return {
+      hotLeadTracking: true,
+      csvUpload: true,
+      auditReports: true,
+      prioritySupport: true,
+      autoFindLeads: true,
+      leadScoring: true,
+      emailPersonalization: true,
+      gmailWarmup: true,
+    };
+  }
+
+  // After trial: gated by plan
+  switch (plan) {
+    case "starter":
+      return {
+        hotLeadTracking: false,
+        csvUpload: false,
+        auditReports: false,
+        prioritySupport: false,
+        autoFindLeads: true,
+        leadScoring: true,
+        emailPersonalization: true,
+        gmailWarmup: true,
+      };
+    case "growth":
+      return {
+        hotLeadTracking: true,
+        csvUpload: true,
+        auditReports: true,
+        prioritySupport: false,
+        autoFindLeads: true,
+        leadScoring: true,
+        emailPersonalization: true,
+        gmailWarmup: true,
+      };
+    case "agency":
+      return {
+        hotLeadTracking: true,
+        csvUpload: true,
+        auditReports: true,
+        prioritySupport: true,
+        autoFindLeads: true,
+        leadScoring: true,
+        emailPersonalization: true,
+        gmailWarmup: true,
+      };
+  }
+}
+
+// Check if user is currently on trial (status is trialing AND trial hasn't expired)
+export function isTrialing(subscriptionStatus: SubscriptionStatus, trialEndsAt: string | null): boolean {
+  if (subscriptionStatus !== "trialing") return false;
+  if (!trialEndsAt) return false;
+  return new Date(trialEndsAt) > new Date();
+}
+
+// Check if trial has expired without payment
+export function isTrialExpired(subscriptionStatus: SubscriptionStatus, trialEndsAt: string | null): boolean {
+  if (subscriptionStatus !== "trialing") return false;
+  if (!trialEndsAt) return true;
+  return new Date(trialEndsAt) <= new Date();
+}
 
 // Default plan for new users
 const DEFAULT_PLAN: PlanTier = "starter";
@@ -111,6 +204,9 @@ export type ServiceType = "web_dev" | "seo" | "digital_marketing" | "social_medi
 export async function getUserPlan(userId: string): Promise<{
   plan: PlanTier;
   serviceType: ServiceType;
+  subscriptionStatus: SubscriptionStatus;
+  trialEndsAt: string | null;
+  isOnTrial: boolean;
   gmailConnectedAt: string | null;
   isActive: boolean;
   leadsFoundThisMonth: number;
@@ -137,6 +233,8 @@ export async function getUserPlan(userId: string): Promise<{
       .upsert({
         user_id: userId,
         plan: DEFAULT_PLAN,
+        subscription_status: "trialing",
+        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         is_active: true,
         leads_found_this_month: 0,
         leads_found_reset_at: new Date().toISOString(),
@@ -162,6 +260,9 @@ export async function getUserPlan(userId: string): Promise<{
       return {
         plan: DEFAULT_PLAN,
         serviceType: "web_dev" as ServiceType,
+        subscriptionStatus: "trialing" as SubscriptionStatus,
+        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        isOnTrial: true,
         gmailConnectedAt: null,
         isActive: true,
         leadsFoundThisMonth: 0,
@@ -178,9 +279,14 @@ export async function getUserPlan(userId: string): Promise<{
 
     // Use the REAL data from the DB (preserves existing counters)
     const tz = plan2.timezone || "UTC";
+    const subStatus = (plan2.subscription_status || "trialing") as SubscriptionStatus;
+    const trialEnds = plan2.trial_ends_at || null;
     return {
       plan: plan2.plan as PlanTier,
       serviceType: (plan2.service_type || "web_dev") as ServiceType,
+      subscriptionStatus: subStatus,
+      trialEndsAt: trialEnds,
+      isOnTrial: isTrialing(subStatus, trialEnds),
       gmailConnectedAt: plan2.gmail_connected_at,
       isActive: plan2.is_active,
       leadsFoundThisMonth: plan2.leads_found_this_month || 0,
@@ -211,9 +317,15 @@ export async function getUserPlan(userId: string): Promise<{
   const effectiveEmailsSentToday = isDailyCounterExpired(data.emails_sent_today_reset_at, userTz)
     ? 0 : (data.emails_sent_today || 0);
 
+  const subStatus = (data.subscription_status || "trialing") as SubscriptionStatus;
+  const trialEnds = data.trial_ends_at || null;
+
   return {
     plan: data.plan as PlanTier,
     serviceType: (data.service_type || "web_dev") as ServiceType,
+    subscriptionStatus: subStatus,
+    trialEndsAt: trialEnds,
+    isOnTrial: isTrialing(subStatus, trialEnds),
     gmailConnectedAt: data.gmail_connected_at,
     isActive: data.is_active,
     leadsFoundThisMonth: data.leads_found_this_month || 0,
@@ -301,7 +413,7 @@ export async function getDailyLimit(userId: string): Promise<{
       warmupDay: 0,
       warmupComplete: false,
       warmupPaused: false,
-      maxCap: config.maxDailyEmails,
+      maxCap: userPlan.isOnTrial ? TRIAL_DAILY_EMAILS : config.maxDailyEmails,
     };
   }
 
@@ -335,13 +447,17 @@ export async function getDailyLimit(userId: string): Promise<{
     warmupComplete = true;
   }
 
+  // During trial: cap sending at trial limit (warmup still applies if lower)
+  const effectiveMaxCap = userPlan.isOnTrial ? TRIAL_DAILY_EMAILS : config.maxDailyEmails;
+  limit = Math.min(limit, effectiveMaxCap);
+
   return {
     limit,
     plan: userPlan.plan,
     warmupDay,
     warmupComplete,
     warmupPaused,
-    maxCap: config.maxDailyEmails,
+    maxCap: effectiveMaxCap,
   };
 }
 
@@ -353,6 +469,7 @@ export async function getDailyLimit(userId: string): Promise<{
 // =============================================
 export async function getDailyLeadFindLimit(userId: string): Promise<number> {
   const userPlan = await getUserPlan(userId);
+  if (userPlan.isOnTrial) return TRIAL_DAILY_LEADS;
   const config = PLAN_CONFIGS[userPlan.plan];
   return config.maxDailyEmails; // 50 / 100 / 200
 }
@@ -417,7 +534,7 @@ export async function checkDailyLeadFindLimit(userId: string): Promise<{
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
-  const dailyLimit = config.maxDailyEmails; // 50 / 100 / 200
+  const dailyLimit = userPlan.isOnTrial ? TRIAL_DAILY_LEADS : config.maxDailyEmails;
   const usedToday = userPlan.leadsFoundToday;
   const remaining = Math.max(0, dailyLimit - usedToday);
 
@@ -441,6 +558,7 @@ export async function checkLeadFindLimit(userId: string): Promise<{
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
+  const monthlyLimit = userPlan.isOnTrial ? TRIAL_MONTHLY_LEADS : config.monthlyLeadFindLimit;
 
   // Check if we need to reset the monthly counter (30 days from last reset)
   const resetAt = new Date(userPlan.leadsFoundResetAt);
@@ -461,15 +579,15 @@ export async function checkLeadFindLimit(userId: string): Promise<{
     return {
       allowed: true,
       used: 0,
-      limit: config.monthlyLeadFindLimit,
+      limit: monthlyLimit,
       plan: userPlan.plan,
     };
   }
 
   return {
-    allowed: userPlan.leadsFoundThisMonth < config.monthlyLeadFindLimit,
+    allowed: userPlan.leadsFoundThisMonth < monthlyLimit,
     used: userPlan.leadsFoundThisMonth,
-    limit: config.monthlyLeadFindLimit,
+    limit: monthlyLimit,
     plan: userPlan.plan,
   };
 }
@@ -523,6 +641,11 @@ export async function setGmailConnectedAt(userId: string): Promise<void> {
 export async function getPlanInfo(userId: string): Promise<{
   plan: PlanTier;
   serviceType: ServiceType;
+  subscriptionStatus: SubscriptionStatus;
+  isOnTrial: boolean;
+  trialEndsAt: string | null;
+  trialDaysLeft: number;
+  features: FeatureAccess;
   planLabel: string;
   priceMonthly: number;
   dailyLimit: number;
@@ -551,24 +674,38 @@ export async function getPlanInfo(userId: string): Promise<{
     agency: "Agency",
   };
 
+  // Calculate trial days remaining
+  let trialDaysLeft = 0;
+  if (userPlan.isOnTrial && userPlan.trialEndsAt) {
+    trialDaysLeft = Math.max(0, Math.ceil((new Date(userPlan.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  }
+
+  // Effective limits based on trial status
+  const effectiveDailyLeadLimit = userPlan.isOnTrial ? TRIAL_DAILY_LEADS : config.maxDailyEmails;
+  const effectiveMonthlyLeadLimit = userPlan.isOnTrial ? TRIAL_MONTHLY_LEADS : config.monthlyLeadFindLimit;
+
   return {
     plan: userPlan.plan,
     serviceType: userPlan.serviceType,
+    subscriptionStatus: userPlan.subscriptionStatus,
+    isOnTrial: userPlan.isOnTrial,
+    trialEndsAt: userPlan.trialEndsAt,
+    trialDaysLeft,
+    features: getFeatureAccess(userPlan.plan, userPlan.isOnTrial),
     planLabel: planLabels[userPlan.plan],
     priceMonthly: config.priceMonthly,
     dailyLimit: dailyInfo.limit,
-    maxDailyEmails: config.maxDailyEmails,
+    maxDailyEmails: userPlan.isOnTrial ? TRIAL_DAILY_EMAILS : config.maxDailyEmails,
     warmupDay: dailyInfo.warmupDay,
     warmupComplete: dailyInfo.warmupComplete,
     warmupPaused: dailyInfo.warmupPaused,
     warmupWeek,
     leadsFoundThisMonth: userPlan.leadsFoundThisMonth,
-    monthlyLeadFindLimit: config.monthlyLeadFindLimit,
+    monthlyLeadFindLimit: effectiveMonthlyLeadLimit,
     leadsFoundToday,
-    dailyLeadFindLimit: config.maxDailyEmails,
+    dailyLeadFindLimit: effectiveDailyLeadLimit,
   };
 }
-
 // =============================================
 // Daily AI generation cap (OpenAI cost protection)
 // Uses a dedicated counter in user_plans (not DB row count)
@@ -614,8 +751,9 @@ export async function checkDailyGenerationLimit(userId: string): Promise<{
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
+  const dailyLimit = userPlan.isOnTrial ? TRIAL_DAILY_GENERATIONS : config.maxDailyGenerations;
   const usedToday = userPlan.emailsGeneratedToday;
-  const remaining = Math.max(0, config.maxDailyGenerations - usedToday);
+  const remaining = Math.max(0, dailyLimit - usedToday);
 
   return {
     allowed: remaining > 0,
@@ -631,6 +769,7 @@ export async function checkDailyGenerationLimit(userId: string): Promise<{
 // =============================================
 export async function getMaxEnrichBatchSize(userId: string): Promise<number> {
   const userPlan = await getUserPlan(userId);
+  if (userPlan.isOnTrial) return TRIAL_ENRICH_BATCH;
   return PLAN_CONFIGS[userPlan.plan].maxEnrichBatchSize;
 }
 

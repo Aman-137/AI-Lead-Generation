@@ -30,6 +30,16 @@ interface Stats {
   monthlyLeadFindLimit: number;
   leadsFoundToday: number;
   dailyLeadFindLimit: number;
+  subscriptionStatus: string;
+  isOnTrial: boolean;
+  trialEndsAt: string | null;
+  trialDaysLeft: number;
+  features: {
+    hotLeadTracking: boolean;
+    csvUpload: boolean;
+    auditReports: boolean;
+    prioritySupport: boolean;
+  };
 }
 
 interface AuditView {
@@ -53,6 +63,8 @@ export default function DashboardPage() {
     maxDailyEmails: 50, warmupDay: 0, warmupComplete: false, warmupWeek: 0, warmupPaused: false,
     leadsFoundThisMonth: 0, monthlyLeadFindLimit: 100,
     leadsFoundToday: 0, dailyLeadFindLimit: 50,
+    subscriptionStatus: "trialing", isOnTrial: true, trialEndsAt: null, trialDaysLeft: 7,
+    features: { hotLeadTracking: true, csvUpload: true, auditReports: true, prioritySupport: true },
   });
   const [displayName, setDisplayName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -137,8 +149,13 @@ export default function DashboardPage() {
             </h1>
             <div className="flex items-center gap-3 mt-3">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "rgba(105,98,196,0.2)", color: "#c4b5fd", boxShadow: "inset 0 0 0 1px rgba(105,98,196,0.4)" }}>
-                {stats.planLabel} Plan
+                {stats.isOnTrial ? "Free Trial" : `${stats.planLabel} Plan`}
               </span>
+              {stats.isOnTrial && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium" style={{ background: stats.trialDaysLeft <= 2 ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)", color: stats.trialDaysLeft <= 2 ? "#fca5a5" : "#34d399", boxShadow: `inset 0 0 0 1px ${stats.trialDaysLeft <= 2 ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)"}` }}>
+                  ⏱ {stats.trialDaysLeft} day{stats.trialDaysLeft !== 1 ? "s" : ""} left
+                </span>
+              )}
               {!stats.warmupComplete && (stats.warmupDay > 0 || stats.warmupPaused) && (
                 <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium" style={{ background: stats.warmupPaused ? "rgba(148,163,184,0.15)" : "rgba(245,158,11,0.15)", color: stats.warmupPaused ? "#94a3b8" : "#fbbf24", boxShadow: `inset 0 0 0 1px ${stats.warmupPaused ? "rgba(148,163,184,0.3)" : "rgba(245,158,11,0.3)"}` }}>
                   {stats.warmupPaused ? "⏸" : "⏳"} Warmup · Day {stats.warmupDay}/21
@@ -175,6 +192,40 @@ export default function DashboardPage() {
       {error && (
         <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4">
           <p className="text-sm text-rose-600">Failed to load dashboard stats. Please refresh.</p>
+        </div>
+      )}
+
+      {/* Trial Banner */}
+      {stats.isOnTrial && (
+        <div className="mb-6 rounded-2xl p-5 border" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.05) 0%, rgba(167,139,250,0.08) 100%)", borderColor: "rgba(105,98,196,0.2)" }}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
+                <span className="text-lg">🚀</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">
+                  {stats.trialDaysLeft > 0 ? (
+                    <>Your free trial ends in <span style={{ color: "#6962c4" }}>{stats.trialDaysLeft} day{stats.trialDaysLeft !== 1 ? "s" : ""}</span></>
+                  ) : (
+                    <span className="text-red-600">Your free trial has expired</span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {stats.trialDaysLeft > 0
+                    ? "You have full access to all features during your trial. Subscribe to keep your data and continue."
+                    : "Subscribe now to continue using all features and keep your data."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/settings")}
+              className="px-5 py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+            >
+              Choose a Plan
+            </button>
+          </div>
         </div>
       )}
 

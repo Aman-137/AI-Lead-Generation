@@ -29,6 +29,18 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
+// Sanitize CSV cell value to prevent formula injection
+// Excel/Sheets execute formulas starting with =, +, -, @, tab, or carriage return
+function sanitizeCSVCell(value: string): string {
+  if (!value) return value;
+  const dangerousChars = ["=", "+", "-", "@", "\t", "\r"];
+  if (dangerousChars.includes(value[0])) {
+    // Prefix with single quote to neutralize formula execution
+    return `'${value}`;
+  }
+  return value;
+}
+
 export function parseCSV(text: string): Record<string, string>[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -41,7 +53,7 @@ export function parseCSV(text: string): Record<string, string>[] {
     const values = parseCSVLine(lines[i]);
     const row: Record<string, string> = {};
     headers.forEach((header, index) => {
-      row[header] = values[index] || "";
+      row[header] = sanitizeCSVCell(values[index] || "");
     });
     rows.push(row);
   }

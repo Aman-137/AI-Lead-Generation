@@ -507,7 +507,7 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 // ===== Lead Detail Modal =====
-function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+function LeadDetailModal({ lead, onClose, canGenerateAudit }: { lead: Lead; onClose: () => void; canGenerateAudit: boolean }) {
   const ed = lead.enriched_data;
   const [auditUrl, setAuditUrl] = useState<string | null>(ed?.audit_token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/audit/${ed.audit_token}` : null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -630,7 +630,25 @@ function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void })
             {/* Audit Report */}
             {ed && (
               <div className="rounded-xl p-4 flex flex-col justify-center" style={{ background: "rgba(105,98,196,0.06)", border: "1px solid rgba(105,98,196,0.2)" }}>
-                {auditLoading ? (
+                {!canGenerateAudit ? (
+                  <div className="text-center py-2">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center mx-auto mb-2" style={{ background: "rgba(105,98,196,0.2)" }}>
+                      <svg className="w-4.5 h-4.5" style={{ color: "#a78bfa" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-sm font-semibold text-white mb-1">Website Audit Report</p>
+                    <p className="text-[11px] mb-3" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      Available on Growth &amp; Agency plans
+                    </p>
+                    <button
+                      onClick={() => window.location.href = "/settings"}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
+                      style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)", boxShadow: "0 2px 10px rgba(105,98,196,0.4)" }}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                      Upgrade to Unlock
+                    </button>
+                  </div>
+                ) : auditLoading ? (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs font-semibold" style={{ color: "#a78bfa" }}>{auditStep}</p>
@@ -1059,6 +1077,7 @@ export default function CampaignDetailPage() {
   const [emailPreviewLeadId, setEmailPreviewLeadId] = useState<string | null>(null);
   const [callScriptPreviewLeadId, setCallScriptPreviewLeadId] = useState<string | null>(null);
   const [auditViews, setAuditViews] = useState<Record<string, { count: number; lastViewed: string; device: string }>>({});
+  const [canGenerateAudit, setCanGenerateAudit] = useState(true);
   const LEADS_PER_PAGE = 10;
 
   // Reset lead page when search changes
@@ -1114,6 +1133,12 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     fetchCampaign();
+    // Check audit feature access
+    apiGet<{ features?: { auditReports?: boolean }; isOnTrial?: boolean }>("/stats")
+      .then((data) => {
+        setCanGenerateAudit(data.isOnTrial || data.features?.auditReports !== false);
+      })
+      .catch(() => {});
   }, [fetchCampaign]);
 
   // Step 3: Generate Emails
@@ -1330,7 +1355,7 @@ export default function CampaignDetailPage() {
   return (
     <div>
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
-      {detailLead && <LeadDetailModal lead={detailLead} onClose={() => setDetailLead(null)} />}
+      {detailLead && <LeadDetailModal lead={detailLead} onClose={() => setDetailLead(null)} canGenerateAudit={canGenerateAudit} />}
       {callScriptPreviewLeadId && (() => {
         const script = callScripts.find(s => s.lead_id === callScriptPreviewLeadId);
         return script ? (

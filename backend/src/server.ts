@@ -1,6 +1,7 @@
 import "./config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import logger from "./utils/logger";
 import leadsRouter from "./routes/leads";
 import campaignsRouter from "./routes/campaigns";
@@ -10,6 +11,8 @@ import gmailRouter from "./routes/gmail";
 import smtpRouter from "./routes/smtp";
 import statsRouter from "./routes/stats";
 import auditRouter from "./routes/audit";
+import billingRouter from "./routes/billing";
+import webhooksRouter from "./routes/webhooks";
 import { apiLimiter, sendEmailLimiter, generateLimiter } from "./middleware/rateLimit";
 import { sanitizeBody, validateCampaignId } from "./middleware/validate";
 import { startEmailQueue, stopEmailQueue } from "./jobs/emailQueue";
@@ -17,6 +20,40 @@ import { startCsvDripFeed, stopCsvDripFeed } from "./jobs/csvDripFeed";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow cross-origin resources (images, fonts)
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+}));
+
+// HTTPS enforcement — redirect HTTP to HTTPS in production
+// Reverse proxies (Vercel, Railway, Render) set x-forwarded-proto
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    if (req.headers["x-forwarded-proto"] === "http") {
+      const httpsUrl = `https://${req.headers.host}${req.url}`;
+      return res.redirect(301, httpsUrl);
+    }
+    next();
+  });
+}
+
+// Health check — before CORS so uptime monitors work without Origin header
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Middleware
 const allowedOrigins = [
@@ -28,8 +65,15 @@ const allowedOrigins = [
 
 app.use(cors({
   origin(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, health checks)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin ONLY in development (for curl/Postman)
+    // In production, no-origin requests are blocked to prevent CSRF-like bypasses
+    if (!origin) {
+      if (process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      // In production, reject no-origin requests (server-side scripts, etc.)
+      return callback(new Error("Origin header required"));
+    }
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -37,7 +81,13 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({
+  limit: "1mb",
+  verify: (req: any, _res, buf) => {
+    // Store raw body for webhook signature verification
+    req.rawBody = buf.toString();
+  },
+}));
 app.use(sanitizeBody);
 app.use(apiLimiter);
 
@@ -50,11 +100,13 @@ app.use("/api/gmail", gmailRouter);
 app.use("/api/smtp", smtpRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/audit", auditRouter);
+app.use("/api/billing", billingRouter);
 
-// Health check
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+// Webhooks — no CORS/auth/rate-limit needed (Lemon Squeezy calls directly)
+app.use("/api/webhooks/lemonsqueezy", webhooksRouter);
+
+// OAuth callback route (Gmail) needs no origin — Google redirects browser directly
+// It's already protected by HMAC-signed state parameter verification
 
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, "Backend server running");

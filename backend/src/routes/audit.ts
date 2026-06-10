@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import { getPageSpeedScores } from "../services/pageSpeed";
-import { getUserPlan } from "../services/planLimits";
+import { getUserPlan, getFeatureAccess } from "../services/planLimits";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -16,6 +16,14 @@ router.post("/generate", authMiddleware, async (req: AuthenticatedRequest, res) 
 
     if (!leadId) {
       res.status(400).json({ error: "Lead ID is required" });
+      return;
+    }
+
+    // Check if user has audit report access (trial users get full access, Starter paid does not)
+    const userPlanData = await getUserPlan(req.userId!);
+    const features = getFeatureAccess(userPlanData.plan, userPlanData.isOnTrial);
+    if (!features.auditReports) {
+      res.status(403).json({ error: "Audit reports are available on Growth and Agency plans. Upgrade to access this feature." });
       return;
     }
 

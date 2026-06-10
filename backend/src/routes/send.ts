@@ -4,6 +4,7 @@ import supabase from "../services/supabase";
 import { getAllEmailAccounts, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
 import { getDailyLimit, getUserPlan } from "../services/planLimits";
 import logger from "../utils/logger";
+import { auditLog } from "../utils/auditLog";
 
 const router = Router();
 
@@ -421,6 +422,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
     }
 
     logger.info({ campaignId, userId: req.userId, totalQueued, cancelled: cancelledFollowUps.length }, "Campaign queued for sending");
+    auditLog({ userId: req.userId, action: "email.send", resource: "campaigns", resourceId: campaignId, req, metadata: { totalQueued, cancelled: cancelledFollowUps.length } });
 
     res.json({
       message,

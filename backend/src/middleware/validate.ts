@@ -14,10 +14,16 @@ function sanitize(value: string, maxLength: number = 500): string {
   return String(value).trim().slice(0, maxLength);
 }
 
-// Validate email format
+// Validate email format — stricter regex that rejects garbage like +++@+++.+
 export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  // Must have: valid local part (letters, digits, ._%+-), @ symbol, domain with at least 2-char TLD
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) return false;
+  // Additional checks: no consecutive dots, local part not starting/ending with dot
+  const [local, domain] = email.split("@");
+  if (local.startsWith(".") || local.endsWith(".") || local.includes("..")) return false;
+  if (domain.startsWith(".") || domain.includes("..")) return false;
+  return true;
 }
 
 // Validate UUID format

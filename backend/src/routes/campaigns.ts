@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import supabase from "../services/supabase";
 import { isValidUUID } from "../middleware/validate";
+import { auditLog } from "../utils/auditLog";
 
 const router = Router();
 
@@ -217,6 +218,7 @@ router.delete("/:id", authMiddleware, async (req: AuthenticatedRequest, res) => 
       return;
     }
 
+    auditLog({ userId: req.userId, action: "campaign.delete", resource: "campaigns", resourceId: id, req });
     res.json({ message: "Campaign deleted successfully" });
   } catch {
     res.status(500).json({ error: "Internal server error" });
