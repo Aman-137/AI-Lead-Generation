@@ -13,13 +13,17 @@ interface PricingModalProps {
 
 export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToast }: PricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   async function handleSubscribe(selectedPlan: string) {
     setLoading(selectedPlan);
     try {
       const res = await apiPost<{ checkoutUrl?: string }>("/billing/checkout", { plan: selectedPlan });
       if (res.checkoutUrl) {
-        window.location.href = res.checkoutUrl;
+        // Append embed=1 to open in iframe-friendly mode
+        const url = new URL(res.checkoutUrl);
+        url.searchParams.set("embed", "1");
+        setCheckoutUrl(url.toString());
       } else {
         onToast("Failed to create checkout session", "error");
       }
@@ -45,6 +49,41 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
       setLoading(null);
     }
   }
+  // Detect when iframe navigates to success URL (user clicks Continue in LS)
+  function handleIframeLoad(e: React.SyntheticEvent<HTMLIFrameElement>) {
+    try {
+      const iframeUrl = e.currentTarget.contentWindow?.location.href;
+      if (iframeUrl && iframeUrl.includes("/settings?payment=success")) {
+        window.location.href = "/settings?payment=success";
+      }
+    } catch {
+      // Cross-origin - can't access iframe URL, ignore
+    }
+  }
+
+  // If checkout URL is set, show checkout inside the same modal shell
+  if (checkoutUrl) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-3xl shadow-2xl max-w-[1100px] w-full h-[calc(100vh-2.8rem)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setCheckoutUrl(null)}
+            className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <iframe
+            src={checkoutUrl}
+            className="w-full h-full border-0 rounded-3xl"
+            title="Checkout"
+            onLoad={handleIframeLoad}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />

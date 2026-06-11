@@ -42,6 +42,8 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
       return res.status(500).json({ error: `Variant ID not configured for ${plan} plan` });
     }
 
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
     // Create checkout with user metadata
     const { data, error } = await createCheckout(storeId, variantId, {
       checkoutData: {
@@ -54,9 +56,9 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
         embed: false,
       },
       productOptions: {
-        redirectUrl: `${process.env.FRONTEND_URL}/settings?payment=success`,
-        receiptButtonText: "Go to Dashboard",
-        receiptLinkUrl: `${process.env.FRONTEND_URL}/settings`,
+        redirectUrl: `${frontendUrl}/settings?payment=success`,
+        receiptButtonText: "Continue",
+        receiptLinkUrl: `${frontendUrl}/settings?payment=success`,
       },
       testMode: process.env.NODE_ENV !== "production",
     });

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 import SidebarNav from "./SidebarNav";
 import PageTitle from "./PageTitle";
+import TrialBadge from "./TrialBadge";
 import { PlanProvider } from "./PlanContext";
 
 function AvatarDropdown({ displayName, avatarUrl }: { displayName: string; avatarUrl?: string }) {
@@ -83,12 +84,16 @@ export default async function DashboardLayout({
   const avatarUrl = user.user_metadata?.avatar_url;
 
   return (
+    <PlanProvider>
     <div className="min-h-screen" style={{ background: "linear-gradient(180deg, #f5f3ff 0%, #ede9fe 50%, #f5f3ff 100%)" }}>
       {/* Fixed top header */}
       <header className="fixed top-0 left-64 right-0 h-16 flex items-center justify-between px-8 z-40" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(245,243,255,0.95) 100%)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(105,98,196,0.1)", boxShadow: "0 1px 8px rgba(105,98,196,0.04)" }}>
         {/* Subtle decorative accent line at top */}
         <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: "linear-gradient(90deg, #6962c4 0%, #a78bfa 40%, #6962c4 70%, transparent 100%)" }} />
         <PageTitle />
+        <div className="absolute left-1/2 -translate-x-1/2">
+          <TrialBadge />
+        </div>
         <AvatarDropdown displayName={displayName} avatarUrl={avatarUrl} />
       </header>
 
@@ -117,7 +122,8 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="ml-64 pt-[88px] p-8"><PlanProvider>{children}</PlanProvider></main>
+      <main className="ml-64 pt-[88px] p-8">{children}</main>
     </div>
+    </PlanProvider>
   );
 }

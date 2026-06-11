@@ -10,6 +10,7 @@ const pageTitles: Record<string, string> = {
   "/hot-leads": "Hot Leads",
   "/settings": "Settings",
   "/help": "Help & Support",
+  "/user-guide": "User Guide",
 };
 
 export default function PageTitle() {

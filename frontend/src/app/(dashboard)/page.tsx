@@ -195,39 +195,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Trial Banner */}
-      {stats.isOnTrial && (
-        <div className="mb-6 rounded-2xl p-5 border" style={{ background: "linear-gradient(135deg, rgba(105,98,196,0.05) 0%, rgba(167,139,250,0.08) 100%)", borderColor: "rgba(105,98,196,0.2)" }}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.15)" }}>
-                <span className="text-lg">🚀</span>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">
-                  {stats.trialDaysLeft > 0 ? (
-                    <>Your free trial ends in <span style={{ color: "#6962c4" }}>{stats.trialDaysLeft} day{stats.trialDaysLeft !== 1 ? "s" : ""}</span></>
-                  ) : (
-                    <span className="text-red-600">Your free trial has expired</span>
-                  )}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {stats.trialDaysLeft > 0
-                    ? "You have full access to all features during your trial. Subscribe to keep your data and continue."
-                    : "Subscribe now to continue using all features and keep your data."}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => router.push("/settings")}
-              className="px-5 py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
-            >
-              Choose a Plan
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Onboarding Checklist */}
       {onboarding && (
