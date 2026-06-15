@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiGet, apiPut } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardSkeleton } from "./Skeleton";
+import { usePlan } from "./PlanContext";
 
 interface Stats {
   totalLeads: number;
@@ -72,6 +73,14 @@ export default function DashboardPage() {
   const [auditViews, setAuditViews] = useState<AuditViewsResponse>({ views: [], leads: {} });
   const [onboarding, setOnboarding] = useState<{ hasProfile: boolean; hasEmail: boolean; hasServiceType: boolean; hasLeads: boolean } | null>(null);
   const router = useRouter();
+  const plan = usePlan();
+
+  // Early redirect: if PlanContext already knows status is "none", go to settings immediately
+  useEffect(() => {
+    if (plan.loaded && plan.subscriptionStatus === "none") {
+      router.push("/settings");
+    }
+  }, [plan.loaded, plan.subscriptionStatus, router]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,6 +94,12 @@ export default function DashboardPage() {
 
         const data = await apiGet<Stats & { serviceType?: string }>("/stats");
         setStats(data);
+
+        // Redirect brand-new users (no plan selected) to settings to complete setup
+        if (data.subscriptionStatus === "none") {
+          router.push("/settings");
+          return;
+        }
 
         // Determine onboarding state (only if not dismissed)
         if (!onboardingDone) {

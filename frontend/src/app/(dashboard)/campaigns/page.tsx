@@ -6,6 +6,7 @@ import { apiGet, apiDelete } from "@/lib/api";
 import SearchBar from "../SearchBar";
 import { CampaignCardsSkeleton } from "../Skeleton";
 import Pagination from "../Pagination";
+import FeatureAccessGuard from "../FeatureAccessGuard";
 
 interface Campaign {
   id: string;
@@ -101,6 +102,7 @@ export default function CampaignsPage() {
   useEffect(() => { setPage(1); }, [search, sourceFilter]);
 
   return (
+    <FeatureAccessGuard>
     <div>
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
@@ -382,5 +384,6 @@ export default function CampaignsPage() {
         </div>
       )}
     </div>
+    </FeatureAccessGuard>
   );
 }

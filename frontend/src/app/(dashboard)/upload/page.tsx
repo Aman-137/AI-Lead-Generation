@@ -5,6 +5,7 @@ import { apiPostFormData, apiGet } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import FeatureGate from "../FeatureGate";
 import { usePlan } from "../PlanContext";
+import LockedFeatureModal from "../LockedFeatureModal";
 
 // ===== Toast Notification System =====
 type ToastType = "success" | "error" | "info";
@@ -143,6 +144,10 @@ export default function UploadPage() {
         </div>
       </div>
     );
+  }
+
+  if (!plan.canAccessFeatures) {
+    return <LockedFeatureModal />;
   }
 
   if (!plan.features.csvUpload) {

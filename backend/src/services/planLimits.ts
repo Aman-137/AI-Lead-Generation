@@ -7,7 +7,7 @@ import supabase from "./supabase";
 // Warmup tracks per Gmail inbox (gmail_connected_at), NOT per billing cycle.
 
 export type PlanTier = "starter" | "growth" | "agency";
-export type SubscriptionStatus = "trialing" | "active" | "cancelled" | "past_due" | "expired";
+export type SubscriptionStatus = "none" | "trialing" | "active" | "cancelled" | "past_due" | "paused" | "expired";
 
 interface PlanConfig {
   // Warmup schedule: daily send limits per week
@@ -143,6 +143,73 @@ export function isTrialExpired(subscriptionStatus: SubscriptionStatus, trialEnds
   return new Date(trialEndsAt) <= new Date();
 }
 
+// =============================================
+// Subscription Access Check — MUST pass before any feature operation
+// Returns whether the user has an active subscription that grants access.
+// This is the SERVER-SIDE gate — frontend checks are cosmetic only.
+// =============================================
+export function hasActiveSubscription(
+  subscriptionStatus: SubscriptionStatus,
+  trialEndsAt: string | null,
+  currentPeriodEnd: string | null,
+  pastDueSince: string | null
+): boolean {
+  switch (subscriptionStatus) {
+    case "active":
+      return true;
+
+    case "trialing":
+      // Must have valid, non-expired trial
+      return !!trialEndsAt && new Date(trialEndsAt) > new Date();
+
+    case "past_due":
+      // 3-day grace period from when payment first failed
+      if (!pastDueSince) return true; // If no timestamp recorded, give benefit of doubt
+      const gracePeriodMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+      return (Date.now() - new Date(pastDueSince).getTime()) < gracePeriodMs;
+
+    case "cancelled":
+      // Access continues until end of paid period
+      return !!currentPeriodEnd && new Date(currentPeriodEnd) > new Date();
+
+    case "paused":
+    case "expired":
+    case "none":
+    default:
+      return false;
+  }
+}
+
+// Convenience wrapper that takes a getUserPlan result
+export async function checkSubscriptionAccess(userId: string): Promise<{
+  hasAccess: boolean;
+  reason: string;
+  status: SubscriptionStatus;
+}> {
+  const userPlan = await getUserPlan(userId);
+  const hasAccess = hasActiveSubscription(
+    userPlan.subscriptionStatus,
+    userPlan.trialEndsAt,
+    userPlan.currentPeriodEnd,
+    userPlan.pastDueSince
+  );
+
+  let reason = "";
+  if (!hasAccess) {
+    switch (userPlan.subscriptionStatus) {
+      case "none": reason = "No active subscription. Please select a plan."; break;
+      case "trialing": reason = "Your trial has expired. Please subscribe to continue."; break;
+      case "expired": reason = "Your subscription has expired. Please renew."; break;
+      case "cancelled": reason = "Your subscription period has ended. Please renew."; break;
+      case "paused": reason = "Your subscription is paused. Please resume to continue."; break;
+      case "past_due": reason = "Payment failed. Please update your payment method."; break;
+      default: reason = "Subscription inactive.";
+    }
+  }
+
+  return { hasAccess, reason, status: userPlan.subscriptionStatus };
+}
+
 // Default plan for new users
 const DEFAULT_PLAN: PlanTier = "starter";
 
@@ -206,6 +273,8 @@ export async function getUserPlan(userId: string): Promise<{
   serviceType: ServiceType;
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  pastDueSince: string | null;
   isOnTrial: boolean;
   gmailConnectedAt: string | null;
   isActive: boolean;
@@ -233,8 +302,8 @@ export async function getUserPlan(userId: string): Promise<{
       .upsert({
         user_id: userId,
         plan: DEFAULT_PLAN,
-        subscription_status: "trialing",
-        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: "none",
+        trial_ends_at: null,
         is_active: true,
         leads_found_this_month: 0,
         leads_found_reset_at: new Date().toISOString(),
@@ -260,9 +329,11 @@ export async function getUserPlan(userId: string): Promise<{
       return {
         plan: DEFAULT_PLAN,
         serviceType: "web_dev" as ServiceType,
-        subscriptionStatus: "trialing" as SubscriptionStatus,
-        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        isOnTrial: true,
+        subscriptionStatus: "none" as SubscriptionStatus,
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        pastDueSince: null,
+        isOnTrial: false,
         gmailConnectedAt: null,
         isActive: true,
         leadsFoundThisMonth: 0,
@@ -279,13 +350,15 @@ export async function getUserPlan(userId: string): Promise<{
 
     // Use the REAL data from the DB (preserves existing counters)
     const tz = plan2.timezone || "UTC";
-    const subStatus = (plan2.subscription_status || "trialing") as SubscriptionStatus;
+    const subStatus = (plan2.subscription_status || "none") as SubscriptionStatus;
     const trialEnds = plan2.trial_ends_at || null;
     return {
       plan: plan2.plan as PlanTier,
       serviceType: (plan2.service_type || "web_dev") as ServiceType,
       subscriptionStatus: subStatus,
       trialEndsAt: trialEnds,
+      currentPeriodEnd: plan2.current_period_end || null,
+      pastDueSince: plan2.past_due_since || null,
       isOnTrial: isTrialing(subStatus, trialEnds),
       gmailConnectedAt: plan2.gmail_connected_at,
       isActive: plan2.is_active,
@@ -317,7 +390,7 @@ export async function getUserPlan(userId: string): Promise<{
   const effectiveEmailsSentToday = isDailyCounterExpired(data.emails_sent_today_reset_at, userTz)
     ? 0 : (data.emails_sent_today || 0);
 
-  const subStatus = (data.subscription_status || "trialing") as SubscriptionStatus;
+  const subStatus = (data.subscription_status || "none") as SubscriptionStatus;
   const trialEnds = data.trial_ends_at || null;
 
   return {
@@ -325,6 +398,8 @@ export async function getUserPlan(userId: string): Promise<{
     serviceType: (data.service_type || "web_dev") as ServiceType,
     subscriptionStatus: subStatus,
     trialEndsAt: trialEnds,
+    currentPeriodEnd: data.current_period_end || null,
+    pastDueSince: data.past_due_since || null,
     isOnTrial: isTrialing(subStatus, trialEnds),
     gmailConnectedAt: data.gmail_connected_at,
     isActive: data.is_active,
@@ -403,6 +478,18 @@ export async function getDailyLimit(userId: string): Promise<{
 }> {
   const userPlan = await getUserPlan(userId);
   const config = PLAN_CONFIGS[userPlan.plan];
+
+  // SECURITY: Check subscription access first
+  const hasAccess = hasActiveSubscription(
+    userPlan.subscriptionStatus,
+    userPlan.trialEndsAt,
+    userPlan.currentPeriodEnd,
+    userPlan.pastDueSince
+  );
+  if (!hasAccess) {
+    return { limit: 0, plan: userPlan.plan, warmupDay: 0, warmupComplete: false, warmupPaused: false, maxCap: 0 };
+  }
+
   const { warmupDay, warmupPaused } = await getWarmupInfo(userId, userPlan.gmailConnectedAt);
 
   // Gmail not connected — no sending allowed
@@ -533,6 +620,18 @@ export async function checkDailyLeadFindLimit(userId: string): Promise<{
   plan: PlanTier;
 }> {
   const userPlan = await getUserPlan(userId);
+
+  // SECURITY: Check subscription access first
+  const hasAccess = hasActiveSubscription(
+    userPlan.subscriptionStatus,
+    userPlan.trialEndsAt,
+    userPlan.currentPeriodEnd,
+    userPlan.pastDueSince
+  );
+  if (!hasAccess) {
+    return { allowed: false, remaining: 0, usedToday: 0, dailyLimit: 0, plan: userPlan.plan };
+  }
+
   const config = PLAN_CONFIGS[userPlan.plan];
   const dailyLimit = userPlan.isOnTrial ? TRIAL_DAILY_LEADS : config.maxDailyEmails;
   const usedToday = userPlan.leadsFoundToday;
@@ -557,6 +656,18 @@ export async function checkLeadFindLimit(userId: string): Promise<{
   plan: PlanTier;
 }> {
   const userPlan = await getUserPlan(userId);
+
+  // SECURITY: Check subscription access first
+  const hasAccess = hasActiveSubscription(
+    userPlan.subscriptionStatus,
+    userPlan.trialEndsAt,
+    userPlan.currentPeriodEnd,
+    userPlan.pastDueSince
+  );
+  if (!hasAccess) {
+    return { allowed: false, used: 0, limit: 0, plan: userPlan.plan };
+  }
+
   const config = PLAN_CONFIGS[userPlan.plan];
   const monthlyLimit = userPlan.isOnTrial ? TRIAL_MONTHLY_LEADS : config.monthlyLeadFindLimit;
 
@@ -644,6 +755,8 @@ export async function getPlanInfo(userId: string): Promise<{
   subscriptionStatus: SubscriptionStatus;
   isOnTrial: boolean;
   trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  pastDueSince: string | null;
   trialDaysLeft: number;
   features: FeatureAccess;
   planLabel: string;
@@ -690,6 +803,8 @@ export async function getPlanInfo(userId: string): Promise<{
     subscriptionStatus: userPlan.subscriptionStatus,
     isOnTrial: userPlan.isOnTrial,
     trialEndsAt: userPlan.trialEndsAt,
+    currentPeriodEnd: userPlan.currentPeriodEnd,
+    pastDueSince: userPlan.pastDueSince,
     trialDaysLeft,
     features: getFeatureAccess(userPlan.plan, userPlan.isOnTrial),
     planLabel: planLabels[userPlan.plan],
@@ -750,6 +865,18 @@ export async function checkDailyGenerationLimit(userId: string): Promise<{
   plan: PlanTier;
 }> {
   const userPlan = await getUserPlan(userId);
+
+  // SECURITY: Check subscription access first
+  const hasAccess = hasActiveSubscription(
+    userPlan.subscriptionStatus,
+    userPlan.trialEndsAt,
+    userPlan.currentPeriodEnd,
+    userPlan.pastDueSince
+  );
+  if (!hasAccess) {
+    return { allowed: false, remaining: 0, usedToday: 0, dailyLimit: 0, plan: userPlan.plan };
+  }
+
   const config = PLAN_CONFIGS[userPlan.plan];
   const dailyLimit = userPlan.isOnTrial ? TRIAL_DAILY_GENERATIONS : config.maxDailyGenerations;
   const usedToday = userPlan.emailsGeneratedToday;

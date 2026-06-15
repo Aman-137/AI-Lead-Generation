@@ -15,10 +15,13 @@ interface PlanData {
   subscriptionStatus: string;
   isOnTrial: boolean;
   trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  pastDueSince: string | null;
   trialDaysLeft: number | null;
   features: Features;
   leadsFoundToday: number;
   dailyLeadFindLimit: number;
+  canAccessFeatures: boolean;
   loaded: boolean;
 }
 
@@ -34,10 +37,13 @@ const defaultPlanData: PlanData = {
   subscriptionStatus: "",
   isOnTrial: false,
   trialEndsAt: null,
+  currentPeriodEnd: null,
+  pastDueSince: null,
   trialDaysLeft: null,
   features: defaultFeatures,
   leadsFoundToday: 0,
   dailyLeadFindLimit: 50,
+  canAccessFeatures: false,
   loaded: false,
 };
 
@@ -56,17 +62,33 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       subscriptionStatus?: string;
       isOnTrial?: boolean;
       trialEndsAt?: string | null;
+      currentPeriodEnd?: string | null;
+      pastDueSince?: string | null;
       trialDaysLeft?: number | null;
       features?: Partial<Features>;
       leadsFoundToday: number;
       dailyLeadFindLimit: number;
     }>("/stats")
       .then((data) => {
+        const status = data.subscriptionStatus || "none";
+        // Check if trial has expired
+        const trialExpired = status === "trialing" && data.trialEndsAt && new Date(data.trialEndsAt) < new Date();
+        // Cancelled users keep access until current_period_end
+        const cancelledWithAccess = status === "cancelled" && data.currentPeriodEnd && new Date(data.currentPeriodEnd) > new Date();
+        // Past due: 3-day grace period from when payment first failed
+        const pastDueWithAccess = status === "past_due" && (
+          !data.pastDueSince || (Date.now() - new Date(data.pastDueSince).getTime()) < 3 * 24 * 60 * 60 * 1000
+        );
+        // User can access features if: trialing (not expired), active, past_due (within grace), or cancelled with remaining period
+        const canAccess = (["trialing", "active"].includes(status) && !trialExpired) || !!cancelledWithAccess || !!pastDueWithAccess;
+        
         setPlanData({
           planLabel: data.planLabel,
-          subscriptionStatus: data.subscriptionStatus || "active",
+          subscriptionStatus: status,
           isOnTrial: data.isOnTrial || false,
           trialEndsAt: data.trialEndsAt || null,
+          currentPeriodEnd: data.currentPeriodEnd || null,
+          pastDueSince: data.pastDueSince || null,
           trialDaysLeft: data.trialDaysLeft ?? null,
           features: {
             hotLeadTracking: data.features?.hotLeadTracking !== false,
@@ -76,11 +98,12 @@ export function PlanProvider({ children }: { children: ReactNode }) {
           },
           leadsFoundToday: data.leadsFoundToday,
           dailyLeadFindLimit: data.dailyLeadFindLimit,
+          canAccessFeatures: canAccess,
           loaded: true,
         });
       })
       .catch(() => {
-        // On error, grant access (fail-open) so users aren't locked out
+        // On error, fail-closed (lock features) — backend still validates on each API call
         setPlanData({ ...defaultPlanData, loaded: true });
       });
   }, []);

@@ -6,6 +6,8 @@ import { apiGet, apiPost, apiPostLong, apiPut } from "@/lib/api";
 import SearchBar from "../../SearchBar";
 import Loader from "../../Loader";
 import Pagination from "../../Pagination";
+import { usePlan } from "../../PlanContext";
+import LockedFeatureModal from "../../LockedFeatureModal";
 
 // ===== Custom Styled Dropdown =====
 function CustomSelect<T extends string>({
@@ -1055,6 +1057,7 @@ export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as string;
+  const plan = usePlan();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1318,6 +1321,10 @@ export default function CampaignDetailPage() {
       </span>
     );
   };
+
+  if (plan.loaded && !plan.canAccessFeatures) {
+    return <LockedFeatureModal />;
+  }
 
   if (loading) {
     return <Loader text="Loading campaign..." fullPage />;

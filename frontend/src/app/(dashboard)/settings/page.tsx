@@ -150,11 +150,17 @@ export default function SettingsPage() {
   const [plan, setPlan] = useState("starter");
   const [hasPlan, setHasPlan] = useState(true);
   const [isExpired, setIsExpired] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [periodEndDate, setPeriodEndDate] = useState<string | null>(null);
   const [isOnTrial, setIsOnTrial] = useState(false);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
   const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   // SMTP form state
   const [showSmtpForm, setShowSmtpForm] = useState(false);
@@ -234,7 +240,7 @@ export default function SettingsPage() {
     };
     loadProfile();
     // Load service type and subscription status from stats
-    apiGet<{ serviceType?: string; subscriptionStatus?: string; isOnTrial?: boolean; trialDaysLeft?: number }>("/stats").then((data) => {
+    apiGet<{ serviceType?: string; subscriptionStatus?: string; isOnTrial?: boolean; trialDaysLeft?: number; currentPeriodEnd?: string }>("/stats").then((data) => {
       if (data.serviceType) {
         // Migrate deprecated social_media to digital_marketing
         const mapped = data.serviceType === "social_media" ? "digital_marketing" : data.serviceType;
@@ -247,14 +253,22 @@ export default function SettingsPage() {
       // Set plan/trial status
       setIsOnTrial(data.isOnTrial || false);
       setTrialDaysLeft(data.trialDaysLeft ?? null);
-      if (data.subscriptionStatus === "expired" || data.subscriptionStatus === "cancelled") {
-        setHasPlan(false);
-        setIsExpired(true);
-      } else {
-        // "trialing" (active or expired trial) and "active" — show active plan card
-        // Once payment integration is live, expired trials will transition to "expired" status via webhook
+      setPeriodEndDate(data.currentPeriodEnd || null);
+
+      if (data.subscriptionStatus === "cancelled" && data.currentPeriodEnd && new Date(data.currentPeriodEnd) > new Date()) {
+        // Cancelled but still has access until period ends
         setHasPlan(true);
         setIsExpired(false);
+        setIsCancelling(true);
+      } else if (data.subscriptionStatus === "expired" || data.subscriptionStatus === "cancelled") {
+        setHasPlan(false);
+        setIsExpired(true);
+        setIsCancelling(false);
+      } else {
+        // "trialing" (active or expired trial) and "active" — show active plan card
+        setHasPlan(true);
+        setIsExpired(false);
+        setIsCancelling(false);
         setIsOnTrial(false);
       }
     }).catch(() => {
@@ -987,7 +1001,7 @@ export default function SettingsPage() {
                 </button>
               </div>
             ) : (
-              /* Existing user - active plan */
+              /* Existing user - active plan or cancelling */
               <div className="flex flex-col h-full justify-between">
                 <div>
                   {/* Plan name & badge */}
@@ -995,7 +1009,12 @@ export default function SettingsPage() {
                     <div className="px-3 py-1.5 rounded-full text-xs font-bold text-white uppercase tracking-wider" style={{ background: plan === "starter" ? "#6962c4" : plan === "growth" ? "#059669" : "#d97706" }}>
                       {plan} Plan
                     </div>
-                    {isOnTrial ? (
+                    {isCancelling ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200">
+                        <div className="w-2 h-2 rounded-full bg-orange-500" />
+                        <span className="text-xs font-semibold text-orange-700">Cancelling</span>
+                      </div>
+                    ) : isOnTrial ? (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
                         <div className="w-2 h-2 rounded-full bg-amber-500" />
                         <span className="text-xs font-semibold text-amber-700">Trial{trialDaysLeft !== null ? ` · ${trialDaysLeft}d left` : ""}</span>
@@ -1008,6 +1027,21 @@ export default function SettingsPage() {
                     )}
                   </div>
 
+                  {/* Cancelling warning banner */}
+                  {isCancelling && periodEndDate && (
+                    <div className="rounded-lg p-3 mb-3 border border-orange-200" style={{ background: "linear-gradient(135deg, rgba(251,146,60,0.06) 0%, rgba(234,88,12,0.08) 100%)" }}>
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-800">Your plan ends on {new Date(periodEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">You still have full access until then. Reactivate to keep your plan.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Price & dates */}
                   <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                     <div>
@@ -1018,7 +1052,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] text-gray-400">Purchased: <span className="text-gray-600 font-medium">May 4, 2026</span></p>
-                      <p className="text-[10px] text-gray-400">Expires: <span className="text-gray-600 font-medium">Jun 4, 2026</span></p>
+                      <p className="text-[10px] text-gray-400">{isCancelling ? "Ends" : "Expires"}: <span className={`font-medium ${isCancelling ? "text-orange-600" : "text-gray-600"}`}>{periodEndDate ? new Date(periodEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Jun 4, 2026"}</span></p>
                     </div>
                   </div>
 
@@ -1045,22 +1079,52 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => setShowPricingModal(true)}
-                    className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-white transition-all hover:opacity-90 hover:shadow-md"
-                    style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
-                  >
-                    {plan === "starter" ? "Upgrade Plan" : "Manage Subscription"}
-                  </button>
+                {isCancelling ? (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={async () => {
+                        setReactivating(true);
+                        try {
+                          await apiPost("/billing/reactivate", {});
+                          setIsCancelling(false);
+                          toast.addToast("Plan reactivated! Your subscription will continue.", "success");
+                        } catch {
+                          toast.addToast("Failed to reactivate. Please try again.", "error");
+                        } finally {
+                          setReactivating(false);
+                        }
+                      }}
+                      disabled={reactivating}
+                      className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-white transition-all hover:opacity-90 hover:shadow-md disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 100%)" }}
+                    >
+                      {reactivating ? "Reactivating..." : "Reactivate Plan"}
+                    </button>
+                    <button
+                      onClick={() => setShowPricingModal(true)}
+                      className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all"
+                    >
+                      Change Plan
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setShowPricingModal(true)}
+                      className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-white transition-all hover:opacity-90 hover:shadow-md"
+                      style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+                    >
+                      {plan === "starter" ? "Upgrade Plan" : "Manage Subscription"}
+                    </button>
 
-                  <button
-                    onClick={() => toast.addToast("Payment integration coming soon!", "info")}
-                    className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-red-500 border border-red-200 hover:bg-red-50 transition-all"
-                  >
-                    Cancel Plan
-                  </button>
-                </div>
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      className="flex-1 py-2.5 text-xs font-semibold rounded-lg text-red-500 border border-red-200 hover:bg-red-50 transition-all"
+                    >
+                      Cancel Plan
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1069,6 +1133,101 @@ export default function SettingsPage() {
         {/* Pricing Modal */}
         {showPricingModal && (
           <PricingModal plan={plan} hasPlan={hasPlan} isExpired={isExpired} onClose={() => setShowPricingModal(false)} onToast={toast.addToast} />
+        )}
+
+        {/* Cancel Plan Modal */}
+        {showCancelModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !cancelling && setShowCancelModal(false)} />
+            <div className="relative z-10 w-full max-w-md rounded-2xl p-6" style={{ background: "linear-gradient(135deg, #1a1540 0%, #0d0a25 100%)", border: "1px solid rgba(105,98,196,0.3)", boxShadow: "0 20px 60px rgba(13,10,37,0.6)" }}>
+              {/* Warning icon */}
+              <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "rgba(239,68,68,0.12)" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+
+              <h3 className="text-lg font-bold text-white text-center mb-2">Cancel Your Plan?</h3>
+              <p className="text-sm text-gray-400 text-center mb-5">
+                You&apos;ll lose access to these features at the end of your billing period:
+              </p>
+
+              {/* Features they'll lose */}
+              <div className="rounded-xl p-3 mb-5" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                <div className="space-y-2">
+                  {["Auto Lead Finder", "Email Campaigns", "Hot Lead Tracking", "CSV Upload", "Audit Reports"].map((feature) => (
+                    <div key={feature} className="flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      <span className="text-xs text-gray-300">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason selection */}
+              <div className="mb-5">
+                <label className="text-xs font-medium text-gray-400 mb-2 block">Why are you cancelling? <span className="text-red-400">*</span></label>
+                <select
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg text-xs border focus:outline-none focus:border-[#6962c4] transition-colors appearance-none"
+                  style={{ background: "#0d0a25", borderColor: "rgba(105,98,196,0.4)", color: cancelReason ? "#ffffff" : "#9ca3af", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+                >
+                  <option value="" style={{ background: "#0d0a25", color: "#9ca3af" }}>Select a reason...</option>
+                  <option value="too_expensive" style={{ background: "#0d0a25", color: "#ffffff" }}>Too expensive</option>
+                  <option value="not_using" style={{ background: "#0d0a25", color: "#ffffff" }}>Not using it enough</option>
+                  <option value="missing_features" style={{ background: "#0d0a25", color: "#ffffff" }}>Missing features I need</option>
+                  <option value="switching" style={{ background: "#0d0a25", color: "#ffffff" }}>Switching to another tool</option>
+                  <option value="temporary" style={{ background: "#0d0a25", color: "#ffffff" }}>Just need a break</option>
+                  <option value="other" style={{ background: "#0d0a25", color: "#ffffff" }}>Other</option>
+                </select>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowCancelModal(false); setCancelReason(""); }}
+                  disabled={cancelling}
+                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl text-white transition-all hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #6962c4 0%, #3d3580 100%)" }}
+                >
+                  Keep My Plan
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!cancelReason) {
+                      toast.addToast("Please select a reason for cancelling.", "error");
+                      return;
+                    }
+                    setCancelling(true);
+                    try {
+                      await apiPost("/billing/cancel", { reason: cancelReason });
+                      toast.addToast("Plan cancelled. You'll keep access until your billing period ends.", "success");
+                      setShowCancelModal(false);
+                      setCancelReason("");
+                      setTimeout(() => window.location.reload(), 1500);
+                    } catch {
+                      toast.addToast("Failed to cancel plan. Please try again.", "error");
+                    } finally {
+                      setCancelling(false);
+                    }
+                  }}
+                  disabled={cancelling || !cancelReason}
+                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cancelling ? "Cancelling..." : "Cancel Plan"}
+                </button>
+              </div>
+
+              <p className="text-[10px] text-gray-500 text-center mt-4">
+                You&apos;ll keep full access until the end of your current billing period.
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Gmail Card */}

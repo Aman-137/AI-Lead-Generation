@@ -6,6 +6,7 @@ import { apiPost, apiGet } from "@/lib/api";
 import SearchBar from "../SearchBar";
 import { SourcesTableSkeleton } from "../Skeleton";
 import Pagination from "../Pagination";
+import FeatureAccessGuard from "../FeatureAccessGuard";
 
 interface LeadSource {
   id: string;
@@ -349,6 +350,7 @@ export default function AutoLeadsPage() {
   };
 
   return (
+    <FeatureAccessGuard>
     <div>
       {/* Toast Notifications */}
       <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
@@ -829,5 +831,6 @@ export default function AutoLeadsPage() {
         </div>
       )}
     </div>
+    </FeatureAccessGuard>
   );
 }

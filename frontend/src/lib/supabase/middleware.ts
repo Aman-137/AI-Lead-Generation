@@ -59,7 +59,7 @@ export async function updateSession(request: NextRequest) {
   // Redirect verified users away from verify-email page
   if (user && user.email_confirmed_at && request.nextUrl.pathname === "/verify-email") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/settings";
     return NextResponse.redirect(url);
   }
 

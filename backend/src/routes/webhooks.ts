@@ -32,9 +32,9 @@ function mapStatus(lsStatus: string): string {
     case "expired":
       return "expired";
     case "paused":
-      return "cancelled"; // Treat paused as cancelled for feature access
+      return "paused";
     default:
-      return "trialing";
+      return "none";
   }
 }
 
@@ -135,12 +135,13 @@ router.post("/", async (req: Request, res: Response) => {
       }
 
       case "subscription_payment_success": {
-        // Payment went through — mark as active
+        // Payment went through — mark as active, clear past_due_since
         await supabaseAdmin
           .from("user_plans")
           .update({
             subscription_status: "active",
             current_period_end: currentPeriodEnd,
+            past_due_since: null,
           })
           .eq("user_id", userId);
 
@@ -149,9 +150,22 @@ router.post("/", async (req: Request, res: Response) => {
       }
 
       case "subscription_payment_failed": {
+        // Record when payment first failed (don't overwrite if already past_due)
+        const { data: existingPlan } = await supabaseAdmin
+          .from("user_plans")
+          .select("subscription_status, past_due_since")
+          .eq("user_id", userId)
+          .single();
+
+        const updateData: Record<string, unknown> = { subscription_status: "past_due" };
+        // Only set past_due_since if not already in past_due state
+        if (!existingPlan?.past_due_since || existingPlan.subscription_status !== "past_due") {
+          updateData.past_due_since = new Date().toISOString();
+        }
+
         await supabaseAdmin
           .from("user_plans")
-          .update({ subscription_status: "past_due" })
+          .update(updateData)
           .eq("user_id", userId);
 
         logger.info({ userId }, "Payment failed — marked past_due");
@@ -186,7 +200,7 @@ router.post("/", async (req: Request, res: Response) => {
       case "subscription_resumed": {
         await supabaseAdmin
           .from("user_plans")
-          .update({ subscription_status: "active" })
+          .update({ subscription_status: "active", past_due_since: null, cancel_reason: null })
           .eq("user_id", userId);
 
         logger.info({ userId }, "Subscription resumed");

@@ -7,6 +7,7 @@ import Pagination from "../Pagination";
 import Link from "next/link";
 import FeatureGate from "../FeatureGate";
 import { usePlan } from "../PlanContext";
+import LockedFeatureModal from "../LockedFeatureModal";
 
 const PER_PAGE = 20;
 
@@ -90,6 +91,11 @@ export default function HotLeadsPage() {
 
   // Reset page when filter/search changes
   useEffect(() => { setPage(1); }, [filter, search]);
+
+  // Show locked modal if user hasn't set up subscription
+  if (plan.loaded && !plan.canAccessFeatures) {
+    return <LockedFeatureModal />;
+  }
 
   // Show FeatureGate immediately once plan is loaded and no access
   if (plan.loaded && !plan.features.hotLeadTracking) {

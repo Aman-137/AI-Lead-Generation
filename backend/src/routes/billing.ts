@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { lemonSqueezySetup, createCheckout, getSubscription, cancelSubscription } from "@lemonsqueezy/lemonsqueezy.js";
+import { lemonSqueezySetup, createCheckout, getSubscription, cancelSubscription, updateSubscription } from "@lemonsqueezy/lemonsqueezy.js";
 import supabaseAdmin from "../services/supabase";
 import { authMiddleware } from "../middleware/auth";
 import logger from "../utils/logger";
@@ -133,6 +133,7 @@ router.post("/cancel", authMiddleware, async (req: Request, res: Response) => {
     initLemonSqueezy();
 
     const userId = (req as any).userId as string;
+    const { reason } = req.body;
 
     const { data: userPlan } = await supabaseAdmin
       .from("user_plans")
@@ -151,11 +152,64 @@ router.post("/cancel", authMiddleware, async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Failed to cancel subscription" });
     }
 
-    logger.info({ userId }, "Subscription cancelled");
+    // Store cancellation reason
+    if (reason) {
+      await supabaseAdmin
+        .from("user_plans")
+        .update({ cancel_reason: reason })
+        .eq("user_id", userId);
+    }
+
+    logger.info({ userId, reason }, "Subscription cancelled");
     res.json({ success: true, message: "Subscription will be cancelled at end of billing period" });
   } catch (err: any) {
     logger.error({ err: err.message }, "Cancel subscription error");
     res.status(500).json({ error: "Failed to cancel subscription" });
+  }
+});
+
+// Reactivate a cancelled subscription (before period ends)
+router.post("/reactivate", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    initLemonSqueezy();
+
+    const userId = (req as any).userId as string;
+
+    const { data: userPlan } = await supabaseAdmin
+      .from("user_plans")
+      .select("lemon_squeezy_subscription_id, subscription_status")
+      .eq("user_id", userId)
+      .single();
+
+    if (!userPlan?.lemon_squeezy_subscription_id) {
+      return res.status(404).json({ error: "No subscription found" });
+    }
+
+    if (userPlan.subscription_status !== "cancelled") {
+      return res.status(400).json({ error: "Subscription is not in cancelled state" });
+    }
+
+    // Un-cancel by setting cancelled to false
+    const { error } = await updateSubscription(userPlan.lemon_squeezy_subscription_id, {
+      cancelled: false,
+    });
+
+    if (error) {
+      logger.error({ error }, "Failed to reactivate subscription");
+      return res.status(500).json({ error: "Failed to reactivate subscription" });
+    }
+
+    // Update local status back to active
+    await supabaseAdmin
+      .from("user_plans")
+      .update({ subscription_status: "active", cancel_reason: null })
+      .eq("user_id", userId);
+
+    logger.info({ userId }, "Subscription reactivated");
+    res.json({ success: true, message: "Subscription reactivated successfully" });
+  } catch (err: any) {
+    logger.error({ err: err.message }, "Reactivate subscription error");
+    res.status(500).json({ error: "Failed to reactivate subscription" });
   }
 });
 
