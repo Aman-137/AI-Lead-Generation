@@ -1244,7 +1244,7 @@ export default function SettingsPage() {
 
         {/* Pricing Modal */}
         {showPricingModal && (
-          <PricingModal plan={plan} hasPlan={hasPlan} isExpired={isExpired} onClose={() => setShowPricingModal(false)} onToast={toast.addToast} />
+          <PricingModal plan={plan} hasPlan={hasPlan} isExpired={isExpired} isPastDue={isPastDue} onClose={() => setShowPricingModal(false)} onToast={toast.addToast} />
         )}
 
         {/* Cancel Plan Modal */}

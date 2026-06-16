@@ -94,12 +94,29 @@ router.post("/", async (req: Request, res: Response) => {
     switch (eventName) {
       case "subscription_created": {
         const plan = getplanFromVariant(variantId);
-        const mappedStatus = mapStatus(status);
+        let mappedStatus = mapStatus(status);
 
-        // Calculate trial end: use LS trial_ends_at if available, otherwise 7 days from now
-        const trialEnd = trialEndsAt
-          ? trialEndsAt
-          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        // Check if user previously had a subscription (returning user)
+        const { data: existingPlan } = await supabaseAdmin
+          .from("user_plans")
+          .select("lemon_squeezy_subscription_id, trial_ends_at")
+          .eq("user_id", userId)
+          .single();
+
+        const isReturningUser = !!(existingPlan?.lemon_squeezy_subscription_id || existingPlan?.trial_ends_at);
+
+        // Returning users should NOT get a trial — override to active
+        // LS product-level trial can't be disabled per-checkout, so we handle it here
+        let trialEnd: string | null = null;
+        if (mappedStatus === "trialing" && isReturningUser) {
+          mappedStatus = "active";
+          trialEnd = null;
+          logger.info({ userId }, "Returning user — overriding trial to active");
+        } else if (mappedStatus === "trialing") {
+          trialEnd = trialEndsAt
+            ? trialEndsAt
+            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        }
 
         await supabaseAdmin
           .from("user_plans")
@@ -110,10 +127,11 @@ router.post("/", async (req: Request, res: Response) => {
             lemon_squeezy_customer_id: customerId,
             trial_ends_at: trialEnd,
             current_period_end: currentPeriodEnd,
+            past_due_since: null,
           })
           .eq("user_id", userId);
 
-        logger.info({ userId, plan, status: mappedStatus }, "Subscription created");
+        logger.info({ userId, plan, status: mappedStatus, isReturningUser }, "Subscription created");
         break;
       }
 

@@ -7,20 +7,38 @@ interface PricingModalProps {
   plan: string;
   hasPlan: boolean;
   isExpired: boolean;
+  isPastDue?: boolean;
   onClose: () => void;
   onToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
-export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToast }: PricingModalProps) {
+export default function PricingModal({ plan, hasPlan, isExpired, isPastDue, onClose, onToast }: PricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [confirmPlan, setConfirmPlan] = useState<string | null>(null);
+
+  const PLAN_PRICES: Record<string, number> = { starter: 39, growth: 79, agency: 129 };
+
+  function handlePlanClick(selectedPlan: string) {
+    // If user has an active plan and is switching (not expired/new), show confirmation
+    if (hasPlan && !isExpired && plan !== selectedPlan) {
+      setConfirmPlan(selectedPlan);
+    } else {
+      handleSubscribe(selectedPlan);
+    }
+  }
 
   async function handleSubscribe(selectedPlan: string) {
     setLoading(selectedPlan);
     try {
-      const res = await apiPost<{ checkoutUrl?: string }>("/billing/checkout", { plan: selectedPlan });
-      if (res.checkoutUrl) {
+      const res = await apiPost<{ checkoutUrl?: string; success?: boolean; message?: string }>("/billing/checkout", { plan: selectedPlan });
+      if (res.success) {
+        // Plan was swapped instantly (existing subscriber upgrade/downgrade)
+        onToast(res.message || "Plan changed successfully!", "success");
+        onClose();
+        window.location.reload();
+      } else if (res.checkoutUrl) {
         setCheckoutUrl(res.checkoutUrl);
       } else {
         onToast("Failed to create checkout session", "error");
@@ -127,6 +145,17 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
+        {isPastDue && (
+          <button
+            onClick={handleManageSubscription}
+            disabled={loading === "manage"}
+            className="absolute top-9 left-10 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white transition-all shadow-sm hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+            {loading === "manage" ? "Opening..." : "Update Payment Method"}
+          </button>
+        )}
         <div className="text-center mb-7">
           <h2 className="text-2xl font-extrabold text-gray-900">Choose Your Plan</h2>
           <p className="text-sm text-gray-500 mt-1.5">Scale your outreach with the right plan</p>
@@ -159,7 +188,7 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
             </ul>
             {isExpired || !hasPlan ? (
               <button
-                onClick={() => handleSubscribe("starter")}
+                onClick={() => handlePlanClick("starter")}
                 disabled={loading === "starter"}
                 className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
@@ -168,29 +197,28 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
               </button>
             ) : plan === "starter" ? (
               <button
-                onClick={handleManageSubscription}
-                disabled={loading === "manage"}
-                className="w-full py-2.5 text-xs font-bold rounded-xl text-gray-500 bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-all mt-auto flex items-center justify-center gap-1.5"
+                disabled
+                className="w-full py-2.5 text-xs font-bold rounded-xl cursor-not-allowed transition-all mt-auto flex items-center justify-center gap-1.5"
+                style={{ color: "#6962c4", border: "2px solid #6962c4", background: "rgba(105,98,196,0.05)" }}
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
                 Current Plan
               </button>
             ) : (
               <button
-                onClick={() => handleSubscribe("starter")}
+                onClick={() => handlePlanClick("starter")}
                 disabled={loading === "starter"}
-                className="w-full py-2.5 text-xs font-bold rounded-xl text-gray-500 bg-white border border-gray-300 hover:bg-gray-50 transition-all hover:scale-[1.02] active:scale-[0.98] mt-auto disabled:opacity-60"
+                className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
               >
-                {loading === "starter" ? "Redirecting..." : "Downgrade"}
+                {loading === "starter" ? "Switching..." : "Downgrade"}
               </button>
             )}
           </div>
 
           {/* Growth - Featured */}
           <div className={`relative rounded-2xl p-5 pt-6 transition-all flex flex-col ${plan === "growth" ? "shadow-lg ring-2 ring-violet-400" : "shadow-xl shadow-amber-100/50 hover:shadow-2xl"}`} style={{ background: "linear-gradient(180deg, #fffbeb 0%, #ffffff 30%)", border: plan === "growth" ? undefined : "1px solid #fbbf24" }}>
-            {plan !== "growth" && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full text-white shadow-md bg-gradient-to-r from-amber-500 to-orange-500">🔥 Most Popular</div>
-            )}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full text-white shadow-md bg-gradient-to-r from-amber-500 to-orange-500">🔥 Most Popular</div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100">
                 <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd"/></svg>
@@ -220,7 +248,7 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
             </ul>
             {isExpired || !hasPlan ? (
               <button
-                onClick={() => handleSubscribe("growth")}
+                onClick={() => handlePlanClick("growth")}
                 disabled={loading === "growth"}
                 className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
@@ -229,38 +257,37 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
               </button>
             ) : plan === "growth" ? (
               <button
-                onClick={handleManageSubscription}
-                disabled={loading === "manage"}
-                className="w-full py-2.5 text-xs font-bold rounded-xl text-gray-500 bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-all mt-auto flex items-center justify-center gap-1.5"
+                disabled
+                className="w-full py-2.5 text-xs font-bold rounded-xl cursor-not-allowed transition-all mt-auto flex items-center justify-center gap-1.5"
+                style={{ color: "#6962c4", border: "2px solid #6962c4", background: "rgba(105,98,196,0.05)" }}
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
                 Current Plan
               </button>
             ) : plan === "agency" ? (
               <button
-                onClick={() => handleSubscribe("growth")}
-                disabled={loading === "growth"}
-                className="w-full py-2.5 text-xs font-bold rounded-xl text-gray-500 bg-white border border-gray-300 hover:bg-gray-50 transition-all hover:scale-[1.02] active:scale-[0.98] mt-auto disabled:opacity-60"
-              >
-                {loading === "growth" ? "Redirecting..." : "Downgrade"}
-              </button>
-            ) : (
-              <button
-                onClick={() => handleSubscribe("growth")}
+                onClick={() => handlePlanClick("growth")}
                 disabled={loading === "growth"}
                 className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
               >
-                {loading === "growth" ? "Redirecting..." : "Upgrade"}
+                {loading === "growth" ? "Switching..." : "Downgrade"}
+              </button>
+            ) : (
+              <button
+                onClick={() => handlePlanClick("growth")}
+                disabled={loading === "growth"}
+                className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+              >
+                {loading === "growth" ? "Switching..." : "Upgrade"}
               </button>
             )}
           </div>
 
           {/* Agency */}
           <div className={`relative rounded-2xl p-5 pt-6 transition-all flex flex-col ${plan === "agency" ? "bg-white shadow-lg ring-2 ring-violet-400" : "bg-white shadow-sm hover:shadow-xl border border-gray-200 hover:border-gray-300"}`}>
-            {plan !== "agency" && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full text-white shadow-md bg-gradient-to-r from-purple-600 to-indigo-600">⚡ Priority Support</div>
-            )}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full text-white shadow-md bg-gradient-to-r from-purple-600 to-indigo-600">⚡ Priority Support</div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(61,53,128,0.1)" }}>
                 <svg className="w-4 h-4" style={{ color: "#3d3580" }} fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>
@@ -290,7 +317,7 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
             </ul>
             {isExpired || !hasPlan ? (
               <button
-                onClick={() => handleSubscribe("agency")}
+                onClick={() => handlePlanClick("agency")}
                 disabled={loading === "agency"}
                 className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
@@ -299,26 +326,67 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
               </button>
             ) : plan === "agency" ? (
               <button
-                onClick={handleManageSubscription}
-                disabled={loading === "manage"}
-                className="w-full py-2.5 text-xs font-bold rounded-xl text-gray-500 bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-all mt-auto flex items-center justify-center gap-1.5"
+                disabled
+                className="w-full py-2.5 text-xs font-bold rounded-xl cursor-not-allowed transition-all mt-auto flex items-center justify-center gap-1.5"
+                style={{ color: "#6962c4", border: "2px solid #6962c4", background: "rgba(105,98,196,0.05)" }}
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
                 Current Plan
               </button>
             ) : (
               <button
-                onClick={() => handleSubscribe("agency")}
+                onClick={() => handlePlanClick("agency")}
                 disabled={loading === "agency"}
                 className="w-full py-2.5 text-xs font-bold rounded-xl text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] mt-auto disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
               >
-                {loading === "agency" ? "Redirecting..." : "Upgrade"}
+                {loading === "agency" ? "Switching..." : "Upgrade"}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Plan Change Confirmation Popup */}
+      {confirmPlan && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setConfirmPlan(null)} />
+          <div className="relative bg-[#1e1b3a] rounded-2xl shadow-2xl max-w-md w-full p-8 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "rgba(105,98,196,0.2)" }}>
+              <svg className="w-7 h-7" style={{ color: "#a9a4e8" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">
+              {PLAN_PRICES[confirmPlan] > PLAN_PRICES[plan] ? "Upgrade" : "Downgrade"} to {confirmPlan.charAt(0).toUpperCase() + confirmPlan.slice(1)}?
+            </h3>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-4" style={{ border: "1px solid rgba(255,255,255,0.15)" }}>
+              <span className="text-xs text-gray-400">{plan.charAt(0).toUpperCase() + plan.slice(1)} (${PLAN_PRICES[plan]})</span>
+              <span className="text-xs text-gray-500">→</span>
+              <span className="text-xs text-gray-400">{confirmPlan.charAt(0).toUpperCase() + confirmPlan.slice(1)} (${PLAN_PRICES[confirmPlan]})</span>
+            </div>
+            <p className="text-xs text-gray-400 mb-7">
+              {PLAN_PRICES[confirmPlan] > PLAN_PRICES[plan]
+                ? "A prorated amount will be charged to your card immediately."
+                : "You'll receive credit for the remaining period on your current plan."}
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setConfirmPlan(null)}
+                className="flex-1 py-3 text-sm font-semibold rounded-xl text-gray-300 border border-gray-500 hover:bg-white/10 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setConfirmPlan(null); handleSubscribe(confirmPlan); }}
+                disabled={!!loading}
+                className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)" }}
+              >
+                {loading ? "Switching..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

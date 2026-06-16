@@ -19,7 +19,7 @@ function initLemonSqueezy() {
   lemonSqueezySetup({ apiKey });
 }
 
-// POST /api/billing/checkout — Create a checkout session
+// POST /api/billing/checkout — Create a checkout session or swap plan for existing subscribers
 router.post("/checkout", authMiddleware, async (req: Request, res: Response) => {
   try {
     initLemonSqueezy();
@@ -44,16 +44,41 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-    // Check if user has ever had a subscription (used trial before)
+    // Check if user already has an active subscription
     const { data: userPlan } = await supabaseAdmin
       .from("user_plans")
-      .select("lemon_squeezy_subscription_id, trial_ends_at")
+      .select("lemon_squeezy_subscription_id, trial_ends_at, subscription_status")
       .eq("user_id", userId)
       .single();
 
-    const hasHadTrial = !!(userPlan?.lemon_squeezy_subscription_id || userPlan?.trial_ends_at);
+    const hasActiveSubscription = userPlan?.lemon_squeezy_subscription_id &&
+      ["active", "trialing", "past_due"].includes(userPlan?.subscription_status || "");
 
-    // Create checkout with user metadata
+    // If user has an active subscription, swap the plan (no new checkout needed)
+    if (hasActiveSubscription) {
+      const { error: updateError } = await updateSubscription(
+        userPlan.lemon_squeezy_subscription_id,
+        { variantId: parseInt(variantId) }
+      );
+
+      if (updateError) {
+        logger.error({ updateError }, "Failed to swap subscription plan");
+        return res.status(500).json({ error: "Failed to change plan" });
+      }
+
+      // Update local DB immediately (webhook will also confirm)
+      await supabaseAdmin
+        .from("user_plans")
+        .update({ plan, subscription_status: "active", trial_ends_at: null })
+        .eq("user_id", userId);
+
+      logger.info({ userId, plan }, "Subscription plan swapped");
+      return res.json({ success: true, message: `Plan changed to ${plan}` });
+    }
+
+    // No active subscription — create a new checkout
+    // Note: LS SDK ignores trialLengthDays — trial override is handled in webhook
+    // for returning users (their trial status gets overridden to "active")
     const { data, error } = await createCheckout(storeId, variantId, {
       checkoutData: {
         email: userEmail,
@@ -69,7 +94,6 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
         receiptButtonText: "Continue",
         receiptLinkUrl: `${frontendUrl}/settings?payment=success`,
       },
-      ...(hasHadTrial ? { trialLengthDays: 0 } : {}),
       testMode: process.env.NODE_ENV !== "production",
     });
 
