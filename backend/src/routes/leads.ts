@@ -699,6 +699,14 @@ router.post("/enrich", authMiddleware, enrichLimiter, async (req: AuthenticatedR
       return;
     }
 
+    // SECURITY: Check subscription access before allowing enrichment
+    const { checkSubscriptionAccess } = await import("../services/planLimits");
+    const accessCheck = await checkSubscriptionAccess(req.userId!);
+    if (!accessCheck.hasAccess) {
+      res.status(403).json({ error: accessCheck.reason });
+      return;
+    }
+
     // Cap batch size to plan limit
     const maxBatch = await getMaxEnrichBatchSize(req.userId!);
     if (leadIds.length > maxBatch) {

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import { getAuthUrl, handleOAuthCallback, isGmailConnected, getGmailAccounts, removeGmailAccount, verifyOAuthState, extractOAuthStateUserId } from "../services/gmail";
-import { getUserPlan, getMaxInboxes } from "../services/planLimits";
+import { getUserPlan, getMaxInboxes, checkSubscriptionAccess } from "../services/planLimits";
 import { isValidUUID } from "../middleware/validate";
 import { auditLog } from "../utils/auditLog";
 
@@ -10,6 +10,13 @@ const router = Router();
 // GET /api/gmail/auth-url — Get the Gmail OAuth consent URL
 router.get("/auth-url", authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
+    // SECURITY: Check subscription access before allowing new connections
+    const accessCheck = await checkSubscriptionAccess(req.userId!);
+    if (!accessCheck.hasAccess) {
+      res.status(403).json({ error: accessCheck.reason });
+      return;
+    }
+
     // Check inbox limit before starting OAuth flow
     const accounts = await getGmailAccounts(req.userId!);
     const { plan } = await getUserPlan(req.userId!);

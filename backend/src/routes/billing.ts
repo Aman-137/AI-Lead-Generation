@@ -44,6 +44,15 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
+    // Check if user has ever had a subscription (used trial before)
+    const { data: userPlan } = await supabaseAdmin
+      .from("user_plans")
+      .select("lemon_squeezy_subscription_id, trial_ends_at")
+      .eq("user_id", userId)
+      .single();
+
+    const hasHadTrial = !!(userPlan?.lemon_squeezy_subscription_id || userPlan?.trial_ends_at);
+
     // Create checkout with user metadata
     const { data, error } = await createCheckout(storeId, variantId, {
       checkoutData: {
@@ -53,13 +62,14 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
         },
       },
       checkoutOptions: {
-        embed: false,
+        buttonColor: "#6962c4",
       },
       productOptions: {
-        redirectUrl: `${frontendUrl}/settings?payment=success`,
+        redirectUrl: `${frontendUrl}/settings`,
         receiptButtonText: "Continue",
         receiptLinkUrl: `${frontendUrl}/settings?payment=success`,
       },
+      ...(hasHadTrial ? { trialLengthDays: 0 } : {}),
       testMode: process.env.NODE_ENV !== "production",
     });
 
@@ -73,16 +83,10 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
       return res.status(500).json({ error: "No checkout URL returned" });
     }
 
-    // Update user_plans with selected plan (before payment)
-    await supabaseAdmin
-      .from("user_plans")
-      .update({ plan })
-      .eq("user_id", userId);
-
     logger.info({ userId, plan }, "Checkout session created");
     res.json({ checkoutUrl });
   } catch (err: any) {
-    logger.error({ err: err.message }, "Checkout error");
+    logger.error({ err: err.message, stack: err.stack }, "Checkout error");
     res.status(500).json({ error: "Failed to create checkout" });
   }
 });

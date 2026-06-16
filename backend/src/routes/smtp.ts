@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
 import { testSmtpConnection, addSmtpAccount, getSmtpAccounts, removeSmtpAccount } from "../services/smtp";
-import { getUserPlan, getMaxInboxes } from "../services/planLimits";
+import { getUserPlan, getMaxInboxes, checkSubscriptionAccess } from "../services/planLimits";
 import { getGmailAccounts } from "../services/gmail";
 
 const router = Router();
@@ -35,6 +35,13 @@ router.post("/accounts", authMiddleware, async (req: AuthenticatedRequest, res) 
 
     if (!email || !host || !port || !username || !password) {
       res.status(400).json({ error: "All SMTP fields are required" });
+      return;
+    }
+
+    // SECURITY: Check subscription access before allowing new connections
+    const accessCheck = await checkSubscriptionAccess(req.userId!);
+    if (!accessCheck.hasAccess) {
+      res.status(403).json({ error: accessCheck.reason });
       return;
     }
 

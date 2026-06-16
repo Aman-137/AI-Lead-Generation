@@ -151,6 +151,8 @@ export default function SettingsPage() {
   const [hasPlan, setHasPlan] = useState(true);
   const [isExpired, setIsExpired] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isPastDue, setIsPastDue] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [periodEndDate, setPeriodEndDate] = useState<string | null>(null);
   const [isOnTrial, setIsOnTrial] = useState(false);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
@@ -260,16 +262,36 @@ export default function SettingsPage() {
         setHasPlan(true);
         setIsExpired(false);
         setIsCancelling(true);
-      } else if (data.subscriptionStatus === "expired" || data.subscriptionStatus === "cancelled") {
-        setHasPlan(false);
-        setIsExpired(true);
-        setIsCancelling(false);
-      } else {
-        // "trialing" (active or expired trial) and "active" — show active plan card
+        setIsPastDue(false);
+        setIsPaused(false);
+      } else if (data.subscriptionStatus === "past_due") {
+        // Payment failed — show warning, still has access during grace period
         setHasPlan(true);
         setIsExpired(false);
         setIsCancelling(false);
-        setIsOnTrial(false);
+        setIsPastDue(true);
+        setIsPaused(false);
+      } else if (data.subscriptionStatus === "paused") {
+        // Subscription paused — no access
+        setHasPlan(false);
+        setIsExpired(false);
+        setIsCancelling(false);
+        setIsPastDue(false);
+        setIsPaused(true);
+      } else if (data.subscriptionStatus === "expired" || data.subscriptionStatus === "cancelled" || data.subscriptionStatus === "none") {
+        // Fully expired, cancelled (period over), or no subscription
+        setHasPlan(false);
+        setIsExpired(true);
+        setIsCancelling(false);
+        setIsPastDue(false);
+        setIsPaused(false);
+      } else {
+        // "trialing" and "active" — show active plan card
+        setHasPlan(true);
+        setIsExpired(false);
+        setIsCancelling(false);
+        setIsPastDue(false);
+        setIsPaused(false);
       }
     }).catch(() => {
       setServiceType("web_dev");
@@ -878,7 +900,30 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="p-6 flex flex-col justify-between" style={{ minHeight: "240px" }}>
-            {!hasPlan && !isExpired ? (
+            {serviceTypeLoading ? (
+              /* Loading skeleton while subscription status is fetched */
+              <div className="flex flex-col h-full justify-between animate-pulse">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-7 w-28 rounded-full bg-gray-200" />
+                    <div className="h-6 w-16 rounded-full bg-gray-200" />
+                  </div>
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                    <div className="h-8 w-20 rounded bg-gray-200" />
+                    <div className="h-4 w-24 rounded bg-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="h-16 rounded-xl bg-gray-100" />
+                    <div className="h-16 rounded-xl bg-gray-100" />
+                    <div className="h-16 rounded-xl bg-gray-100" />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <div className="flex-1 h-10 rounded-lg bg-gray-200" />
+                  <div className="flex-1 h-10 rounded-lg bg-gray-200" />
+                </div>
+              </div>
+            ) : !hasPlan && !isExpired && !isPaused ? (
               /* New user - no plan selected */
               <div className="flex flex-col h-full justify-between">
                 <div>
@@ -1000,6 +1045,53 @@ export default function SettingsPage() {
                   Renew Plan
                 </button>
               </div>
+            ) : isPaused ? (
+              /* Paused subscription */
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="px-2.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 flex items-center justify-center leading-none">
+                      Plan Paused
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span className="text-[10px] font-semibold text-blue-700">Paused</span>
+                    </div>
+                  </div>
+
+                  {/* Paused info */}
+                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+                    <div>
+                      <p className="text-[10px] text-gray-400 mb-0.5">Current plan</p>
+                      <span className="text-sm font-bold text-gray-900 capitalize">{plan}</span>
+                      <span className="text-xs text-gray-400 ml-1.5">
+                        {plan === "starter" ? "$39" : plan === "growth" ? "$79" : "$129"}/mo
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Warning box */}
+                  <div className="rounded-lg p-3 border border-blue-100 relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.04) 0%, rgba(37,99,235,0.06) 100%)" }}>
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="text-[11px] font-bold text-gray-800 mb-1">Your subscription is paused</p>
+                        <p className="text-[10px] text-gray-500 leading-relaxed">All features are disabled while paused. Resume your plan to continue using leads, emails, and AI.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowPricingModal(true)}
+                  className="w-full py-2.5 text-sm font-bold rounded-lg text-white transition-all hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] mt-3"
+                  style={{ background: "linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%)" }}
+                >
+                  Resume Plan
+                </button>
+              </div>
             ) : (
               /* Existing user - active plan or cancelling */
               <div className="flex flex-col h-full justify-between">
@@ -1013,6 +1105,11 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200">
                         <div className="w-2 h-2 rounded-full bg-orange-500" />
                         <span className="text-xs font-semibold text-orange-700">Cancelling</span>
+                      </div>
+                    ) : isPastDue ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-xs font-semibold text-red-700">Past Due</span>
                       </div>
                     ) : isOnTrial ? (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
@@ -1037,6 +1134,21 @@ export default function SettingsPage() {
                         <div>
                           <p className="text-[11px] font-bold text-gray-800">Your plan ends on {new Date(periodEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                           <p className="text-[10px] text-gray-500 mt-0.5">You still have full access until then. Reactivate to keep your plan.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Past due warning banner */}
+                  {isPastDue && (
+                    <div className="rounded-lg p-3 mb-3 border border-red-200" style={{ background: "linear-gradient(135deg, rgba(239,68,68,0.04) 0%, rgba(185,28,28,0.06) 100%)" }}>
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-800">Payment failed</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">Please update your payment method within 3 days to avoid losing access.</p>
                         </div>
                       </div>
                     </div>

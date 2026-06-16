@@ -14,16 +14,14 @@ interface PricingModalProps {
 export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToast }: PricingModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
 
   async function handleSubscribe(selectedPlan: string) {
     setLoading(selectedPlan);
     try {
       const res = await apiPost<{ checkoutUrl?: string }>("/billing/checkout", { plan: selectedPlan });
       if (res.checkoutUrl) {
-        // Append embed=1 to open in iframe-friendly mode
-        const url = new URL(res.checkoutUrl);
-        url.searchParams.set("embed", "1");
-        setCheckoutUrl(url.toString());
+        setCheckoutUrl(res.checkoutUrl);
       } else {
         onToast("Failed to create checkout session", "error");
       }
@@ -68,16 +66,54 @@ export default function PricingModal({ plan, hasPlan, isExpired, onClose, onToas
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
         <div className="relative bg-white rounded-3xl shadow-2xl max-w-[1100px] w-full h-[calc(100vh-2.8rem)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => setCheckoutUrl(null)}
+            onClick={() => { setCheckoutUrl(null); setIframeLoaded(false); }}
             className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
+
+          {/* Loading animation while iframe loads */}
+          {!iframeLoaded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-[5]">
+              {/* Animated bars - equalizer style */}
+              <div className="flex items-end gap-[7px] h-20">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="w-[7px] rounded-full bg-gradient-to-t from-[#6962c4] to-[#a9a4e8]"
+                    style={{
+                      animation: "barWave 1s ease-in-out infinite",
+                      animationDelay: `${i * 0.1}s`,
+                      height: "16px",
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="mt-7 text-lg font-semibold text-gray-700">Loading Checkout...</p>
+              <p className="mt-2 text-sm text-gray-400">Securely connecting to payment provider</p>
+              <div className="flex gap-1.5 mt-5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#6962c4] animate-bounce" style={{ animationDelay: "0ms" }} />
+                <div className="w-2.5 h-2.5 rounded-full bg-[#6962c4] animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="w-2.5 h-2.5 rounded-full bg-[#6962c4] animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+
+              <style jsx>{`
+                @keyframes barWave {
+                  0%, 100% { height: 16px; opacity: 0.4; }
+                  50% { height: 72px; opacity: 1; }
+                }
+              `}</style>
+            </div>
+          )}
+
           <iframe
             src={checkoutUrl}
-            className="w-full h-full border-0 rounded-3xl"
+            className={`w-full h-full border-0 rounded-3xl transition-opacity duration-300 ${iframeLoaded ? "opacity-100" : "opacity-0"}`}
             title="Checkout"
-            onLoad={handleIframeLoad}
+            onLoad={(e) => {
+              setIframeLoaded(true);
+              handleIframeLoad(e);
+            }}
           />
         </div>
       </div>
