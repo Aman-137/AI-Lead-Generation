@@ -87,6 +87,7 @@ router.post("/", async (req: Request, res: Response) => {
     const variantId = String(attributes?.variant_id || attributes?.first_subscription_item?.variant_id || "");
     const status = attributes?.status || "";
     const currentPeriodEnd = attributes?.renews_at || attributes?.ends_at || null;
+    const currentPeriodStart = attributes?.created_at || null;
     const trialEndsAt = attributes?.trial_ends_at || null;
 
     logger.info({ eventName, userId, status, subscriptionId }, "Webhook received");
@@ -109,13 +110,19 @@ router.post("/", async (req: Request, res: Response) => {
         // LS product-level trial can't be disabled per-checkout, so we handle it here
         let trialEnd: string | null = null;
         if (mappedStatus === "trialing" && isReturningUser) {
+          // Case 1: Returning subscriber — no trial regardless
           mappedStatus = "active";
           trialEnd = null;
           logger.info({ userId }, "Returning user — overriding trial to active");
-        } else if (mappedStatus === "trialing") {
-          trialEnd = trialEndsAt
-            ? trialEndsAt
-            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        } else if (mappedStatus === "trialing" && !trialEndsAt && currentPeriodEnd) {
+          // Case 2: LS sent on_trial with no trial_ends_at but has a paid period end
+          // This is a paid subscriber — LS just tagged it as trial due to product-level trial config
+          mappedStatus = "active";
+          trialEnd = null;
+          logger.info({ userId }, "New user paid subscription with no trial date — overriding trialing to active");
+        } else if (mappedStatus === "trialing" && trialEndsAt) {
+          // Case 3: Genuine trial with a valid end date
+          trialEnd = trialEndsAt;
         }
 
         await supabaseAdmin
@@ -127,6 +134,7 @@ router.post("/", async (req: Request, res: Response) => {
             lemon_squeezy_customer_id: customerId,
             trial_ends_at: trialEnd,
             current_period_end: currentPeriodEnd,
+            current_period_start: currentPeriodStart,
             past_due_since: null,
           })
           .eq("user_id", userId);
@@ -139,12 +147,13 @@ router.post("/", async (req: Request, res: Response) => {
         const plan = getplanFromVariant(variantId);
         const mappedStatus = mapStatus(status);
 
+        // Only update plan and status — do NOT overwrite current_period_end.
+        // Plan swaps (upgrade/downgrade) don't reset the billing cycle.
         await supabaseAdmin
           .from("user_plans")
           .update({
             plan,
             subscription_status: mappedStatus,
-            current_period_end: currentPeriodEnd,
           })
           .eq("user_id", userId);
 
@@ -159,6 +168,7 @@ router.post("/", async (req: Request, res: Response) => {
           .update({
             subscription_status: "active",
             current_period_end: currentPeriodEnd,
+            current_period_start: currentPeriodStart,
             past_due_since: null,
           })
           .eq("user_id", userId);

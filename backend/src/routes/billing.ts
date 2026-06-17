@@ -77,8 +77,9 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
     }
 
     // No active subscription — create a new checkout
-    // Note: LS SDK ignores trialLengthDays — trial override is handled in webhook
-    // for returning users (their trial status gets overridden to "active")
+    // Skip the trial for users who have already used it (has prior subscription or trial record)
+    const hasUsedTrial = !!(userPlan?.lemon_squeezy_subscription_id || userPlan?.trial_ends_at);
+
     const { data, error } = await createCheckout(storeId, variantId, {
       checkoutData: {
         email: userEmail,
@@ -88,6 +89,7 @@ router.post("/checkout", authMiddleware, async (req: Request, res: Response) => 
       },
       checkoutOptions: {
         buttonColor: "#6962c4",
+        skipTrial: hasUsedTrial,
       },
       productOptions: {
         redirectUrl: `${frontendUrl}/settings`,

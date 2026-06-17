@@ -65,6 +65,7 @@ router.get("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       isOnTrial: planInfo.isOnTrial,
       trialEndsAt: planInfo.trialEndsAt,
       currentPeriodEnd: planInfo.currentPeriodEnd,
+      currentPeriodStart: planInfo.currentPeriodStart,
       pastDueSince: planInfo.pastDueSince,
       trialDaysLeft: planInfo.trialDaysLeft,
       features: planInfo.features,

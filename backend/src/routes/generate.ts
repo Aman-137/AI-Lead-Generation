@@ -75,9 +75,36 @@ function pickTone(): ToneKey {
   return TONES[Math.floor(Math.random() * TONES.length)];
 }
 
+// Opt-out line variants — rotated per email so the closing isn't a byte-identical
+// signature across a whole campaign (an identical footer is a strong bulk fingerprint).
+const OPT_OUT_VARIANTS = [
+  'P.S. Not relevant? Just reply "unsubscribe" and I won\'t reach out again.',
+  'If this isn\'t for you, a quick "unsubscribe" reply and I\'ll leave you be.',
+  '(Rather not get these? Reply "unsubscribe" — no hard feelings.)',
+  'Not interested? Reply "unsubscribe" and I\'ll take you off the list.',
+  'Prefer I stop here? Just say "unsubscribe" and that\'s the end of it.',
+];
+
 // Append opt-out line to email body (CAN-SPAM / GDPR compliance)
 function appendOptOut(body: string): string {
-  return body.trimEnd() + "\n\nP.S. If this isn't relevant, just reply \"unsubscribe\" and I won't reach out again.";
+  const optOut = OPT_OUT_VARIANTS[Math.floor(Math.random() * OPT_OUT_VARIANTS.length)];
+  return body.trimEnd() + "\n\n" + optOut;
+}
+
+// Distinct email STRUCTURES, rotated per lead. The point is genuine shape variation
+// (length, opening move, whether there's social proof) — not just different words —
+// so a mass send doesn't collapse into one spam-detectable template fingerprint.
+const STRUCTURE_VARIANTS: string[] = [
+  `Ultra-short. 2-3 sentences total: one specific thing you noticed, one line on why it costs them, one genuine question. No link fluff, no story.`,
+  `Question-first. Open with a real question about the specific problem you found, THEN explain what you saw, then stop. Don't wrap it in a pitch.`,
+  `Single-observation. Lead with the one most surprising thing you found, spend exactly one line on why it matters to their customers, end abruptly with a question.`,
+  `Observation → consequence → soft offer. State the problem plainly, connect it to a real-world consequence in one sentence, then offer to share what you found. No urgency.`,
+  `Conversational note. Write it like a quick message you'd dash off to an acquaintance — slightly informal, one clear point, a casual closing question. Vary sentence length naturally.`,
+  `Contrast. Frame it as "solid business, odd gap" — acknowledge something fine about them, point out the one thing that doesn't fit, then ask about it.`,
+];
+
+function pickStructure(): string {
+  return STRUCTURE_VARIANTS[Math.floor(Math.random() * STRUCTURE_VARIANTS.length)];
 }
 
 function buildInitialPrompt(lead: any, tone: ToneKey, enriched?: { summary?: string; issues?: string; digitalGaps?: string; noWebsite?: boolean; brokenWebsite?: boolean; auditUrl?: string }, serviceType: ServiceType = "web_dev", language: string = "eng"): string {
@@ -183,11 +210,22 @@ WRITING STRUCTURE:
 4. END with a question about how customers find/trust them: "When someone Googles your business, what do they see that makes them choose you over the place down the street?"`,
   };
 
+  // Per-lead structure + social-proof variation, so a campaign of many emails
+  // doesn't share one detectable template fingerprint.
+  const structure = pickStructure();
+  const includeSocialProof = Math.random() < 0.5;
+
   return `Write a cold email that reads like a personal message, NOT a marketing email.
 
 The reader should feel like a real human noticed something about their business and took 2 minutes to write them about it. The email should feel so personal and specific that they think "this person actually looked at my business" — not "this is a mass email."
 
 ${serviceApproach[serviceType]}
+
+STRUCTURE FOR THIS SPECIFIC EMAIL — this OVERRIDES the default step order above. Follow this shape:
+${structure}
+${includeSocialProof
+  ? "Social proof: you MAY include ONE short, realistic result line if it genuinely fits — but vary its wording and where it sits, and never reuse a fixed phrase."
+  : "Social proof: do NOT include any 'helped another business' / 'went from X to Y' line in this email. Keep it entirely about THEM."}
 
 LEAD DATA:
 Company name: ${company}
@@ -199,7 +237,7 @@ CRITICAL RULES:
 - ${city ? `Use "${city}" as their city — it's confirmed data.` : "Do NOT guess their city. Skip location references if no city is provided."}
 - BANNED words/phrases: "revenue", "optimize", "solution", "leverage", "streamline", "maximize", "boost", "transform", "unlock", "empower", "excited", "thrilled", "growth", "scale", "ROI", "synergy", "game-changer", "I was just browsing", "I came across", "I hope this finds you"
 - Do NOT start with a greeting ("Hi", "Hey", "Hello", "I hope this"). Start directly with the observation.
-- 75-110 words maximum. Every word must earn its place — if a sentence doesn't add specificity or curiosity, delete it.
+- Length: 40-110 words — match the STRUCTURE above (short variants must be genuinely short, not padded to fill space). Every word must earn its place.
 - Do NOT use bullet points or numbered lists — this is a personal message, not a report.
 - Write in plain English. If your grandmother wouldn't say it in conversation, rewrite it.
 - Social proof numbers must be REALISTIC and modest — not "10x", not "doubled revenue", not "hundreds of leads." Think: "went from 2 to 11 bookings/week" or "started getting 5-6 calls a week from Google."
@@ -212,7 +250,8 @@ SUBJECT LINE RULES:
 - Must sound like a friend texting about something they noticed — NOT like a marketing email subject
 - Include their PROPER company name (exactly as provided, with correct capitalization) when natural
 - Create curiosity without being clickbaity
-- Examples of GOOD subjects: "Noticed something on ${company}'s site", "${city || industry} question for you", "Quick ${company} question"
+- Vary the subject every send — do NOT fall back to one fixed template. It must feel specific to THIS business.
+- GOOD subjects (inspiration only — do NOT copy these verbatim): "noticed something on ${company}'s site", "a quick thought about ${company}", "${city || industry} — one thing"
 - Examples of BAD subjects: "Boost Your Business!", "Your Website Needs Help", "Partnership Opportunity"
 
 ${toneInstructions[tone]}
@@ -236,6 +275,28 @@ function buildFollowup1Prompt(company: string, issues: string, tone: ToneKey, to
 
   const gapContext = topGap || issues || "their website";
 
+  // Rotate the follow-up angle, subject style, and length per lead so follow-ups
+  // don't share one template fingerprint across a campaign.
+  const angles = [
+    `A quick industry stat — e.g. "looked into this more, a lot of ${company.split(" ")[0].toLowerCase()}-type places nearby have the same gap."`,
+    `A new observation you "just noticed" on their site (a form not working on mobile, a slow page, a broken link).`,
+    `A competitor reference — "saw a ${gapContext.split(" ")[0].toLowerCase()} nearby just updated theirs, figured you'd want to know."`,
+    `One genuinely useful tip they can act on in two minutes, no strings attached.`,
+    `An honest, light nudge built around ONE concrete new detail about what you found — zero pressure.`,
+  ];
+  const angle = angles[Math.floor(Math.random() * angles.length)];
+
+  const subjects = [
+    `a reply-style "re:" variation of the original thread`,
+    `"one more thing"`,
+    `"forgot to mention"`,
+    `"quick follow-up"`,
+    `"saw this, thought of ${company}"`,
+  ];
+  const subject = subjects[Math.floor(Math.random() * subjects.length)];
+
+  const wordTarget = ["25-40", "30-50", "35-55"][Math.floor(Math.random() * 3)];
+
   return `Write a follow-up email that feels like a real person bumping their own thread. NOT a marketing email — a human checking in.
 
 Context:
@@ -243,20 +304,18 @@ Context:
 - No reply yet
 - You want to re-engage them WITHOUT re-pitching
 
-APPROACH: Add NEW value — don't just say "bumping this." Give them one small, useful insight they didn't get in the first email. Something like:
-- A quick stat about their industry ("btw — looked into this more, about 60% of ${company.split(" ")[0].toLowerCase()}-type businesses in the area have this same issue")
-- A new observation you "just noticed" ("was on your site again and realized the contact form doesn't actually work on mobile — not sure if you knew that")
-- A competitor reference ("noticed a ${gapContext.split(" ")[0].toLowerCase()} competitor nearby just redid their site — figured you'd want to know")
+APPROACH FOR THIS EMAIL: ${angle}
+Add real, NEW value — don't just say "bumping this." Use the angle above; pick this ONE idea and make it natural, don't list several.
 
 Rules:
-- 30-50 words — short enough to read in 3 seconds
+- ${wordTarget} words — short enough to read in a few seconds
 - MUST add something new — a small nugget of value, not just "did you see my last email?"
 - End with a casual, specific question
 - No marketing language, no formal greetings
 - Do NOT use placeholder brackets like [City], [Name], etc.
 - Do NOT include a sign-off name or signature
 
-Subject line: A reply-style subject — "re: [original subject variation]" or something casual like "one more thing" or "forgot to mention"
+Subject line: ${subject}
 
 ${toneStyle[tone]}
 ${language !== "eng" ? `\nLANGUAGE: Write the ENTIRE email (subject and body) in ${getLanguageName(language)}. Write naturally as a native speaker would.` : ""}
@@ -271,6 +330,21 @@ function buildFollowup2Prompt(company: string, tone: ToneKey, language: string =
     curious: `TONE: Leave them with one final thought-provoking observation.`,
   };
 
+  // Rotate the closing move, subject, and length per lead so the breakup email
+  // isn't an identical template across a campaign.
+  const finalThoughts = [
+    `Leave ONE tiny, specific observation that might stick in their mind.`,
+    `End with a single honest line acknowledging they're probably busy, plus a soft "door's open" if they ever want to look.`,
+    `Drop one small, genuinely useful tip on the way out — nothing asked in return.`,
+    `Close with a light, low-key question they could answer in one word if they ever feel like it.`,
+  ];
+  const finalThought = finalThoughts[Math.floor(Math.random() * finalThoughts.length)];
+
+  const subjects = [`"closing the loop"`, `"last one from me"`, `"I'll leave it here"`, `"no worries either way"`];
+  const subject = subjects[Math.floor(Math.random() * subjects.length)];
+
+  const wordTarget = ["20-35", "25-40"][Math.floor(Math.random() * 2)];
+
   return `Write a final follow-up that ends the thread naturally. This is the last email — it should feel like a real person wrapping up, not a marketer doing a "last chance!" push.
 
 Context:
@@ -279,18 +353,18 @@ Context:
 
 APPROACH: Use the "breakup + door open" technique:
 - Acknowledge they're busy (NOT guilt-trip)
-- Leave ONE final thought — a tiny value nugget or observation that might stick in their mind
+- ${finalThought}
 - Make it clear you won't email again — but the door is open if they want to reach out later
 
 Rules:
-- 25-40 words maximum
+- ${wordTarget} words maximum
 - Sound like a real person, not a drip sequence
 - ZERO pressure, zero urgency tactics, zero "last chance" energy
 - The reader should feel GOOD after reading this, not guilty
 - Do NOT use placeholder brackets like [City], [Name], etc.
 - Do NOT include a sign-off name or signature
 
-Subject line: Something casual like "closing the loop" or "last one from me"
+Subject line: ${subject}
 
 ${toneStyle[tone]}
 ${language !== "eng" ? `\nLANGUAGE: Write the ENTIRE email (subject and body) in ${getLanguageName(language)}. Write naturally as a native speaker would.` : ""}

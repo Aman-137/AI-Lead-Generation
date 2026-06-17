@@ -154,6 +154,7 @@ export default function SettingsPage() {
   const [isPastDue, setIsPastDue] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [periodEndDate, setPeriodEndDate] = useState<string | null>(null);
+  const [periodStartDate, setPeriodStartDate] = useState<string | null>(null);
   const [isOnTrial, setIsOnTrial] = useState(false);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,7 +243,7 @@ export default function SettingsPage() {
     };
     loadProfile();
     // Load service type and subscription status from stats
-    apiGet<{ serviceType?: string; subscriptionStatus?: string; isOnTrial?: boolean; trialDaysLeft?: number; currentPeriodEnd?: string }>("/stats").then((data) => {
+    apiGet<{ serviceType?: string; subscriptionStatus?: string; isOnTrial?: boolean; trialDaysLeft?: number; currentPeriodEnd?: string; currentPeriodStart?: string }>("/stats").then((data) => {
       if (data.serviceType) {
         // Migrate deprecated social_media to digital_marketing
         const mapped = data.serviceType === "social_media" ? "digital_marketing" : data.serviceType;
@@ -256,6 +257,7 @@ export default function SettingsPage() {
       setIsOnTrial(data.isOnTrial || false);
       setTrialDaysLeft(data.trialDaysLeft ?? null);
       setPeriodEndDate(data.currentPeriodEnd || null);
+      setPeriodStartDate(data.currentPeriodStart || null);
 
       if (data.subscriptionStatus === "cancelled" && data.currentPeriodEnd && new Date(data.currentPeriodEnd) > new Date()) {
         // Cancelled but still has access until period ends
@@ -1163,7 +1165,7 @@ export default function SettingsPage() {
                       <span className="text-xs text-gray-400 ml-1">per month</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-gray-400">Purchased: <span className="text-gray-600 font-medium">May 4, 2026</span></p>
+                      <p className="text-[10px] text-gray-400">Purchased: <span className="text-gray-600 font-medium">{periodStartDate ? new Date(periodStartDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</span></p>
                       <p className="text-[10px] text-gray-400">{isCancelling ? "Ends" : "Expires"}: <span className={`font-medium ${isCancelling ? "text-orange-600" : "text-gray-600"}`}>{periodEndDate ? new Date(periodEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Jun 4, 2026"}</span></p>
                     </div>
                   </div>

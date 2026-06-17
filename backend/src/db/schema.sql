@@ -120,7 +120,9 @@ create table if not exists gmail_accounts (
 -- Table: emails
 -- =============================================
 
--- Email status: pending, sent, failed
+-- Email status: pending, sending, sent, failed, cancelled
+--   'sending' is a transient claim state: a worker atomically flips pending -> sending
+--   before contacting the provider so no two workers can ever send the same email.
 -- sequence_step: 1 = initial, 2 = follow-up 1, 3 = follow-up 2
 create table if not exists emails (
   id uuid primary key default uuid_generate_v4(),
@@ -130,7 +132,7 @@ create table if not exists emails (
   to_email text not null,
   subject text not null,
   body text not null,
-  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'cancelled')),
+  status text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'failed', 'cancelled')),
   sequence_step integer default 1,
   tone_variant text default 'friendly',
   replied boolean default false,
@@ -139,6 +141,7 @@ create table if not exists emails (
   error_log text,
   sent_at timestamp with time zone,
   scheduled_at timestamp with time zone,
+  claimed_at timestamp with time zone, -- when a worker claimed this email for sending (status='sending')
   gmail_account_id uuid references gmail_accounts(id) on delete set null,
   created_at timestamp with time zone default now()
 );
@@ -156,6 +159,7 @@ create table if not exists user_plans (
   lemon_squeezy_subscription_id text,
   lemon_squeezy_customer_id text,
   current_period_end timestamp with time zone,
+  current_period_start timestamp with time zone,
   gmail_connected_at timestamp with time zone,
   is_active boolean default true,
   leads_found_this_month integer default 0,
@@ -539,3 +543,29 @@ create policy "Service can insert audit logs"
 
 -- Auto-cleanup: delete audit logs older than 90 days (run via pg_cron or scheduled function)
 -- select delete from audit_logs where created_at < now() - interval '90 days';
+
+-- =============================================
+-- MIGRATION (2026-06): exactly-once email sending
+-- Safe to run on an existing database (idempotent). Closes the double-send race
+-- in the email queue. See backend/src/jobs/emailQueue.ts for the matching logic.
+-- =============================================
+
+-- 1. Allow the transient "sending" claim state on the emails status constraint.
+alter table emails drop constraint if exists emails_status_check;
+alter table emails add constraint emails_status_check
+  check (status in ('pending', 'sending', 'sent', 'failed', 'cancelled'));
+
+-- 2. Track when an email was claimed for sending (used by the stuck-send reaper).
+alter table emails add column if not exists claimed_at timestamp with time zone;
+create index if not exists idx_emails_claimed_at on emails(claimed_at);
+
+-- 3. Heartbeat RPC: a live worker re-stamps its lock so it never looks "stale"
+--    while it is still working. Without this, a run longer than the 5-minute
+--    stale-lock TTL would have its lock expire mid-run, letting a second cycle
+--    start. With the heartbeat, the lock only expires if the worker truly dies.
+create or replace function heartbeat_job_lock(p_lock_name text, p_locked_by text)
+returns void as $$
+  update job_locks
+  set locked_at = now()
+  where lock_name = p_lock_name and locked_by = p_locked_by;
+$$ language sql volatile security definer;

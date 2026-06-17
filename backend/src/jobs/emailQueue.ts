@@ -13,6 +13,11 @@ const INSTANCE_ID = `eq_${crypto.randomBytes(4).toString("hex")}_${process.pid}`
 const MAX_RETRIES = 2;
 const INITIAL_BATCH_SIZE = 10;   // Process up to 10 initial emails per campaign per cycle
 const FOLLOW_UP_BATCH_SIZE = 15; // Process up to 15 follow-ups per campaign per cycle
+// Emails left in "sending" longer than this were orphaned by a crash mid-send;
+// the reaper recovers them (without resending, to avoid duplicate delivery).
+const STUCK_SENDING_TIMEOUT_MIN = 15;
+// How often a working process re-stamps its lock so it never looks stale while alive.
+const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
 // Exponential backoff: retry 1 = 5 min, retry 2 = 15 min
 function getRetryDelay(retryCount: number): Date {
@@ -31,11 +36,83 @@ async function getUserSentToday(userId: string): Promise<number> {
   return userPlan.emailsSentToday;
 }
 
+// Atomically claim an email for sending: flip pending -> sending ONLY if it is
+// still pending. Postgres row-locking serializes concurrent claims, so at most
+// one worker can win — this is what guarantees no email is ever sent twice,
+// even if two cycles or two server instances overlap. Returns true if we won.
+async function claimEmail(emailId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("emails")
+    .update({ status: "sending", claimed_at: new Date().toISOString() })
+    .eq("id", emailId)
+    .eq("status", "pending")
+    .select("id");
+  return !!(data && data.length > 0);
+}
+
+// Release a claim we couldn't actually act on (no inbox connected, inbox at cap):
+// put it back to pending so a later cycle can try again.
+async function revertClaim(emailId: string): Promise<void> {
+  await supabase
+    .from("emails")
+    .update({ status: "pending", claimed_at: null })
+    .eq("id", emailId)
+    .eq("status", "sending");
+}
+
+// Reaper: recover emails stranded in "sending" by a process that died between
+// the provider accepting the message and us writing status='sent'. We deliberately
+// do NOT resend — the message may already have been delivered, and a missed send
+// is far safer than emailing a prospect twice. Runs once per cycle.
+async function reapStuckSends(): Promise<void> {
+  const cutoff = new Date(Date.now() - STUCK_SENDING_TIMEOUT_MIN * 60 * 1000).toISOString();
+  const { data: stuck } = await supabase
+    .from("emails")
+    .select("id, lead_id, campaign_id, sequence_step")
+    .eq("status", "sending")
+    .lt("claimed_at", cutoff);
+
+  if (!stuck || stuck.length === 0) return;
+
+  for (const email of stuck) {
+    await supabase
+      .from("emails")
+      .update({
+        status: "failed",
+        error_log: "Send interrupted (process stopped mid-send). Not auto-retried to avoid duplicate delivery.",
+      })
+      .eq("id", email.id)
+      .eq("status", "sending");
+
+    // If an initial email was orphaned, cancel its pending follow-ups (consistent
+    // with how a permanently-failed initial email is handled).
+    if ((email.sequence_step || 1) === 1 && email.lead_id && email.campaign_id) {
+      await supabase
+        .from("emails")
+        .update({ status: "cancelled", error_log: "Cancelled: initial send interrupted" })
+        .eq("lead_id", email.lead_id)
+        .eq("campaign_id", email.campaign_id)
+        .eq("status", "pending")
+        .gt("sequence_step", 1);
+    }
+  }
+  logger.warn({ count: stuck.length }, "Reaper: marked crash-orphaned 'sending' emails as failed");
+}
+
 // Send a single email with all safety checks, returns true if sent
 async function sendSingleEmail(
   email: any,
   campaign: { id: string; user_id: string },
 ): Promise<boolean> {
+  // Atomically claim this email (pending -> sending). If we don't win the claim,
+  // another worker/cycle already has it — skip silently. This is the core
+  // guarantee that no email is ever sent more than once.
+  const won = await claimEmail(email.id);
+  if (!won) {
+    logger.debug({ emailId: email.id }, "Email already claimed elsewhere, skipping");
+    return false;
+  }
+
   // Resolve which email account to send from
   let accountInfo = getAccountInfo(email);
   if (!accountInfo) {
@@ -55,6 +132,8 @@ async function sendSingleEmail(
       if (primary) accountInfo = primary;
     }
     if (!accountInfo) {
+      // No inbox to send from — release the claim so it retries once one is connected.
+      await revertClaim(email.id);
       logger.warn({ userId: campaign.user_id, emailId: email.id }, "No email account found, skipping");
       return false;
     }
@@ -68,6 +147,8 @@ async function sendSingleEmail(
   // Per-inbox safety cap (450/inbox/day)
   const inboxSent = await getInboxSentTodayUnified(accountInfo.id, accountInfo.type);
   if (inboxSent >= GMAIL_INBOX_CAP) {
+    // Inbox at its daily cap — release the claim so it can send later / from another inbox.
+    await revertClaim(email.id);
     logger.info({ inboxId: accountInfo.id, accountType: accountInfo.type, inboxSent, cap: GMAIL_INBOX_CAP }, "Inbox hit cap, skipping");
     return false;
   }
@@ -80,33 +161,35 @@ async function sendSingleEmail(
     email.body
   );
 
-  if (result.success) {
-    await supabase
-      .from("emails")
-      .update({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        error_log: null,
-      })
-      .eq("id", email.id);
-
-    // Increment monotonic daily sent counter (never decrements)
-    await incrementEmailsSentToday(campaign.user_id, 1);
-
-    // Mark lead as contacted (only on first email)
-    if ((email.sequence_step || 1) === 1 && email.lead_id) {
-      await supabase
-        .from("leads")
-        .update({ contacted: true, contacted_at: new Date().toISOString() })
-        .eq("id", email.lead_id);
-    }
-
-    const sequenceInfo = email.sequence_step === 1 ? "(initial)" : `(follow-up ${email.sequence_step - 1})`;
-    logger.info({ emailId: email.id, to: email.to_email, sequenceInfo, accountType: accountInfo.type }, "Email sent");
-    return true;
+  if (!result.success) {
+    // Provider reported failure without throwing. Treat as a send error so the
+    // retry/backoff path handles it — otherwise the claim would stay "sending".
+    throw new Error("Email provider reported send failure");
   }
 
-  return false;
+  await supabase
+    .from("emails")
+    .update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      error_log: null,
+    })
+    .eq("id", email.id);
+
+  // Increment monotonic daily sent counter (never decrements)
+  await incrementEmailsSentToday(campaign.user_id, 1);
+
+  // Mark lead as contacted (only on first email)
+  if ((email.sequence_step || 1) === 1 && email.lead_id) {
+    await supabase
+      .from("leads")
+      .update({ contacted: true, contacted_at: new Date().toISOString() })
+      .eq("id", email.lead_id);
+  }
+
+  const sequenceInfo = email.sequence_step === 1 ? "(initial)" : `(follow-up ${email.sequence_step - 1})`;
+  logger.info({ emailId: email.id, to: email.to_email, sequenceInfo, accountType: accountInfo.type }, "Email sent");
+  return true;
 }
 
 // Handle send failure with retry logic
@@ -119,6 +202,8 @@ async function handleSendError(email: any, err: unknown): Promise<void> {
     await supabase
       .from("emails")
       .update({
+        status: "pending", // release the claim back to pending so the retry can pick it up
+        claimed_at: null,
         retry_count: currentRetry,
         error_log: errorMsg,
         scheduled_at: retryAt.toISOString(),
@@ -166,7 +251,20 @@ async function processEmailQueue() {
     return;
   }
 
+  // Keep the lock fresh while we work. A long run (many emails × 45–90s delays)
+  // can exceed the 5-minute stale-lock TTL; the heartbeat re-stamps locked_at
+  // every minute so the lock only ever expires if this process actually dies —
+  // closing the window where a second cycle could start and double-send.
+  const heartbeat = setInterval(() => {
+    supabase
+      .rpc("heartbeat_job_lock", { p_lock_name: LOCK_NAME, p_locked_by: INSTANCE_ID })
+      .then(() => {}, () => { /* transient DB error — lock survives until next beat */ });
+  }, HEARTBEAT_INTERVAL_MS);
+
   try {
+    // Recover any emails left in "sending" by a previous run that crashed mid-send.
+    await reapStuckSends();
+
     const { data: campaigns, error: campaignsError } = await supabase
       .from("campaigns")
       .select("id, user_id, send_timezone")
@@ -338,11 +436,13 @@ async function processEmailQueue() {
       }
 
       // ===== CHECK IF CAMPAIGN IS DONE =====
+      // Count both "pending" and in-flight "sending" so we never mark a campaign
+      // complete while an email is mid-send.
       const { count: pendingCount } = await supabase
         .from("emails")
         .select("*", { count: "exact", head: true })
         .eq("campaign_id", campaign.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "sending"]);
 
       if (pendingCount === 0) {
         // Check if any emails were actually sent successfully
@@ -363,6 +463,8 @@ async function processEmailQueue() {
   } catch (err) {
     logger.error({ err }, "Error processing email queue");
   } finally {
+    // Stop the heartbeat before releasing the lock
+    clearInterval(heartbeat);
     // Always release the lock so the next cycle can acquire it
     try {
       await supabase.rpc("release_job_lock", {

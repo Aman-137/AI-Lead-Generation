@@ -160,7 +160,11 @@ export function hasActiveSubscription(
 
     case "trialing":
       // Must have valid, non-expired trial
-      return !!trialEndsAt && new Date(trialEndsAt) > new Date();
+      if (!!trialEndsAt && new Date(trialEndsAt) > new Date()) return true;
+      // Edge case: status stuck at "trialing" with no trial end date but valid paid period
+      // This happens when a paying user's status wasn't updated from trialing → active
+      if (!trialEndsAt && !!currentPeriodEnd && new Date(currentPeriodEnd) > new Date()) return true;
+      return false;
 
     case "past_due":
       // 3-day grace period from when payment first failed
@@ -332,6 +336,7 @@ export async function getUserPlan(userId: string): Promise<{
         subscriptionStatus: "none" as SubscriptionStatus,
         trialEndsAt: null,
         currentPeriodEnd: null,
+        currentPeriodStart: null,
         pastDueSince: null,
         isOnTrial: false,
         gmailConnectedAt: null,
@@ -358,6 +363,7 @@ export async function getUserPlan(userId: string): Promise<{
       subscriptionStatus: subStatus,
       trialEndsAt: trialEnds,
       currentPeriodEnd: plan2.current_period_end || null,
+      currentPeriodStart: plan2.current_period_start || null,
       pastDueSince: plan2.past_due_since || null,
       isOnTrial: isTrialing(subStatus, trialEnds),
       gmailConnectedAt: plan2.gmail_connected_at,
@@ -399,6 +405,7 @@ export async function getUserPlan(userId: string): Promise<{
     subscriptionStatus: subStatus,
     trialEndsAt: trialEnds,
     currentPeriodEnd: data.current_period_end || null,
+    currentPeriodStart: data.current_period_start || null,
     pastDueSince: data.past_due_since || null,
     isOnTrial: isTrialing(subStatus, trialEnds),
     gmailConnectedAt: data.gmail_connected_at,
@@ -632,6 +639,14 @@ export async function checkDailyLeadFindLimit(userId: string): Promise<{
     return { allowed: false, remaining: 0, usedToday: 0, dailyLimit: 0, plan: userPlan.plan };
   }
 
+  // Self-heal: if status is stuck as "trialing" but trial_ends_at is null with a valid period end,
+  // silently correct it to "active" so the UI and all future checks are consistent
+  if (userPlan.subscriptionStatus === "trialing" && !userPlan.trialEndsAt && userPlan.currentPeriodEnd) {
+    supabase.from("user_plans").update({ subscription_status: "active", trial_ends_at: null }).eq("user_id", userId).then(() => {
+      console.log(`[checkDailyLeadFindLimit] Auto-healed status for user ${userId}: trialing → active`);
+    });
+  }
+
   const config = PLAN_CONFIGS[userPlan.plan];
   const dailyLimit = userPlan.isOnTrial ? TRIAL_DAILY_LEADS : config.maxDailyEmails;
   const usedToday = userPlan.leadsFoundToday;
@@ -756,6 +771,7 @@ export async function getPlanInfo(userId: string): Promise<{
   isOnTrial: boolean;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  currentPeriodStart: string | null;
   pastDueSince: string | null;
   trialDaysLeft: number;
   features: FeatureAccess;
@@ -804,6 +820,7 @@ export async function getPlanInfo(userId: string): Promise<{
     isOnTrial: userPlan.isOnTrial,
     trialEndsAt: userPlan.trialEndsAt,
     currentPeriodEnd: userPlan.currentPeriodEnd,
+    currentPeriodStart: userPlan.currentPeriodStart,
     pastDueSince: userPlan.pastDueSince,
     trialDaysLeft,
     features: getFeatureAccess(userPlan.plan, userPlan.isOnTrial),
