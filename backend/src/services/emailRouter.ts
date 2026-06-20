@@ -65,12 +65,13 @@ export async function sendEmailUnified(
   accountType: "gmail" | "smtp",
   to: string,
   subject: string,
-  body: string
+  body: string,
+  listUnsubscribeUrl?: string
 ): Promise<{ success: boolean; messageId?: string }> {
   if (accountType === "gmail") {
-    return sendViaGmail(accountId, to, subject, body);
+    return sendViaGmail(accountId, to, subject, body, listUnsubscribeUrl);
   } else {
-    return sendViaSMTP(accountId, to, subject, body);
+    return sendViaSMTP(accountId, to, subject, body, listUnsubscribeUrl);
   }
 }
 

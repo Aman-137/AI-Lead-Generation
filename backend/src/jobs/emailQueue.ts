@@ -2,6 +2,8 @@ import supabase from "../services/supabase";
 import { sendEmailUnified, getInboxSentTodayUnified, getPrimaryEmailAccountId, getAccountInfo, buildAccountAssignment } from "../services/emailRouter";
 import { isWithinSendWindow } from "../routes/send";
 import { getDailyLimit, GMAIL_INBOX_CAP, getUserPlan, incrementEmailsSentToday } from "../services/planLimits";
+import { isSuppressed } from "../services/suppression";
+import { buildUnsubscribeUrl } from "../utils/unsubscribe";
 import logger from "../utils/logger";
 import crypto from "crypto";
 
@@ -113,6 +115,26 @@ async function sendSingleEmail(
     return false;
   }
 
+  // Respect unsubscribes — never send to a suppressed address. Cancel this email
+  // (and, if it's the initial, its pending follow-ups) instead of sending.
+  if (await isSuppressed(campaign.user_id, email.to_email)) {
+    await supabase
+      .from("emails")
+      .update({ status: "cancelled", error_log: "Cancelled: recipient unsubscribed" })
+      .eq("id", email.id);
+    if ((email.sequence_step || 1) === 1 && email.lead_id) {
+      await supabase
+        .from("emails")
+        .update({ status: "cancelled", error_log: "Cancelled: recipient unsubscribed" })
+        .eq("lead_id", email.lead_id)
+        .eq("campaign_id", campaign.id)
+        .eq("status", "pending")
+        .gt("sequence_step", 1);
+    }
+    logger.info({ emailId: email.id, to: email.to_email }, "Skipped send — recipient unsubscribed");
+    return false;
+  }
+
   // Resolve which email account to send from
   let accountInfo = getAccountInfo(email);
   if (!accountInfo) {
@@ -158,7 +180,8 @@ async function sendSingleEmail(
     accountInfo.type,
     email.to_email,
     email.subject,
-    email.body
+    email.body,
+    buildUnsubscribeUrl(campaign.user_id, email.to_email)
   );
 
   if (!result.success) {

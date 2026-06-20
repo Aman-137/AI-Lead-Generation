@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import supabase from "./supabase";
 import logger from "../utils/logger";
 import { encrypt, decrypt } from "../utils/encryption";
+import { buildEmailParts } from "../utils/emailFormat";
 
 // =============================================
 // SMTP Account Management
@@ -174,7 +175,8 @@ export async function sendViaSMTP(
   smtpAccountId: string,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  listUnsubscribeUrl?: string
 ): Promise<{ success: boolean; messageId?: string }> {
   const { data: account, error } = await supabase
     .from("smtp_accounts")
@@ -217,11 +219,24 @@ export async function sendViaSMTP(
     ? `"${safeName}" <${account.email}>`
     : account.email;
 
+  // List-Unsubscribe + one-click (RFC 8058) — native "Unsubscribe" button + bulk-sender compliance.
+  const unsubHeaders = listUnsubscribeUrl
+    ? {
+        "List-Unsubscribe": `<${listUnsubscribeUrl.replace(/[\r\n]/g, "")}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }
+    : undefined;
+
+  // Plain-text + HTML parts (HTML renders the unsubscribe URL as a clickable "Unsubscribe").
+  const { text, html } = buildEmailParts(body, listUnsubscribeUrl);
+
   const result = await transporter.sendMail({
     from: fromAddress,
     to: safeTo,
     subject: safeSubject,
-    text: body,
+    text,
+    html,
+    headers: unsubHeaders,
   });
 
   transporter.close();

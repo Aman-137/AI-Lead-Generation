@@ -569,3 +569,35 @@ returns void as $$
   set locked_at = now()
   where lock_name = p_lock_name and locked_by = p_locked_by;
 $$ language sql volatile security definer;
+
+-- =============================================
+-- Table: email_suppressions (per-user unsubscribe / opt-out list)
+-- =============================================
+-- When a recipient unsubscribes (one-click List-Unsubscribe, footer link, or
+-- manual add), their address is recorded here for that user. No email — initial
+-- or follow-up — is ever sent to a suppressed address again. Per-user scoped:
+-- one customer's opt-out does not affect another customer's sending.
+create table if not exists email_suppressions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  email text not null,
+  reason text not null default 'unsubscribe', -- unsubscribe | bounce | complaint | manual
+  lead_id uuid references leads(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  unique(user_id, email)
+);
+
+create index if not exists idx_email_suppressions_user_email on email_suppressions(user_id, email);
+
+-- RLS: users can see and manage only their own suppressions.
+-- (The public unsubscribe endpoint writes via the service role, which bypasses RLS.)
+alter table email_suppressions enable row level security;
+
+create policy "Users can view their own suppressions"
+  on email_suppressions for select using (auth.uid() = user_id);
+
+create policy "Users can insert their own suppressions"
+  on email_suppressions for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete their own suppressions"
+  on email_suppressions for delete using (auth.uid() = user_id);

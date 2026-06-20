@@ -3,6 +3,7 @@ import crypto from "crypto";
 import supabase from "./supabase";
 import { setGmailConnectedAt } from "./planLimits";
 import { encrypt, decrypt } from "../utils/encryption";
+import { buildEmailParts } from "../utils/emailFormat";
 
 // Create OAuth2 client
 function getOAuth2Client() {
@@ -206,7 +207,8 @@ export async function sendEmail(
   gmailAccountId: string,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  listUnsubscribeUrl?: string
 ): Promise<{ success: boolean; messageId?: string }> {
   // Fetch account for both token and email address
   const { data: account, error: accountError } = await supabase
@@ -226,18 +228,46 @@ export async function sendEmail(
   const safeTo = to.replace(/[\r\n]/g, "");
   const safeSubject = subject.replace(/[\r\n]/g, "");
 
-  // Build RFC 2822 email
+  // Build a multipart/alternative message: plain-text part (fallback, with the
+  // unsubscribe URL visible) + HTML part (URL rendered as a clickable "Unsubscribe").
+  const { text, html } = buildEmailParts(body, listUnsubscribeUrl);
+  const boundary = `b_${crypto.randomBytes(12).toString("hex")}`;
+
   const headers = [
     `To: ${safeTo}`,
     `Subject: ${safeSubject}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
   // Add From header if account email is known (supports send-as aliases)
   if (!accountError && account?.email) {
     headers.unshift(`From: ${account.email}`);
   }
 
-  const rawEmail = [...headers, "", body].join("\n");
+  // List-Unsubscribe + one-click (RFC 8058) — shows the native "Unsubscribe"
+  // button in Gmail/Outlook and is expected by bulk-sender requirements.
+  if (listUnsubscribeUrl) {
+    const safeUrl = listUnsubscribeUrl.replace(/[\r\n]/g, "");
+    headers.push(`List-Unsubscribe: <${safeUrl}>`);
+    headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
+  }
+
+  const mimeBody = [
+    "",
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    "",
+    text,
+    "",
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    "",
+    html,
+    "",
+    `--${boundary}--`,
+  ].join("\n");
+
+  const rawEmail = headers.join("\n") + "\n" + mimeBody;
 
   const encodedEmail = Buffer.from(rawEmail)
     .toString("base64")

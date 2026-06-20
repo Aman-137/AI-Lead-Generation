@@ -19,6 +19,7 @@ const REQUIRED_ENV_VARS = [
 
 // Optional but recommended
 const OPTIONAL_ENV_VARS = [
+  "BACKEND_URL", // Public backend URL for unsubscribe links — falls back to GMAIL_REDIRECT_URI origin
   "PAGESPEED_API_KEY", // Google PageSpeed Insights — free 25k/day
   "LEMONSQUEEZY_API_KEY",
   "LEMONSQUEEZY_STORE_ID",

@@ -1,5 +1,5 @@
 import "./config";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import logger from "./utils/logger";
@@ -13,6 +13,7 @@ import statsRouter from "./routes/stats";
 import auditRouter from "./routes/audit";
 import billingRouter from "./routes/billing";
 import webhooksRouter from "./routes/webhooks";
+import unsubscribeRouter from "./routes/unsubscribe";
 import { apiLimiter, sendEmailLimiter, generateLimiter } from "./middleware/rateLimit";
 import { sanitizeBody, validateCampaignId } from "./middleware/validate";
 import { startEmailQueue, stopEmailQueue } from "./jobs/emailQueue";
@@ -54,6 +55,11 @@ if (process.env.NODE_ENV === "production") {
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Public unsubscribe endpoint — before CORS/auth/rate-limit. Recipients (GET) and
+// mailbox providers' one-click button (POST, RFC 8058) hit this directly with no
+// Origin header. Protected by an HMAC-signed token in the URL.
+app.use("/api/unsubscribe", unsubscribeRouter);
 
 // Middleware
 const allowedOrigins = [
@@ -108,6 +114,20 @@ app.use("/api/webhooks/lemonsqueezy", webhooksRouter);
 // OAuth callback route (Gmail) needs no origin — Google redirects browser directly
 // It's already protected by HMAC-signed state parameter verification
 
+// Catch-all error handler — MUST be registered after all routes. Synchronous
+// throws in route handlers, explicit next(err) calls, and rejected middleware
+// (e.g. CORS) land here instead of leaking a stack trace or crashing the process.
+// (Sentry's Express error handler will be inserted just before this at deploy.)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  logger.error(
+    { err: err.stack || err.message, path: req.path, method: req.method },
+    "Unhandled route error"
+  );
+  // If the response already started streaming, defer to Express's default handler.
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Internal server error" });
+});
+
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, "Backend server running");
   // Start background email queue processor
@@ -125,22 +145,43 @@ const server = app.listen(PORT, () => {
 });
 
 // Graceful shutdown — stop background jobs and close server on termination signals
-function gracefulShutdown(signal: string) {
+function gracefulShutdown(signal: string, exitCode = 0) {
   logger.info({ signal }, "Shutdown signal received, closing gracefully...");
   stopEmailQueue();
   stopCsvDripFeed();
   server.close(() => {
     logger.info("Server closed. Exiting.");
-    process.exit(0);
+    process.exit(exitCode);
   });
   // Force exit if graceful close takes too long (10 seconds)
   setTimeout(() => {
     logger.warn("Graceful shutdown timed out, forcing exit.");
-    process.exit(1);
+    process.exit(exitCode || 1);
   }, 10000);
 }
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Global safety nets for async errors that escape try/catch. Without these an
+// unhandled rejection (Node ≥15 default) or a thrown async error terminates the
+// process with no structured log — taking the email queue and CSV drip-feed down
+// silently. (Sentry capture hooks into both at deploy.)
+process.on("unhandledRejection", (reason) => {
+  // Log and keep running: one stray promise rejection shouldn't tear down the
+  // whole live send pipeline.
+  logger.error(
+    { reason: reason instanceof Error ? (reason.stack || reason.message) : reason },
+    "Unhandled promise rejection"
+  );
+});
+
+process.on("uncaughtException", (err) => {
+  // An uncaught exception leaves the process in an undefined state — log it, then
+  // shut down gracefully so the platform restarts us clean. exit(1) ensures
+  // Railway's restart-on-failure policy fires.
+  logger.fatal({ err: err.stack || err.message }, "Uncaught exception — shutting down");
+  gracefulShutdown("uncaughtException", 1);
+});
 
 export default app;

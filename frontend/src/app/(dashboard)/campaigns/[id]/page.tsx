@@ -935,17 +935,21 @@ function EmailPreviewModal({ emails, onClose, onMarkReply }: { emails: Email[]; 
     { border: "rgba(251,146,60,0.3)", label: "rgba(251,146,60,0.9)" },
   ];
 
-  // Convert URLs in text to clickable links
+  // Convert URLs in text to clickable links. The unsubscribe URL is shown as a
+  // clickable "Unsubscribe" word (matching how the sent HTML email renders it).
   function renderBody(text: string) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part, i) =>
-      urlRegex.test(part) ? (
-        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="hover:underline break-all" style={{ color: "#a78bfa" }}>{part}</a>
-      ) : (
-        <span key={i}>{part}</span>
-      )
-    );
+    const parts = text.split(/(https?:\/\/[^\s]+)/g);
+    return parts.map((part, i) => {
+      if (/^https?:\/\//.test(part)) {
+        const isUnsub = part.includes("/api/unsubscribe/") || part.includes("/u/");
+        return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="hover:underline break-all" style={{ color: "#a78bfa" }}>
+            {isUnsub ? "Unsubscribe" : part}
+          </a>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
   }
 
   return (

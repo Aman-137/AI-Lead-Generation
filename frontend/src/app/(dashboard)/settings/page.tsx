@@ -184,7 +184,8 @@ export default function SettingsPage() {
 
   // Profile state
   const [profileName, setProfileName] = useState("");
-  const [profileBio, setProfileBio] = useState("");
+  const [profileCompany, setProfileCompany] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
   const [profileAvatarUrl, setProfileAvatarUrl] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [memberSince, setMemberSince] = useState("");
@@ -233,13 +234,14 @@ export default function SettingsPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setProfileName(user?.user_metadata?.full_name || "");
-      setProfileBio(user?.user_metadata?.bio || "");
+      setProfileCompany(user?.user_metadata?.company_name || "");
+      setProfileAddress(user?.user_metadata?.business_address || "");
       setProfileAvatarUrl(user?.user_metadata?.avatar_url || "");
       setProfileEmail(user?.email || "");
       if (user?.created_at) {
         setMemberSince(new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }));
       }
-      if (!user?.user_metadata?.full_name) setProfileEditing(true);
+      if (!user?.user_metadata?.full_name || !user?.user_metadata?.business_address) setProfileEditing(true);
     };
     loadProfile();
     // Load service type and subscription status from stats
@@ -304,12 +306,21 @@ export default function SettingsPage() {
   }, [fetchAccounts]);
 
   const saveProfile = async () => {
+    if (!profileAddress.trim()) {
+      setProfileMsg({ type: "error", text: "Business address is required (CAN-SPAM compliance)." });
+      return;
+    }
     setProfileSaving(true);
     setProfileMsg(null);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: profileName.trim(), bio: profileBio.trim(), avatar_url: profileAvatarUrl },
+        data: {
+          full_name: profileName.trim(),
+          company_name: profileCompany.trim(),
+          business_address: profileAddress.trim(),
+          avatar_url: profileAvatarUrl,
+        },
       });
       if (error) throw error;
       setProfileMsg({ type: "success", text: "Profile updated!" });
@@ -688,7 +699,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-white">Personal Information</h2>
-                  <p className="text-xs text-white/60">Update your name and bio</p>
+                  <p className="text-xs text-white/60">Update your name, company and address</p>
                 </div>
               </div>
               {!profileEditing && profileName && (
@@ -719,25 +730,35 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">About</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Company Name <span className="text-gray-400 normal-case font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={profileCompany}
+                    onChange={(e) => { setProfileCompany(e.target.value); setProfileMsg(null); }}
+                    placeholder="e.g. Inertia Leads"
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Business Address <span className="text-red-500">*</span></label>
                   <textarea
-                    value={profileBio}
-                    onChange={(e) => { setProfileBio(e.target.value); setProfileMsg(null); }}
-                    placeholder="Tell us a little about yourself..."
-                    rows={3}
+                    value={profileAddress}
+                    onChange={(e) => { setProfileAddress(e.target.value); setProfileMsg(null); }}
+                    placeholder="e.g. 123 Example Street, Suite 400, Austin, TX 78701"
+                    rows={2}
                     className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(105,98,196,0.3)] focus:border-[#6962c4] focus:bg-white transition-all resize-none"
                   />
                 </div>
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     onClick={saveProfile}
-                    disabled={profileSaving || !profileName.trim()}
+                    disabled={profileSaving || !profileName.trim() || !profileAddress.trim()}
                     className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all hover:opacity-90"
                     style={{ background: "linear-gradient(135deg, #3d3580 0%, #6962c4 100%)", boxShadow: "0 2px 8px rgba(105,98,196,0.3)" }}
                   >
                     {profileSaving ? "Saving..." : "Save Profile"}
                   </button>
-                  {profileName.trim() && (
+                  {profileName.trim() && profileAddress.trim() && (
                     <button
                       onClick={() => { setProfileEditing(false); setProfileMsg(null); }}
                       className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
@@ -756,7 +777,7 @@ export default function SettingsPage() {
               (() => {
                 const checks = [
                   { label: "Name", done: !!profileName.trim() },
-                  { label: "Bio", done: !!profileBio.trim() },
+                  { label: "Address", done: !!profileAddress.trim() },
                   { label: "Avatar", done: !!profileAvatarUrl },
                   { label: "Inbox", done: totalInboxes > 0 },
                 ];
@@ -768,11 +789,22 @@ export default function SettingsPage() {
                     <div className="flex-1 space-y-4 min-w-0">
                       <div>
                         <p className="text-lg font-bold text-gray-900">{profileName}</p>
-                        {profileBio && (
-                          <p className="text-sm text-gray-500 mt-1 leading-relaxed">{profileBio}</p>
+                        {profileCompany && (
+                          <p className="text-sm font-medium text-gray-700 mt-0.5">{profileCompany}</p>
                         )}
                       </div>
                       <div className="border-t pt-3 grid grid-cols-1 gap-2.5" style={{ borderColor: "rgba(105,98,196,0.12)" }}>
+                        {profileAddress && (
+                          <div className="flex items-center gap-2.5 text-sm">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.1)" }}>
+                              <svg className="w-4 h-4" style={{ color: "#6962c4" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                            </div>
+                            <span className="text-gray-600">{profileAddress}</span>
+                          </div>
+                        )}
                         {profileEmail && (
                           <div className="flex items-center gap-2.5 text-sm">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(105,98,196,0.1)" }}>

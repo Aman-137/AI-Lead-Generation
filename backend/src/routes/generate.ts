@@ -6,6 +6,8 @@ import openai from "../services/openai";
 import { checkDailyGenerationLimit, PLAN_CONFIGS, getUserPlan, incrementEmailsGeneratedToday, ServiceType, getFeatureAccess } from "../services/planLimits";
 import { getPageSpeedScores } from "../services/pageSpeed";
 import { getLanguageName } from "../utils/languageDetection";
+import { buildUnsubscribeUrl } from "../utils/unsubscribe";
+import { getSuppressedEmails } from "../services/suppression";
 import logger from "../utils/logger";
 
 const router = Router();
@@ -77,18 +79,52 @@ function pickTone(): ToneKey {
 
 // Opt-out line variants — rotated per email so the closing isn't a byte-identical
 // signature across a whole campaign (an identical footer is a strong bulk fingerprint).
+// Each carries the recipient's one-click unsubscribe link (CAN-SPAM compliance).
+// The URL is rendered as a clickable "Unsubscribe" word in the HTML email, so the
+// intro deliberately omits the word "unsubscribe" (it would otherwise read twice).
 const OPT_OUT_VARIANTS = [
-  'P.S. Not relevant? Just reply "unsubscribe" and I won\'t reach out again.',
-  'If this isn\'t for you, a quick "unsubscribe" reply and I\'ll leave you be.',
-  '(Rather not get these? Reply "unsubscribe" — no hard feelings.)',
-  'Not interested? Reply "unsubscribe" and I\'ll take you off the list.',
-  'Prefer I stop here? Just say "unsubscribe" and that\'s the end of it.',
+  (url: string) => `Not relevant? ${url}`,
+  (url: string) => `If this isn't for you: ${url}`,
+  (url: string) => `Rather not get these? ${url}`,
+  (url: string) => `Not interested? ${url}`,
+  (url: string) => `Prefer I stop reaching out? ${url}`,
 ];
 
-// Append opt-out line to email body (CAN-SPAM / GDPR compliance)
-function appendOptOut(body: string): string {
-  const optOut = OPT_OUT_VARIANTS[Math.floor(Math.random() * OPT_OUT_VARIANTS.length)];
+// Append the opt-out line (with the recipient's unsubscribe link) to the email body.
+function appendOptOut(body: string, unsubscribeUrl: string): string {
+  const optOut = OPT_OUT_VARIANTS[Math.floor(Math.random() * OPT_OUT_VARIANTS.length)](unsubscribeUrl);
   return body.trimEnd() + "\n\n" + optOut;
+}
+
+// Build the sender's signature block from their saved profile (CAN-SPAM sender
+// identity + physical postal address). Returns "" if nothing is set.
+//   Best regards,
+//   <Full Name>
+//   <Company>        (optional)
+//   <Business Address>
+async function getSenderSignature(userId: string): Promise<string> {
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error || !data?.user) return "";
+    const meta = (data.user.user_metadata || {}) as Record<string, string>;
+    const name = (meta.full_name || "").trim();
+    const company = (meta.company_name || "").trim();
+    const address = (meta.business_address || "").trim();
+    if (!name && !company && !address) return "";
+    const lines: string[] = ["Best regards,"];
+    if (name) lines.push(name);
+    if (company) lines.push(company);
+    if (address) lines.push(address);
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+// Append the sender's signature block to the body (placed before the opt-out line).
+function appendSignature(body: string, signature: string): string {
+  if (!signature) return body;
+  return body.trimEnd() + "\n\n" + signature;
 }
 
 // Distinct email STRUCTURES, rotated per lead. The point is genuine shape variation
@@ -572,9 +608,17 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
       return true;
     });
 
+    // Sender signature block (name/company/address) — fetched once per request
+    const senderSignature = await getSenderSignature(req.userId!);
+
+    // Skip leads that already unsubscribed — don't generate emails we'd only cancel.
+    const suppressedSet = await getSuppressedEmails(req.userId!, validLeads.map(l => l.email));
+    const sendableLeads = validLeads.filter(l => !suppressedSet.has((l.email || "").toLowerCase()));
+
     // Generate emails in parallel batches of 5
-    const results = await processBatch(validLeads, PARALLEL_BATCH_SIZE, async (lead) => {
+    const results = await processBatch(sendableLeads, PARALLEL_BATCH_SIZE, async (lead) => {
       const tone = pickTone();
+      const unsubUrl = buildUnsubscribeUrl(req.userId!, lead.email);
       const hasNoWebsite = !lead.website || !lead.website.startsWith("http");
       const enrichedData = lead.enriched_data || {};
       const hasBrokenWebsite = !hasNoWebsite && (enrichedData._siteDown === true || (!enrichedData.title && !enrichedData.description && (!enrichedData.technologies || enrichedData.technologies.length === 0)));
@@ -601,7 +645,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res) => {
               user_id: req.userId,
               to_email: lead.email,
               subject: emailData.subject,
-              body: appendOptOut(emailData.body),
+              body: appendOptOut(appendSignature(emailData.body, senderSignature), unsubUrl),
               status: "pending",
               sequence_step: 1,
               tone_variant: tone,
@@ -754,9 +798,17 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
       return true;
     });
 
+    // Sender signature block (name/company/address) — fetched once per request
+    const senderSignature = await getSenderSignature(req.userId!);
+
+    // Skip leads that already unsubscribed — don't generate emails we'd only cancel.
+    const suppressedSet = await getSuppressedEmails(req.userId!, validLeads.map(l => l.email));
+    const sendableLeads = validLeads.filter(l => !suppressedSet.has((l.email || "").toLowerCase()));
+
     // Generate emails in parallel batches of 5
-    const results = await processBatch(validLeads, PARALLEL_BATCH_SIZE, async (lead) => {
+    const results = await processBatch(sendableLeads, PARALLEL_BATCH_SIZE, async (lead) => {
       const enrichedData = lead.enriched_data || {};
+      const unsubUrl = buildUnsubscribeUrl(req.userId!, lead.email);
       const summary = enrichedData.summary || lead.company;
       const issues = (enrichedData.issues || []).slice(0, 2).join(", ");
       const tone = pickTone();
@@ -928,7 +980,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
               user_id: req.userId,
               to_email: lead.email,
               subject: emailData.subject,
-              body: appendOptOut(emailData.body),
+              body: appendOptOut(appendSignature(emailData.body, senderSignature), unsubUrl),
               status: "pending",
               sequence_step: 1,
               scheduled_at: null,
@@ -959,7 +1011,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                           user_id: req.userId,
                           to_email: lead.email,
                           subject: f1Data.subject,
-                          body: appendOptOut(f1Data.body),
+                          body: appendOptOut(appendSignature(f1Data.body, senderSignature), unsubUrl),
                           status: "pending",
                           sequence_step: 2,
                           scheduled_at: calculateFollowUpDate(2, 4),
@@ -990,7 +1042,7 @@ router.post("/advanced", authMiddleware, async (req: AuthenticatedRequest, res) 
                           user_id: req.userId,
                           to_email: lead.email,
                           subject: f2Data.subject,
-                          body: appendOptOut(f2Data.body),
+                          body: appendOptOut(appendSignature(f2Data.body, senderSignature), unsubUrl),
                           status: "pending",
                           sequence_step: 3,
                           scheduled_at: calculateFollowUpDate(5, 7),

@@ -278,6 +278,7 @@ export async function getUserPlan(userId: string): Promise<{
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  currentPeriodStart: string | null;
   pastDueSince: string | null;
   isOnTrial: boolean;
   gmailConnectedAt: string | null;
