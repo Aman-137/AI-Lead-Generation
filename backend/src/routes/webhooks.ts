@@ -86,8 +86,15 @@ router.post("/", async (req: Request, res: Response) => {
     const customerId = String(attributes?.customer_id || "");
     const variantId = String(attributes?.variant_id || attributes?.first_subscription_item?.variant_id || "");
     const status = attributes?.status || "";
-    const currentPeriodEnd = attributes?.renews_at || attributes?.ends_at || null;
     const currentPeriodStart = attributes?.created_at || null;
+    // Prefer the real billing period end from LS; fall back to start + 30 days
+    // (one billing cycle) so expiry is never null/inconsistent with the purchase date.
+    const currentPeriodEnd =
+      attributes?.renews_at ||
+      attributes?.ends_at ||
+      (currentPeriodStart
+        ? new Date(new Date(currentPeriodStart).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        : null);
     const trialEndsAt = attributes?.trial_ends_at || null;
 
     logger.info({ eventName, userId, status, subscriptionId }, "Webhook received");

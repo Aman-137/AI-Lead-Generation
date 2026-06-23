@@ -88,7 +88,9 @@ export default function SidebarNav() {
         }
         .sidebar-nav-item {
           position: relative;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          /* Transition only hover-animated props — NOT border, so the active
+             border doesn't linger/fade when navigating to another item. */
+          transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .sidebar-nav-item:hover:not(.sidebar-active-item) {
           background: linear-gradient(135deg, rgba(105,98,196,0.1) 0%, rgba(61,53,128,0.08) 100%);

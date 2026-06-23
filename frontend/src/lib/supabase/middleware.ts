@@ -33,14 +33,24 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Build a redirect that preserves any auth cookies that getUser() just
+  // refreshed onto supabaseResponse. Returning a bare NextResponse.redirect
+  // drops those Set-Cookie headers, so the browser keeps the old (now-rotated)
+  // refresh token and gets logged out on the next request.
+  const redirectTo = (pathname: string) => {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname;
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    return response;
+  };
+
   // Redirect unauthenticated users to login (except for public routes)
   const publicRoutes = ["/login", "/signup", "/verify-email", "/forgot-password", "/reset-password", "/privacy", "/terms"];
   const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/audit");
 
   if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectTo("/login");
   }
 
   // Redirect authenticated but unverified users to verify-email page
@@ -51,23 +61,17 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname !== "/verify-email" &&
     !isPublicRoute
   ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/verify-email";
-    return NextResponse.redirect(url);
+    return redirectTo("/verify-email");
   }
 
   // Redirect verified users away from verify-email page
   if (user && user.email_confirmed_at && request.nextUrl.pathname === "/verify-email") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/settings";
-    return NextResponse.redirect(url);
+    return redirectTo("/settings");
   }
 
   // Redirect authenticated users away from login/signup to dashboard
   if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    return redirectTo("/");
   }
 
   return supabaseResponse;

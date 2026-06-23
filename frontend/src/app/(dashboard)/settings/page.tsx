@@ -544,6 +544,14 @@ export default function SettingsPage() {
     return { label: `Warmup Week ${week} (Day ${days}/21)`, color: "yellow" };
   }
 
+  // Effective plan expiry: use the real billing period end when available,
+  // otherwise derive it as purchase date + 30 days (one billing cycle).
+  const effectivePeriodEnd: Date | null = periodEndDate
+    ? new Date(periodEndDate)
+    : periodStartDate
+      ? new Date(new Date(periodStartDate).getTime() + 30 * 24 * 60 * 60 * 1000)
+      : null;
+
   return (
     <div>
       {/* Toast Notifications */}
@@ -1198,7 +1206,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] text-gray-400">Purchased: <span className="text-gray-600 font-medium">{periodStartDate ? new Date(periodStartDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</span></p>
-                      <p className="text-[10px] text-gray-400">{isCancelling ? "Ends" : "Expires"}: <span className={`font-medium ${isCancelling ? "text-orange-600" : "text-gray-600"}`}>{periodEndDate ? new Date(periodEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Jun 4, 2026"}</span></p>
+                      <p className="text-[10px] text-gray-400">{isCancelling ? "Ends" : "Expires"}: <span className={`font-medium ${isCancelling ? "text-orange-600" : "text-gray-600"}`}>{effectivePeriodEnd ? effectivePeriodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</span></p>
                     </div>
                   </div>
 
