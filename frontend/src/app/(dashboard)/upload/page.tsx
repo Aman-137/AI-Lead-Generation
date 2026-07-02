@@ -91,20 +91,28 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [dailyUsed, setDailyUsed] = useState(0);
+  const [freshLimit, setFreshLimit] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const toast = useToast();
 
-  const dailyLimit = plan.dailyLeadFindLimit;
+  const dailyLimit = freshLimit ?? plan.dailyLeadFindLimit;
   const planLabel = plan.planLabel || "Starter";
   const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
   const isAtLimit = dailyRemaining <= 0;
 
   useEffect(() => {
-    if (plan.loaded) {
-      setDailyUsed(plan.leadsFoundToday);
-    }
-  }, [plan.loaded, plan.leadsFoundToday]);
+    let cancelled = false;
+    apiGet<{ leadsFoundToday: number; dailyLeadFindLimit: number }>("/stats")
+      .then((data) => {
+        if (!cancelled) {
+          setDailyUsed(data.leadsFoundToday);
+          setFreshLimit(data.dailyLeadFindLimit);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   if (!plan.loaded) {
     return (

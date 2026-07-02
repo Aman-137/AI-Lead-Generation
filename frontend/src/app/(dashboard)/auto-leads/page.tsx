@@ -296,8 +296,13 @@ export default function AutoLeadsPage() {
       setSources((prev) => [newSource, ...prev]);
 
       findProgress.finish();
-      const dupMsg = response.duplicatesSkipped ? ` (${response.duplicatesSkipped} duplicates skipped)` : "";
-      toast.addToast(`Found ${response.count} new leads!${dupMsg}`, response.count > 0 ? "success" : "info");
+      if (response.count > 0) {
+        const dupMsg = response.duplicatesSkipped ? ` (${response.duplicatesSkipped} duplicates skipped)` : "";
+        toast.addToast(`Found ${response.count} new leads!${dupMsg}`, "success");
+      } else {
+        // Genuine "no results" — show the guiding message from the backend (city/niche tip).
+        toast.addToast(response.message || `No businesses found for "${niche}" in "${location}". Try a specific city or a different niche.`, "info");
+      }
 
       // If leads found and campaign created, navigate to campaign
       if (response.campaign_id && response.count > 0) {
