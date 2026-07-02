@@ -524,8 +524,8 @@ export default function AutoLeadsPage() {
                   <button
                     type="submit"
                     disabled={findingLeads || findLimitReached}
-                    className="group relative w-full px-5 py-3.5 text-white font-semibold rounded-xl overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none text-sm shadow-lg transition-all duration-500 ease-out active:scale-[0.99]"
-                    style={{ background: (findingLeads || findLimitReached) ? undefined : 'linear-gradient(135deg, #3d3580, #6962c4)', boxShadow: (findingLeads || findLimitReached) ? undefined : '0 8px 24px rgba(47, 39, 108, 0.4)' }}
+                    className="group relative w-full px-5 py-3.5 text-white font-semibold rounded-xl overflow-hidden transition-all duration-500 ease-out shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-[0.99]"
+                    style={{ background: 'linear-gradient(135deg, #3d3580 0%, #6962c4 100%)', boxShadow: '0 8px 24px rgba(47,39,108,0.4)' }}
                     title={findLimitReached ? findLimitMsg : ""}
                   >
                     <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out" />
